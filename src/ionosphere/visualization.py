@@ -2,8 +2,7 @@
 
 Matplotlib and Cartopy provide quantitative maps, sections, and traces.
 PyVista provides interactive 3-D topology inspection and animations.  These
-libraries are optional so the numerical solver remains a lightweight NumPy
-package.
+libraries are optional so the numerical solver remains lightweight.
 """
 
 from __future__ import annotations
@@ -161,7 +160,10 @@ def sample_radial_section(
     end = geographic_direction(end_latitude_deg, end_longitude_deg)
     directions, arc = _great_circle_directions(start, end, samples)
     values = _inverse_distance_sample(
-        directions, simulation.mesh.vertices, simulation.er, neighbors
+        directions,
+        simulation.mesh.vertices,
+        simulation.to_numpy(simulation.er),
+        neighbors,
     )
     return RadialSection(
         distance_m=np.linspace(0.0, arc * simulation.config.earth_radius_m, samples),
@@ -230,14 +232,21 @@ def record_receiver_traces(
         for receiver in receivers
     )
     times = [simulation.time_s]
-    rows = [[simulation.er[vertex, layer] for vertex, layer in locations]]
+    rows = [
+        [simulation.field_value("er", vertex, layer) for vertex, layer in locations]
+    ]
     remaining = steps
     while remaining:
         advance = min(sample_every, remaining)
         simulation.step(advance)
         remaining -= advance
         times.append(simulation.time_s)
-        rows.append([simulation.er[vertex, layer] for vertex, layer in locations])
+        rows.append(
+            [
+                simulation.field_value("er", vertex, layer)
+                for vertex, layer in locations
+            ]
+        )
     return ReceiverTraces(
         time_s=np.asarray(times), er_v_m=np.asarray(rows), labels=labels
     )
@@ -644,13 +653,17 @@ def _surface_values(
     component = component.lower()
     if component == "er":
         index = int(np.argmin(np.abs(simulation.altitudes_m - altitude_m)))
-        return simulation.er[:, index], float(simulation.altitudes_m[index]), "point"
+        return (
+            simulation.to_numpy(simulation.er[:, index]),
+            float(simulation.altitudes_m[index]),
+            "point",
+        )
     if component == "hr":
         index = int(
             np.argmin(np.abs(simulation.radial_midpoint_altitudes_m - altitude_m))
         )
         return (
-            simulation.hr[:, index],
+            simulation.to_numpy(simulation.hr[:, index]),
             float(simulation.radial_midpoint_altitudes_m[index]),
             "cell",
         )

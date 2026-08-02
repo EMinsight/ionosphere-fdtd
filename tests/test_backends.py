@@ -1,0 +1,115 @@
+import numpy as np
+import pytest
+
+from ionosphere.backends import BackendUnavailableError
+from ionosphere.solver import GeodesicFDTD, SimulationConfig
+from ionosphere.sources import GaussianCurrent
+
+
+def config() -> SimulationConfig:
+    return SimulationConfig(subdivision=1, radial_cells=6, courant_factor=0.2)
+
+
+def source() -> GaussianCurrent:
+    return GaussianCurrent(peak_current_a=1.0e6)
+
+
+def test_numpy_backend_defaults_to_cpu_float64() -> None:
+    simulation = GeodesicFDTD(config=config())
+    assert simulation.backend.name == "numpy"
+    assert simulation.backend.device == "cpu"
+    assert simulation.backend.dtype_name == "float64"
+    assert simulation.er.dtype == np.float64
+
+
+def test_numpy_backend_rejects_accelerator_device() -> None:
+    with pytest.raises(BackendUnavailableError, match="only supports"):
+        GeodesicFDTD(config=config(), backend="numpy", device="mps")
+
+
+def test_torch_cpu_matches_numpy() -> None:
+    torch = pytest.importorskip("torch")
+    numpy_simulation = GeodesicFDTD(
+        config=config(), source=source(), backend="numpy", dtype="float64"
+    )
+    torch_simulation = GeodesicFDTD(
+        config=config(),
+        source=source(),
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+    )
+
+    numpy_simulation.step(40)
+    torch_simulation.step(40)
+
+    assert torch_simulation.er.device.type == "cpu"
+    assert torch_simulation.er.dtype == torch.float64
+    for field in ("er", "et", "hr", "ht"):
+        expected = getattr(numpy_simulation, field)
+        actual = torch_simulation.to_numpy(getattr(torch_simulation, field))
+        np.testing.assert_allclose(actual, expected, rtol=1.0e-11, atol=1.0e-12)
+
+
+def test_torch_auto_selects_an_available_device() -> None:
+    torch = pytest.importorskip("torch")
+    expected = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    simulation = GeodesicFDTD(config=config(), backend="torch", device="auto")
+    assert simulation.er.device.type == expected
+
+
+def test_torch_fields_cross_the_visualization_boundary_as_numpy() -> None:
+    pytest.importorskip("torch")
+    from ionosphere.visualization import _surface_values
+
+    simulation = GeodesicFDTD(
+        config=config(), source=source(), backend="torch", device="cpu"
+    )
+    simulation.step(2)
+    values, _, association = _surface_values(simulation, "er", 0.0)
+    assert isinstance(values, np.ndarray)
+    assert association == "point"
+    assert np.isfinite(values).all()
+
+
+def test_torch_mps_runs_when_available() -> None:
+    torch = pytest.importorskip("torch")
+    if not torch.backends.mps.is_available():
+        with pytest.raises(BackendUnavailableError, match="MPS"):
+            GeodesicFDTD(config=config(), backend="torch", device="mps")
+        return
+
+    simulation = GeodesicFDTD(
+        config=config(), source=source(), backend="torch", device="mps"
+    )
+    simulation.step(5)
+    assert simulation.er.device.type == "mps"
+    assert simulation.er.dtype == torch.float32
+    assert np.isfinite(simulation.to_numpy(simulation.er)).all()
+
+
+def test_torch_gpu_alias_uses_cuda_or_reports_unavailable() -> None:
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        with pytest.raises(BackendUnavailableError, match="CUDA"):
+            GeodesicFDTD(config=config(), backend="torch", device="gpu")
+        return
+
+    simulation = GeodesicFDTD(config=config(), backend="torch", device="gpu")
+    assert simulation.er.device.type == "cuda"
+
+
+def test_torch_mps_rejects_float64_when_available() -> None:
+    torch = pytest.importorskip("torch")
+    if not torch.backends.mps.is_available():
+        pytest.skip("MPS is unavailable")
+    with pytest.raises(BackendUnavailableError, match="does not support float64"):
+        GeodesicFDTD(
+            config=config(), backend="torch", device="mps", dtype="float64"
+        )

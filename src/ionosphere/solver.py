@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .backends import ArrayBackend, create_backend
 from .constants import C_0, EARTH_RADIUS_M, EPSILON_0, MU_0
 from .materials import EarthIonosphereMaterial
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .sources import GaussianCurrent
-
-FloatArray = NDArray[np.float64]
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +71,9 @@ class GeodesicFDTD:
         material: EarthIonosphereMaterial | None = None,
         source: GaussianCurrent | None = None,
         mesh: GeodesicMesh | None = None,
+        backend: str = "numpy",
+        device: str = "auto",
+        dtype: str = "auto",
     ) -> None:
         self.config = config or SimulationConfig()
         self.mesh = mesh or build_geodesic_mesh(
@@ -78,6 +81,9 @@ class GeodesicFDTD:
         )
         if self.mesh.subdivision != self.config.subdivision:
             raise ValueError("provided mesh subdivision does not match config")
+        self.backend: ArrayBackend = create_backend(
+            backend, self.mesh, device=device, dtype=dtype
+        )
         self.material = material or EarthIonosphereMaterial()
         self.source = source
 
@@ -110,16 +116,26 @@ class GeodesicFDTD:
                 f"{self.maximum_stable_time_step_s:.6e} s"
             )
 
-        self.er = np.zeros((self.mesh.n_vertices, len(self.radii_m)))
-        self.ht = np.zeros((self.mesh.n_edges, len(self.radii_m)))
-        self.et = np.zeros((self.mesh.n_edges, len(self.radial_midpoints_m)))
-        self.hr = np.zeros((self.mesh.n_faces, len(self.radial_midpoints_m)))
+        self.er = self.backend.zeros((self.mesh.n_vertices, len(self.radii_m)))
+        self.ht = self.backend.zeros((self.mesh.n_edges, len(self.radii_m)))
+        self.et = self.backend.zeros(
+            (self.mesh.n_edges, len(self.radial_midpoints_m))
+        )
+        self.hr = self.backend.zeros(
+            (self.mesh.n_faces, len(self.radial_midpoints_m))
+        )
 
         self._prepare_geometry()
         self._prepare_material_coefficients()
-        self._source_distribution = (
-            self.source.distribution(self) if self.source is not None else None
-        )
+        if self.source is None:
+            self._source_distribution = None
+        else:
+            vertices, layer, weights = self.source.distribution(self)
+            self._source_distribution = (
+                self.backend.index_array(vertices),
+                layer,
+                self.backend.asarray(weights),
+            )
         self.time_s = 0.0
         self.steps = 0
 
@@ -132,24 +148,34 @@ class GeodesicFDTD:
         return self.config.courant_factor / (C_0 * np.sqrt(inverse_length_squared))
 
     def _prepare_geometry(self) -> None:
-        self._primal_lengths_tm = (
+        primal_lengths_tm = (
             self.mesh.primal_edge_angles[:, None] * self.radii_m[None, :]
         )
-        self._dual_lengths_tm = (
+        dual_lengths_tm = (
             self.mesh.dual_edge_angles[:, None] * self.radii_m[None, :]
         )
-        self._dual_areas_tm = (
+        dual_areas_tm = (
             self.mesh.dual_cell_solid_angles[:, None] * self.radii_m[None, :] ** 2
         )
-        self._primal_lengths_te = (
+        primal_lengths_te = (
             self.mesh.primal_edge_angles[:, None] * self.radial_midpoints_m[None, :]
         )
-        self._dual_lengths_te = (
+        dual_lengths_te = (
             self.mesh.dual_edge_angles[:, None] * self.radial_midpoints_m[None, :]
         )
-        self._face_areas_te = (
+        face_areas_te = (
             self.mesh.face_solid_angles[:, None]
             * self.radial_midpoints_m[None, :] ** 2
+        )
+        self._primal_lengths_tm = self.backend.asarray(primal_lengths_tm)
+        self._dual_lengths_tm = self.backend.asarray(dual_lengths_tm)
+        self._dual_areas_tm = self.backend.asarray(dual_areas_tm)
+        self._primal_lengths_te = self.backend.asarray(primal_lengths_te)
+        self._dual_lengths_te = self.backend.asarray(dual_lengths_te)
+        self._face_areas_te = self.backend.asarray(face_areas_te)
+        self._radial_steps = self.backend.asarray(self.radial_steps_m)
+        self._radial_center_distances = self.backend.asarray(
+            self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
 
     def _prepare_material_coefficients(self) -> None:
@@ -165,14 +191,18 @@ class GeodesicFDTD:
         epsilon_et = EPSILON_0 * epsilon_r_et
         loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
         loss_et = sigma_et * self.time_step_s / (2.0 * epsilon_et)
-        self._ca_er = (1.0 - loss_er) / (1.0 + loss_er)
-        self._cb_er = self.time_step_s / (epsilon_er * (1.0 + loss_er))
-        self._ca_et = (1.0 - loss_et) / (1.0 + loss_et)
-        self._cb_et = self.time_step_s / (epsilon_et * (1.0 + loss_et))
-        self.sigma_er = sigma_er
-        self.sigma_et = sigma_et
-        self.epsilon_r_er = epsilon_r_er
-        self.epsilon_r_et = epsilon_r_et
+        self._ca_er = self.backend.asarray((1.0 - loss_er) / (1.0 + loss_er))
+        self._cb_er = self.backend.asarray(
+            self.time_step_s / (epsilon_er * (1.0 + loss_er))
+        )
+        self._ca_et = self.backend.asarray((1.0 - loss_et) / (1.0 + loss_et))
+        self._cb_et = self.backend.asarray(
+            self.time_step_s / (epsilon_et * (1.0 + loss_et))
+        )
+        self.sigma_er = self.backend.asarray(sigma_er)
+        self.sigma_et = self.backend.asarray(sigma_et)
+        self.epsilon_r_er = self.backend.asarray(epsilon_r_er)
+        self.epsilon_r_et = self.backend.asarray(epsilon_r_et)
 
     def step(self, count: int = 1) -> None:
         """Advance the fields by ``count`` complete leapfrog time steps."""
@@ -186,24 +216,23 @@ class GeodesicFDTD:
             self.time_s = self.steps * self.time_step_s
 
     def _update_magnetic_fields(self) -> None:
-        surface_gradient_er = (
-            self.mesh.edge_difference(self.er) / self._primal_lengths_tm
-        )
+        surface_gradient_er = self.backend.edge_difference(
+            self.er
+        ) / self._primal_lengths_tm
 
-        radial_derivative_et = np.empty_like(self.ht)
-        radial_derivative_et[:, 0] = 2.0 * self.et[:, 0] / self.radial_steps_m[0]
-        radial_derivative_et[:, -1] = -2.0 * self.et[:, -1] / self.radial_steps_m[-1]
+        radial_derivative_et = self.backend.empty_like(self.ht)
+        radial_derivative_et[:, 0] = 2.0 * self.et[:, 0] / self._radial_steps[0]
+        radial_derivative_et[:, -1] = -2.0 * self.et[:, -1] / self._radial_steps[-1]
         if self.ht.shape[1] > 2:
-            center_distance = (
-                self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
-            )
-            radial_derivative_et[:, 1:-1] = np.diff(self.et, axis=1) / center_distance
+            radial_derivative_et[:, 1:-1] = self.backend.diff(
+                self.et, axis=1
+            ) / self._radial_center_distances
 
         self.ht += (self.time_step_s / MU_0) * (
             surface_gradient_er - radial_derivative_et
         )
 
-        electric_circulation = self.mesh.face_circulation(
+        electric_circulation = self.backend.face_circulation(
             self.et * self._primal_lengths_te
         )
         self.hr -= (self.time_step_s / MU_0) * (
@@ -211,7 +240,7 @@ class GeodesicFDTD:
         )
 
     def _update_electric_fields(self) -> None:
-        magnetic_circulation = self.mesh.dual_cell_circulation(
+        magnetic_circulation = self.backend.dual_cell_circulation(
             self.ht * self._dual_lengths_tm
         )
         curl_h_radial = magnetic_circulation / self._dual_areas_tm
@@ -229,26 +258,50 @@ class GeodesicFDTD:
             vertices, layer, _ = self._source_distribution
             self.er[vertices, layer] -= self._cb_er[vertices, layer] * current_density
 
-        surface_gradient_hr = (
-            self.mesh.dual_edge_difference(self.hr) / self._dual_lengths_te
-        )
-        radial_derivative_ht = np.diff(self.ht, axis=1) / self.radial_steps_m[None, :]
+        surface_gradient_hr = self.backend.dual_edge_difference(
+            self.hr
+        ) / self._dual_lengths_te
+        radial_derivative_ht = self.backend.diff(
+            self.ht, axis=1
+        ) / self._radial_steps[None, :]
         curl_h_tangential = surface_gradient_hr - radial_derivative_ht
         self.et *= self._ca_et
         self.et += self._cb_et * curl_h_tangential
 
-    def diagnostics(self) -> dict[str, float | int]:
+    def diagnostics(self) -> dict[str, float | int | str]:
         """Return inexpensive scalar diagnostics without saving field data."""
 
         return {
             "step": self.steps,
             "time_s": self.time_s,
-            "max_abs_er_v_m": float(np.max(np.abs(self.er))),
-            "max_abs_et_v_m": float(np.max(np.abs(self.et))),
-            "max_abs_hr_a_m": float(np.max(np.abs(self.hr))),
-            "max_abs_ht_a_m": float(np.max(np.abs(self.ht))),
+            "backend": self.backend.name,
+            "device": self.backend.device,
+            "dtype": self.backend.dtype_name,
+            "max_abs_er_v_m": self.backend.max_abs(self.er),
+            "max_abs_et_v_m": self.backend.max_abs(self.et),
+            "max_abs_hr_a_m": self.backend.max_abs(self.hr),
+            "max_abs_ht_a_m": self.backend.max_abs(self.ht),
         }
+
+    def to_numpy(self, values: Any) -> NDArray[np.generic]:
+        """Expose values as a host NumPy array for analysis or plotting."""
+
+        return self.backend.to_numpy(values)
+
+    def field_value(self, field: str, *indices: int) -> float:
+        """Read one field value without exposing backend scalar semantics."""
+
+        try:
+            values = getattr(self, field)
+        except AttributeError as error:
+            raise ValueError("field must be er, et, hr, or ht") from error
+        if field not in {"er", "et", "hr", "ht"}:
+            raise ValueError("field must be er, et, hr, or ht")
+        return self.backend.scalar(values[indices])
 
     @property
     def memory_bytes(self) -> int:
-        return int(self.er.nbytes + self.et.nbytes + self.hr.nbytes + self.ht.nbytes)
+        return sum(
+            self.backend.nbytes(field)
+            for field in (self.er, self.et, self.hr, self.ht)
+        )
