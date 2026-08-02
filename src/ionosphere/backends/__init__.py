@@ -15,14 +15,21 @@ def create_backend(
     *,
     device: str = "auto",
     dtype: str = "auto",
+    torch_threads: int | None = None,
 ) -> ArrayBackend:
     """Create a configured array backend without importing torch eagerly."""
 
     normalized = name.lower()
     if normalized == "numpy":
+        if torch_threads is not None:
+            raise BackendUnavailableError(
+                "torch_threads is only valid for the PyTorch CPU backend"
+            )
         return NumPyBackend(mesh, device=device, dtype=dtype)
     if normalized in {"torch", "pytorch"}:
-        return TorchBackend(mesh, device=device, dtype=dtype)
+        return TorchBackend(
+            mesh, device=device, dtype=dtype, threads=torch_threads
+        )
     raise ValueError("backend must be 'numpy' or 'torch'")
 
 

@@ -33,6 +33,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="compile the PyTorch field step for long-running simulations",
     )
+    parser.add_argument(
+        "--torch-threads",
+        type=int,
+        help="set PyTorch CPU intra-op threads (small grids often prefer 1)",
+    )
     parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
     parser.add_argument("--radial-cells", type=int, default=24)
     parser.add_argument(
@@ -75,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--surface-step must be positive")
     if args.anomaly_radius_km <= 0.0:
         raise SystemExit("--anomaly-radius-km must be positive")
+    if args.torch_threads is not None and args.torch_threads < 1:
+        raise SystemExit("--torch-threads must be positive")
 
     radial_altitudes: tuple[float, ...] | None = None
     if args.surface_step is not None:
@@ -116,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             dtype=args.dtype,
             compile_step=args.torch_compile,
+            torch_threads=args.torch_threads,
         )
     except BackendUnavailableError as error:
         raise SystemExit(str(error)) from error
@@ -147,9 +155,15 @@ def main(argv: list[str] | None = None) -> int:
         f"{simulation.mesh.n_edges} edges, {simulation.mesh.n_faces} triangles, "
         f"{len(simulation.radial_steps_m)} radial cells"
     )
+    thread_text = (
+        f" threads={simulation.backend.threads}"
+        if simulation.backend.threads is not None
+        else ""
+    )
     print(
         f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name} compiled={simulation.compiled}; "
+        f"dtype={simulation.backend.dtype_name}{thread_text} "
+        f"compiled={simulation.compiled}; "
         f"dt={simulation.time_step_s:.6e} s "
         f"(conservative limit), field memory={simulation.memory_bytes / 2**20:.2f} MiB"
     )

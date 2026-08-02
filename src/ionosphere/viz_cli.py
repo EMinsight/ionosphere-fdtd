@@ -41,6 +41,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="compile the PyTorch field step for long-running simulations",
     )
+    parser.add_argument(
+        "--torch-threads",
+        type=int,
+        help="set PyTorch CPU intra-op threads (small grids often prefer 1)",
+    )
     parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
     parser.add_argument("--radial-cells", type=int, default=24)
     parser.add_argument("--steps", type=int, default=100, help="warm-up steps")
@@ -147,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.steps < 0:
         raise SystemExit("--steps must be non-negative")
+    if args.torch_threads is not None and args.torch_threads < 1:
+        raise SystemExit("--torch-threads must be positive")
     try:
         simulation = GeodesicFDTD(
             config=SimulationConfig(
@@ -162,12 +169,19 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             dtype=args.dtype,
             compile_step=args.torch_compile,
+            torch_threads=args.torch_threads,
         )
     except BackendUnavailableError as error:
         raise SystemExit(str(error)) from error
+    thread_text = (
+        f" threads={simulation.backend.threads}"
+        if simulation.backend.threads is not None
+        else ""
+    )
     print(
         f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name} compiled={simulation.compiled}"
+        f"dtype={simulation.backend.dtype_name}{thread_text} "
+        f"compiled={simulation.compiled}"
     )
     simulation.step(args.steps)
     output = getattr(args, "output", None)

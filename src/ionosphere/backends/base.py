@@ -22,6 +22,7 @@ class ArrayBackend(ABC):
     name: str
     device: str
     dtype_name: str
+    threads: int | None = None
 
     def compile_step(
         self, step: Callable[[Array], None]

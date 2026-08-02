@@ -15,7 +15,14 @@ class TorchBackend(ArrayBackend):
 
     name = "torch"
 
-    def __init__(self, mesh: Any, *, device: str = "auto", dtype: str = "auto"):
+    def __init__(
+        self,
+        mesh: Any,
+        *,
+        device: str = "auto",
+        dtype: str = "auto",
+        threads: int | None = None,
+    ):
         try:
             import torch
         except ImportError as error:
@@ -34,6 +41,17 @@ class TorchBackend(ArrayBackend):
             raise BackendUnavailableError(
                 "the MPS backend does not support float64; use dtype='float32'"
             )
+        if threads is not None:
+            if isinstance(threads, bool) or threads < 1:
+                raise ValueError("torch_threads must be a positive integer")
+            if self.torch_device.type != "cpu":
+                raise BackendUnavailableError(
+                    "torch_threads is only valid for the PyTorch CPU backend"
+                )
+            torch.set_num_threads(threads)
+        self.threads = (
+            torch.get_num_threads() if self.torch_device.type == "cpu" else None
+        )
         self.dtype = torch.float32 if dtype == "float32" else torch.float64
         self.dtype_name = dtype
         self.edges = self.index_array(mesh.edges)

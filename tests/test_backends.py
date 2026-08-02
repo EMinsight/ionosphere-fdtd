@@ -34,6 +34,11 @@ def test_numpy_backend_rejects_compiled_step() -> None:
         GeodesicFDTD(config=config(), backend="numpy", compile_step=True)
 
 
+def test_numpy_backend_rejects_torch_threads() -> None:
+    with pytest.raises(BackendUnavailableError, match="PyTorch CPU"):
+        GeodesicFDTD(config=config(), backend="numpy", torch_threads=1)
+
+
 @pytest.mark.parametrize("trailing_shape", [(), (7,), (3, 4)])
 def test_numpy_incidence_circulation_matches_scatter(
     trailing_shape: tuple[int, ...],
@@ -107,6 +112,22 @@ def test_torch_compiled_cpu_matches_eager_with_source() -> None:
             rtol=1.0e-11,
             atol=1.0e-12,
         )
+
+
+def test_torch_cpu_thread_count_is_configurable() -> None:
+    torch = pytest.importorskip("torch")
+    previous_threads = torch.get_num_threads()
+    try:
+        simulation = GeodesicFDTD(
+            config=config(),
+            backend="torch",
+            device="cpu",
+            torch_threads=1,
+        )
+        assert simulation.backend.threads == 1
+        assert torch.get_num_threads() == 1
+    finally:
+        torch.set_num_threads(previous_threads)
 
 
 def test_torch_auto_selects_an_available_device() -> None:

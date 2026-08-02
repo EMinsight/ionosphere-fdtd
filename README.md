@@ -65,6 +65,15 @@ For the deliberately small default grid, accelerator dispatch overhead can
 outweigh its benefit, so compare NumPy CPU and MPS before choosing a backend for
 long runs.
 
+PyTorch CPU uses its process-wide default intra-op thread count unless it is
+overridden.  The small level-2 grid is typically faster with one thread, while
+larger grids should be benchmarked with several values:
+
+```bash
+uv run --extra pytorch ionosphere \
+  --backend torch --device cpu --torch-threads 1 --steps 20000
+```
+
 Useful variants:
 
 ```bash

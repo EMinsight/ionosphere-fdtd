@@ -75,6 +75,7 @@ class GeodesicFDTD:
         device: str = "auto",
         dtype: str = "auto",
         compile_step: bool = False,
+        torch_threads: int | None = None,
     ) -> None:
         self.config = config or SimulationConfig()
         self.mesh = mesh or build_geodesic_mesh(
@@ -83,7 +84,11 @@ class GeodesicFDTD:
         if self.mesh.subdivision != self.config.subdivision:
             raise ValueError("provided mesh subdivision does not match config")
         self.backend: ArrayBackend = create_backend(
-            backend, self.mesh, device=device, dtype=dtype
+            backend,
+            self.mesh,
+            device=device,
+            dtype=dtype,
+            torch_threads=torch_threads,
         )
         self.material = material or EarthIonosphereMaterial()
         self.source = source
