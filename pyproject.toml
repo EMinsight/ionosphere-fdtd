@@ -22,11 +22,13 @@ visualization = [
     "imageio>=2.36",
     "imageio-ffmpeg>=0.5",
     "matplotlib>=3.9",
+    "pillow>=11",
     "pyvista>=0.45",
 ]
 
 [project.scripts]
 ionosphere = "ionosphere.cli:main"
+ionosphere-figure-3-11 = "ionosphere.taflove_fig_3_11_cli:main"
 ionosphere-visualize = "ionosphere.viz_cli:main"
 
 [tool.setuptools.packages.find]

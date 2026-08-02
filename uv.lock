@@ -463,6 +463,7 @@ visualization = [
     { name = "imageio" },
     { name = "imageio-ffmpeg" },
     { name = "matplotlib" },
+    { name = "pillow" },
     { name = "pyvista" },
 ]
 
@@ -473,6 +474,7 @@ requires-dist = [
     { name = "imageio-ffmpeg", marker = "extra == 'visualization'", specifier = ">=0.5" },
     { name = "matplotlib", marker = "extra == 'visualization'", specifier = ">=3.9" },
     { name = "numpy", specifier = ">=2.0" },
+    { name = "pillow", marker = "extra == 'visualization'", specifier = ">=11" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pyvista", marker = "extra == 'visualization'", specifier = ">=0.45" },
     { name = "torch", marker = "extra == 'pytorch'", specifier = ">=2.5" },
