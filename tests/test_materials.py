@@ -1,6 +1,10 @@
 import numpy as np
 
-from ionosphere.materials import EarthIonosphereMaterial, SphericalAnomaly
+from ionosphere.materials import (
+    EarthIonosphereMaterial,
+    SimpsonTaflove2004Material,
+    SphericalAnomaly,
+)
 
 
 def test_profile_is_lithosphere_below_and_exponential_above() -> None:
@@ -26,3 +30,20 @@ def test_anomaly_changes_only_selected_volume() -> None:
     sigma, _ = material.sample(directions, np.asarray((-1_000.0,)), 6_371_000.0)
     assert np.isclose(sigma[0, 0], 1.0e-4)
     assert np.isclose(sigma[1, 0], 1.0e-3)
+
+
+def test_simpson_taflove_material_distinguishes_land_water_and_rock() -> None:
+    material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: directions[:, 0] > 0.0
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0)))
+    sigma, epsilon_r = material.sample(
+        directions, np.asarray((-2_500.0, -30_000.0, 80_000.0)), 6_371_000.0
+    )
+
+    assert sigma[0, 0] == 1.0 / material.upper_crust_resistivity_ohm_m
+    assert sigma[1, 0] == 1.0 / material.sea_water_resistivity_ohm_m
+    assert sigma[0, 1] == 1.0 / material.asthenosphere_resistivity_ohm_m
+    assert sigma[1, 1] == sigma[0, 1]
+    assert epsilon_r[1, 0] == material.sea_water_relative_permittivity
+    assert sigma[0, 2] == sigma[1, 2]

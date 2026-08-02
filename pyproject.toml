@@ -29,6 +29,7 @@ visualization = [
 [project.scripts]
 ionosphere = "ionosphere.cli:main"
 ionosphere-figure-3-11 = "ionosphere.taflove_fig_3_11_cli:main"
+ionosphere-verify-2004 = "ionosphere.simpson_taflove_2004_cli:main"
 ionosphere-visualize = "ionosphere.viz_cli:main"
 
 [tool.setuptools.packages.find]
