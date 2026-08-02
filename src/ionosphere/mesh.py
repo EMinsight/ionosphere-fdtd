@@ -1,0 +1,333 @@
+"""Icosahedral geodesic mesh and its triangular/dual-cell geometry.
+
+The triangular primal mesh supports the TE-r plane.  Its dual cells support
+the TM-r plane and have five sides at the twelve original icosahedron
+vertices and six sides everywhere else.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+from numpy.typing import NDArray
+
+FloatArray = NDArray[np.float64]
+IntArray = NDArray[np.int64]
+
+
+@dataclass(frozen=True, slots=True)
+class GeodesicMesh:
+    """Topology and unit-sphere metric terms for a geodesic mesh."""
+
+    vertices: FloatArray
+    faces: IntArray
+    edges: IntArray
+    face_edges: IntArray
+    face_edge_signs: IntArray
+    edge_left_faces: IntArray
+    edge_right_faces: IntArray
+    face_centers: FloatArray
+    primal_edge_angles: FloatArray
+    dual_edge_angles: FloatArray
+    face_solid_angles: FloatArray
+    dual_cell_solid_angles: FloatArray
+    vertex_degree: IntArray
+    subdivision: int
+
+    @property
+    def n_vertices(self) -> int:
+        return int(self.vertices.shape[0])
+
+    @property
+    def n_edges(self) -> int:
+        return int(self.edges.shape[0])
+
+    @property
+    def n_faces(self) -> int:
+        return int(self.faces.shape[0])
+
+    def edge_midpoints(self) -> FloatArray:
+        points = self.vertices[self.edges].sum(axis=1)
+        return _normalize(points)
+
+    def face_circulation(self, edge_values: FloatArray) -> FloatArray:
+        """Counter-clockwise circulation around every primal triangle."""
+
+        selected = edge_values[self.face_edges]
+        signs = self.face_edge_signs
+        while signs.ndim < selected.ndim:
+            signs = signs[..., None]
+        return np.sum(selected * signs, axis=1)
+
+    def dual_cell_circulation(self, dual_edge_values: FloatArray) -> FloatArray:
+        """Counter-clockwise circulation around every polygonal dual cell.
+
+        A positive dual-edge value points from the right primal face to the
+        left primal face.  With that convention it contributes positively to
+        the cell at the tail of the corresponding primal edge.
+        """
+
+        output_shape = (self.n_vertices,) + dual_edge_values.shape[1:]
+        result = np.zeros(output_shape, dtype=dual_edge_values.dtype)
+        np.add.at(result, self.edges[:, 0], dual_edge_values)
+        np.add.at(result, self.edges[:, 1], -dual_edge_values)
+        return result
+
+    def edge_difference(self, vertex_values: FloatArray) -> FloatArray:
+        """Head-minus-tail difference along oriented primal edges."""
+
+        return vertex_values[self.edges[:, 1]] - vertex_values[self.edges[:, 0]]
+
+    def dual_edge_difference(self, face_values: FloatArray) -> FloatArray:
+        """Left-minus-right difference across oriented primal edges."""
+
+        return face_values[self.edge_left_faces] - face_values[self.edge_right_faces]
+
+
+def build_geodesic_mesh(subdivision: int = 2, relaxations: int = 0) -> GeodesicMesh:
+    """Build a recursively bisected icosahedral mesh on the unit sphere.
+
+    ``subdivision=0`` gives 12 dual cells; each increment quarters every
+    primal triangular face.  Thus the dual-cell count is
+    ``10 * 4**subdivision + 2``.  Small MacBook runs normally use levels 1-2;
+    level 3 gives the 642-cell grid shown in the cited papers.
+    """
+
+    if subdivision < 0:
+        raise ValueError("subdivision must be non-negative")
+    if relaxations < 0:
+        raise ValueError("relaxations must be non-negative")
+
+    vertices, faces = _icosahedron()
+    for _ in range(subdivision):
+        vertices, faces = _subdivide(vertices, faces)
+    for _ in range(relaxations):
+        vertices = _relax(vertices, faces)
+    faces = _orient_faces(vertices, faces)
+
+    face_centers = _spherical_face_centers(vertices, faces)
+    (
+        edges,
+        face_edges,
+        face_edge_signs,
+        left_faces,
+        right_faces,
+    ) = _build_edges(faces)
+
+    primal_angles = _arc_length(vertices[edges[:, 0]], vertices[edges[:, 1]])
+    dual_angles = _arc_length(face_centers[left_faces], face_centers[right_faces])
+    face_areas = _spherical_triangle_area(
+        vertices[faces[:, 0]], vertices[faces[:, 1]], vertices[faces[:, 2]]
+    )
+    dual_areas, degree = _dual_geometry(vertices, face_centers, faces)
+
+    if not np.all(degree >= 5):
+        raise RuntimeError("invalid closed geodesic topology")
+    if not np.isclose(face_areas.sum(), 4.0 * np.pi, rtol=1e-11):
+        raise RuntimeError("primal face areas do not cover the unit sphere")
+    if not np.isclose(dual_areas.sum(), 4.0 * np.pi, rtol=1e-10):
+        raise RuntimeError("dual cell areas do not cover the unit sphere")
+
+    return GeodesicMesh(
+        vertices=vertices,
+        faces=faces,
+        edges=edges,
+        face_edges=face_edges,
+        face_edge_signs=face_edge_signs,
+        edge_left_faces=left_faces,
+        edge_right_faces=right_faces,
+        face_centers=face_centers,
+        primal_edge_angles=primal_angles,
+        dual_edge_angles=dual_angles,
+        face_solid_angles=face_areas,
+        dual_cell_solid_angles=dual_areas,
+        vertex_degree=degree,
+        subdivision=subdivision,
+    )
+
+
+def _normalize(values: FloatArray) -> FloatArray:
+    return values / np.linalg.norm(values, axis=-1, keepdims=True)
+
+
+def _icosahedron() -> tuple[FloatArray, IntArray]:
+    phi = (1.0 + np.sqrt(5.0)) / 2.0
+    vertices = np.asarray(
+        [
+            (-1, phi, 0),
+            (1, phi, 0),
+            (-1, -phi, 0),
+            (1, -phi, 0),
+            (0, -1, phi),
+            (0, 1, phi),
+            (0, -1, -phi),
+            (0, 1, -phi),
+            (phi, 0, -1),
+            (phi, 0, 1),
+            (-phi, 0, -1),
+            (-phi, 0, 1),
+        ],
+        dtype=np.float64,
+    )
+    faces = np.asarray(
+        [
+            (0, 11, 5),
+            (0, 5, 1),
+            (0, 1, 7),
+            (0, 7, 10),
+            (0, 10, 11),
+            (1, 5, 9),
+            (5, 11, 4),
+            (11, 10, 2),
+            (10, 7, 6),
+            (7, 1, 8),
+            (3, 9, 4),
+            (3, 4, 2),
+            (3, 2, 6),
+            (3, 6, 8),
+            (3, 8, 9),
+            (4, 9, 5),
+            (2, 4, 11),
+            (6, 2, 10),
+            (8, 6, 7),
+            (9, 8, 1),
+        ],
+        dtype=np.int64,
+    )
+    return _normalize(vertices), _orient_faces(_normalize(vertices), faces)
+
+
+def _orient_faces(vertices: FloatArray, faces: IntArray) -> IntArray:
+    result = faces.copy()
+    a, b, c = (vertices[result[:, index]] for index in range(3))
+    inward = np.einsum("ij,ij->i", np.cross(b - a, c - a), a + b + c) < 0.0
+    result[inward, 1], result[inward, 2] = (
+        result[inward, 2].copy(),
+        result[inward, 1].copy(),
+    )
+    return result
+
+
+def _subdivide(vertices: FloatArray, faces: IntArray) -> tuple[FloatArray, IntArray]:
+    points = [row.copy() for row in vertices]
+    midpoint_indices: dict[tuple[int, int], int] = {}
+
+    def midpoint(first: int, second: int) -> int:
+        key = (min(first, second), max(first, second))
+        if key not in midpoint_indices:
+            midpoint_indices[key] = len(points)
+            points.append(_normalize((vertices[first] + vertices[second])[None, :])[0])
+        return midpoint_indices[key]
+
+    new_faces: list[tuple[int, int, int]] = []
+    for first, second, third in faces:
+        ab = midpoint(int(first), int(second))
+        bc = midpoint(int(second), int(third))
+        ca = midpoint(int(third), int(first))
+        new_faces.extend(
+            [
+                (int(first), ab, ca),
+                (int(second), bc, ab),
+                (int(third), ca, bc),
+                (ab, bc, ca),
+            ]
+        )
+    return np.asarray(points), np.asarray(new_faces, dtype=np.int64)
+
+
+def _relax(vertices: FloatArray, faces: IntArray) -> FloatArray:
+    centers = _normalize(vertices[faces].sum(axis=1))
+    accumulated = np.zeros_like(vertices)
+    counts = np.zeros(vertices.shape[0], dtype=np.int64)
+    for corner in range(3):
+        np.add.at(accumulated, faces[:, corner], centers)
+        np.add.at(counts, faces[:, corner], 1)
+    return _normalize(accumulated / counts[:, None])
+
+
+def _spherical_face_centers(vertices: FloatArray, faces: IntArray) -> FloatArray:
+    a, b, c = (vertices[faces[:, index]] for index in range(3))
+    centers = _normalize(np.cross(b - a, c - a))
+    reverse = np.einsum("ij,ij->i", centers, a + b + c) < 0.0
+    centers[reverse] *= -1.0
+    return centers
+
+
+def _build_edges(
+    faces: IntArray,
+) -> tuple[IntArray, IntArray, IntArray, IntArray, IntArray]:
+    edge_lookup: dict[tuple[int, int], int] = {}
+    edge_faces: list[list[tuple[int, int]]] = []
+    face_edges = np.empty((faces.shape[0], 3), dtype=np.int64)
+    face_signs = np.empty_like(face_edges)
+
+    for face_index, (a, b, c) in enumerate(faces):
+        for local_index, (tail, head) in enumerate(((a, b), (b, c), (c, a))):
+            key = (min(int(tail), int(head)), max(int(tail), int(head)))
+            sign = 1 if (int(tail), int(head)) == key else -1
+            edge_index = edge_lookup.setdefault(key, len(edge_lookup))
+            if edge_index == len(edge_faces):
+                edge_faces.append([])
+            edge_faces[edge_index].append((face_index, sign))
+            face_edges[face_index, local_index] = edge_index
+            face_signs[face_index, local_index] = sign
+
+    if any(len(adjacent) != 2 for adjacent in edge_faces):
+        raise RuntimeError("geodesic mesh is not a closed two-manifold")
+
+    edges = np.asarray(list(edge_lookup), dtype=np.int64)
+    left = np.empty(edges.shape[0], dtype=np.int64)
+    right = np.empty_like(left)
+    for edge_index, adjacent in enumerate(edge_faces):
+        for face_index, sign in adjacent:
+            if sign == 1:
+                left[edge_index] = face_index
+            else:
+                right[edge_index] = face_index
+    return edges, face_edges, face_signs, left, right
+
+
+def _arc_length(first: FloatArray, second: FloatArray) -> FloatArray:
+    cross_norm = np.linalg.norm(np.cross(first, second), axis=1)
+    dot = np.einsum("ij,ij->i", first, second)
+    return np.arctan2(cross_norm, dot)
+
+
+def _spherical_triangle_area(a: FloatArray, b: FloatArray, c: FloatArray) -> FloatArray:
+    numerator = np.abs(np.einsum("ij,ij->i", a, np.cross(b, c)))
+    denominator = (
+        1.0
+        + np.einsum("ij,ij->i", a, b)
+        + np.einsum("ij,ij->i", b, c)
+        + np.einsum("ij,ij->i", c, a)
+    )
+    return 2.0 * np.arctan2(numerator, denominator)
+
+
+def _dual_geometry(
+    vertices: FloatArray, face_centers: FloatArray, faces: IntArray
+) -> tuple[FloatArray, IntArray]:
+    incident: list[list[int]] = [[] for _ in range(vertices.shape[0])]
+    for face_index, face in enumerate(faces):
+        for vertex_index in face:
+            incident[int(vertex_index)].append(face_index)
+
+    dual_area = np.empty(vertices.shape[0], dtype=np.float64)
+    degree = np.asarray([len(items) for items in incident], dtype=np.int64)
+    for vertex_index, face_indices in enumerate(incident):
+        vertex = vertices[vertex_index]
+        reference = np.array((1.0, 0.0, 0.0))
+        if abs(float(vertex @ reference)) > 0.9:
+            reference = np.array((0.0, 1.0, 0.0))
+        tangent_x = _normalize((reference - (reference @ vertex) * vertex)[None, :])[0]
+        tangent_y = np.cross(vertex, tangent_x)
+        centers = face_centers[face_indices]
+        tangent = centers - (centers @ vertex)[:, None] * vertex
+        angles = np.arctan2(tangent @ tangent_y, tangent @ tangent_x)
+        ordered = centers[np.argsort(angles)]
+        repeated_vertex = np.repeat(vertex[None, :], len(ordered), axis=0)
+        dual_area[vertex_index] = _spherical_triangle_area(
+            repeated_vertex, ordered, np.roll(ordered, -1, axis=0)
+        ).sum()
+    return dual_area, degree
