@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 
 from ionosphere.backends import BackendUnavailableError
+from ionosphere.backends.numpy_backend import NumPyBackend
+from ionosphere.mesh import build_geodesic_mesh
 from ionosphere.solver import GeodesicFDTD, SimulationConfig
 from ionosphere.sources import GaussianCurrent
 
@@ -30,6 +32,24 @@ def test_numpy_backend_rejects_accelerator_device() -> None:
 def test_numpy_backend_rejects_compiled_step() -> None:
     with pytest.raises(BackendUnavailableError, match="compiled field steps"):
         GeodesicFDTD(config=config(), backend="numpy", compile_step=True)
+
+
+@pytest.mark.parametrize("trailing_shape", [(), (7,), (3, 4)])
+def test_numpy_incidence_circulation_matches_scatter(
+    trailing_shape: tuple[int, ...],
+) -> None:
+    mesh = build_geodesic_mesh(1)
+    backend = NumPyBackend(mesh)
+    values = np.random.default_rng(42).standard_normal(
+        (mesh.n_edges,) + trailing_shape
+    )
+
+    expected = mesh.dual_cell_circulation(values)
+    actual = backend.dual_cell_circulation(values)
+
+    np.testing.assert_allclose(actual, expected, rtol=1.0e-13, atol=1.0e-13)
+    assert np.count_nonzero(backend.vertex_edge_signs, axis=1).min() == 5
+    assert np.count_nonzero(backend.vertex_edge_signs, axis=1).max() == 6
 
 
 def test_torch_cpu_matches_numpy() -> None:
