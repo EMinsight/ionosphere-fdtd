@@ -346,14 +346,24 @@ baseline.
 This workflow is deliberately a verification test, not a claim of complete
 agreement.  Correcting the ionosphere profile and DFT criterion reduced the
 level-7 `float64` mean absolute errors from 6.15/5.99 dB/Mm to 0.24/0.25 dB/Mm
-for A–B/A′–B′.  The maximum errors remain 2.39/2.43 dB/Mm, dominated by the
-488 Hz point, so the strict pointwise comparison still fails.  The command
-prints pulse timings, selected DFT cutoffs, and east/west RMS differences so
-remaining material and discretization improvements can be measured.
+for A–B/A′–B′.  A CUDA `float64` subdivision-8 run reduced both mean errors
+to 0.156 dB/Mm and the 32,768-point DFT-bin maxima to 0.906/0.913 dB/Mm.  This
+passes the A′–B′ ±1.0 dB/Mm range but not the tighter A–B ±0.5 dB/Mm range.
+The residual is now confined mainly to a narrow 450–500 Hz ripple; its sampled
+maximum depends on DFT zero-padding, so it must not be presented as complete
+quantitative reproduction without the original Bannister comparison data.
+The command prints pulse timings, selected DFT cutoffs, and east/west RMS
+differences so remaining material and discretization improvements can be
+measured.
 
 The baseline level-7 result, interpretation, and recommended next checks are
 documented in
 [the Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).
+
+The subdivision-8 compiled CUDA run used about 10.1 GB of peak allocated GPU
+memory in a one-step preflight and completed 25,023 steps in 3,477.9 seconds on
+an RTX 3060.  Its figures, traces, and generated report are preserved in
+[`artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected`](artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected).
 
 Apple MPS does not support PyTorch `float64`.  Run the double-precision
 validation on a CUDA Linux host instead:

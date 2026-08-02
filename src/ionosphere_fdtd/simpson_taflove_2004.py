@@ -403,7 +403,7 @@ def render_figure_8(
 
 
 def validation_metrics(curves: AttenuationCurves) -> dict[str, float]:
-    """Return mean absolute differences from the digitized Fig. 8 guide."""
+    """Return mean and maximum differences from the digitized Fig. 8 guide."""
 
     valid = (curves.frequency_hz >= curves.valid_frequency_hz[0]) & (
         curves.frequency_hz <= curves.valid_frequency_hz[1]

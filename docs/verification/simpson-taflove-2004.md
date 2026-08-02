@@ -157,6 +157,51 @@ samples였다. Fig. 8의 전체 기울기와 대부분의 점은 크게 개선�
 488.281 Hz의 잔차가 약 +2.4 dB/Mm이어 논문의 보고 범위를
 최대 절대 오차 기준으로 엄격하게 적용하면 아직 실패다.
 
+## subdivision 8 CUDA float64 수렴 검증
+
+논문 격자보다 거친 subdivision 7의 고주파 수치 분산 여부를 확인하기 위해
+표면 셀을 4배 늘린 subdivision 8을 같은 조건으로 실행했다. PyTorch
+backend에서 face edge를 한 번에 모으던 큰 임시 tensor를 corner별로
+누적하고 solver 산술을 제자리 연산으로 바꿔 12 GB RTX 3060에서 실행할
+수 있도록 peak memory를 줄였다. Compiled one-step preflight의 peak allocated
+memory는 약 10.1 GB였고, 전체 25,023스텝 실행에는 3,477.9초가 걸렸다.
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 8 --steps 25023 \
+  --material natural-earth \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.33 \
+  --synchronize-every 1024 \
+  --output-dir artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected
+```
+
+[subdivision 8 전체 보고서](../../artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected/verification-report.md)
+
+| subdivision | 표면 셀 | A–B 평균/최대 오차 | A′–B′ 평균/최대 오차 |
+|---:|---:|---:|---:|
+| 6 | 40,962 | 0.572 / 2.028 dB/Mm | 0.584 / 2.130 dB/Mm |
+| 7 | 163,842 | 0.241 / 2.389 dB/Mm | 0.249 / 2.433 dB/Mm |
+| 8 | 655,362 | 0.156 / 0.906 dB/Mm | 0.156 / 0.913 dB/Mm |
+
+subdivision 7의 488.281 Hz 잔차는 A–B에서 +2.389 dB/Mm였으나
+subdivision 8에서 +0.412 dB/Mm로 감소했다. 평균 오차도 두 경로에서
+각각 35%, 37% 감소해 공간 해상도 증가에 따른 전반적인 수렴을 확인했다.
+음의 주펄스 위치는 A/A′ 7,489, B/B′ 14,446스텝이며 adaptive DFT 절단은
+A 21,788, A′ 21,722, B/B′ 22,436 samples였다.
+
+다만 subdivision 8의 최대 잔차는 478.109 Hz에서 +0.906/+0.913 dB/Mm로
+이동했다. 따라서 A′–B′의 ±1.0 dB/Mm 범위는 통과하지만 A–B의 ±0.5
+dB/Mm 범위는 통과하지 못해 전체 정량 상태는 여전히 실패다. 절단점을
+±16 samples 바꿔도 최대 오차 변화는 약 0.01 dB/Mm에 불과해 adaptive
+cutoff가 원인은 아니다. 반면 zero-padding을 32,768에서 65,536으로 늘리면
+MAE는 약 0.156 dB/Mm로 유지되지만 483.195 Hz의 좁은 peak를 더 촘촘히
+표본화해 최대 오차가 1.736/1.744 dB/Mm로 증가한다. 원시 Bannister
+비교점이 없는 상태에서 임의 FFT bin 전체의 최대값은 주파수 표본화에
+민감하므로, 현재 결과를 완전한 정량 재현으로 판정해서는 안 된다.
+
 가능성이 큰 차이 원인은 다음과 같다.
 
 1. NOAA-NGDC 지형·수심 원본 대신 해안선 기반 육지 마스크를 사용했다.
@@ -169,12 +214,12 @@ samples였다. Fig. 8의 전체 기울기와 대부분의 점은 크게 개선�
 
 ## 다음 검증 순서
 
-1. 488 Hz 스펙트럼 잔차가 subdivision 8에서 수렴하는지 확인한다.
+1. 원시 Bannister 비교점 또는 Fig. 8 digitization을 확보해 평가 주파수를
+   고정하고, FFT zero-padding에 불변인 점별 판정을 정의한다.
 2. 균질 모델에서 subdivision별 위상속도와 도달 시간을 수렴 검증한다.
 3. NOAA relief와 Hermance 전도도 자료를 동일한 해상도로 준비해
    동서 파형 비대칭을 재현한다.
-4. 원시 Bannister 곡선을 확보한 뒤 digitized guide를 교체한다.
-5. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
+4. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
 
 ## 참고문헌
 

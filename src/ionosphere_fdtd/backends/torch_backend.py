@@ -144,11 +144,16 @@ class TorchBackend(ArrayBackend):
         return face_values[self.edge_left_faces] - face_values[self.edge_right_faces]
 
     def face_circulation(self, edge_values: Any) -> Any:
-        selected = edge_values[self.face_edges]
-        signs = self.face_edge_signs
-        while signs.ndim < selected.ndim:
-            signs = signs.unsqueeze(-1)
-        return self.torch.sum(selected * signs, dim=1)
+        sign_shape = (self.face_edges.shape[0],) + (1,) * (
+            edge_values.ndim - 1
+        )
+        result = edge_values[self.face_edges[:, 0]]
+        result.mul_(self.face_edge_signs[:, 0].reshape(sign_shape))
+        for corner in (1, 2):
+            term = edge_values[self.face_edges[:, corner]]
+            term.mul_(self.face_edge_signs[:, corner].reshape(sign_shape))
+            result.add_(term)
+        return result
 
     def dual_cell_circulation(self, edge_values: Any) -> Any:
         output_shape = (self.n_vertices,) + tuple(edge_values.shape[1:])
@@ -156,7 +161,7 @@ class TorchBackend(ArrayBackend):
             output_shape, dtype=edge_values.dtype, device=self.torch_device
         )
         result.index_add_(0, self.edges[:, 0], edge_values)
-        result.index_add_(0, self.edges[:, 1], -edge_values)
+        result.index_add_(0, self.edges[:, 1], edge_values, alpha=-1.0)
         return result
 
     def to_numpy(self, values: Array) -> np.ndarray:

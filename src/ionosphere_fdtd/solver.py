@@ -274,22 +274,23 @@ class GeodesicFDTD:
                 self.et, axis=1
             ) / self._radial_center_distances
 
-        self.ht += (self.time_step_s / MU_0) * (
-            surface_gradient_er - radial_derivative_et
-        )
+        surface_gradient_er -= radial_derivative_et
+        surface_gradient_er *= self.time_step_s / MU_0
+        self.ht += surface_gradient_er
+        del surface_gradient_er, radial_derivative_et
 
         electric_circulation = self.backend.face_circulation(
             self.et * self._primal_lengths_te
         )
-        self.hr -= (self.time_step_s / MU_0) * (
-            electric_circulation / self._face_areas_te
-        )
+        electric_circulation /= self._face_areas_te
+        electric_circulation *= self.time_step_s / MU_0
+        self.hr -= electric_circulation
 
     def _update_electric_fields(self, current_a: Any = 0.0) -> None:
         magnetic_circulation = self.backend.dual_cell_circulation(
             self.ht * self._dual_lengths_tm
         )
-        curl_h_radial = magnetic_circulation / self._dual_areas_tm
+        magnetic_circulation /= self._dual_areas_tm
 
         current_density = None
         if self.source is not None and self._source_distribution is not None:
@@ -299,7 +300,8 @@ class GeodesicFDTD:
             )
 
         self.er *= self._ca_er
-        self.er += self._cb_er * curl_h_radial
+        magnetic_circulation *= self._cb_er
+        self.er += magnetic_circulation
         if current_density is not None:
             vertices, layer, _ = self._source_distribution
             self.er[vertices, layer] -= self._cb_er[vertices, layer] * current_density
@@ -310,9 +312,11 @@ class GeodesicFDTD:
         radial_derivative_ht = self.backend.diff(
             self.ht, axis=1
         ) / self._radial_steps[None, :]
-        curl_h_tangential = surface_gradient_hr - radial_derivative_ht
+        surface_gradient_hr -= radial_derivative_ht
+        del radial_derivative_ht
         self.et *= self._ca_et
-        self.et += self._cb_et * curl_h_tangential
+        surface_gradient_hr *= self._cb_et
+        self.et += surface_gradient_hr
 
     def diagnostics(self) -> dict[str, float | int | str]:
         """Return inexpensive scalar diagnostics without saving field data."""
