@@ -68,6 +68,12 @@ class TorchBackend(ArrayBackend):
 
         return self.torch.compile(step, fullgraph=True, dynamic=False)
 
+    def synchronize(self) -> None:
+        if self.torch_device.type == "mps":
+            self.torch.mps.synchronize()
+        elif self.torch_device.type == "cuda":
+            self.torch.cuda.synchronize(self.torch_device)
+
     def _resolve_device(self, requested: str) -> Any:
         torch = self.torch
         requested = requested.lower()

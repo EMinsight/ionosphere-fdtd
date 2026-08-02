@@ -89,3 +89,21 @@ def test_loss_coefficient_damps_uncoupled_radial_field() -> None:
     expected = simulation._ca_er[:, 0].copy()
     simulation.step()
     assert np.allclose(simulation.er[:, 0], expected)
+
+
+def test_backend_native_observation_recording_includes_initial_state() -> None:
+    simulation = GeodesicFDTD(
+        config=small_config(), source=GaussianCurrent(peak_current_a=1.0e6)
+    )
+    traces = simulation.record_er_observations(
+        np.asarray(((0, 1, 2),), dtype=np.int64),
+        np.asarray((3,), dtype=np.int64),
+        np.asarray(((0.2, 0.3, 0.5),)),
+        5,
+        synchronize_every=2,
+    )
+
+    assert traces.shape == (6, 1)
+    assert traces[0, 0] == 0.0
+    assert simulation.steps == 5
+    assert np.isfinite(traces).all()

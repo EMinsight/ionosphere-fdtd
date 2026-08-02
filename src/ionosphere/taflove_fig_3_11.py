@@ -138,15 +138,7 @@ def _advance_in_batches(
 
 
 def _synchronize_accelerator(simulation: GeodesicFDTD) -> None:
-    backend = simulation.backend
-    torch = getattr(backend, "torch", None)
-    device = getattr(backend, "torch_device", None)
-    if torch is None or device is None:
-        return
-    if device.type == "mps":
-        torch.mps.synchronize()
-    elif device.type == "cuda":
-        torch.cuda.synchronize(device)
+    simulation.backend.synchronize()
 
 
 def render_figure_3_11_media(

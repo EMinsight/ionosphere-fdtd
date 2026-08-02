@@ -346,6 +346,62 @@ class GeodesicFDTD:
             raise ValueError("field must be er, et, hr, or ht")
         return self.backend.scalar(values[indices])
 
+    def record_er_observations(
+        self,
+        vertex_indices: NDArray[np.int64],
+        radial_layers: NDArray[np.int64],
+        weights: NDArray[np.float64],
+        steps: int,
+        *,
+        synchronize_every: int = 128,
+    ) -> NDArray[np.generic]:
+        """Advance and record weighted ``Er`` observations without host syncs.
+
+        Each row of ``vertex_indices`` and ``weights`` describes one receiver.
+        The returned first row is the initial field, followed by one row per
+        completed time step.  Keeping the trace buffer on the backend is much
+        faster than reading individual MPS or CUDA scalars every step.
+        """
+
+        vertices = np.asarray(vertex_indices, dtype=np.int64)
+        layers = np.asarray(radial_layers, dtype=np.int64)
+        sample_weights = np.asarray(weights, dtype=np.float64)
+        if steps < 0:
+            raise ValueError("step count must be non-negative")
+        if synchronize_every < 1:
+            raise ValueError("synchronize_every must be positive")
+        if vertices.ndim != 2 or sample_weights.shape != vertices.shape:
+            raise ValueError("vertex_indices and weights must have matching 2-D shapes")
+        if layers.shape != (vertices.shape[0],):
+            raise ValueError("radial_layers must contain one layer per observation")
+        if np.any(vertices < 0) or np.any(vertices >= self.mesh.n_vertices):
+            raise ValueError("observation vertex index is out of range")
+        if np.any(layers < 0) or np.any(layers >= len(self.radii_m)):
+            raise ValueError("observation radial layer is out of range")
+        if not np.allclose(sample_weights.sum(axis=1), 1.0):
+            raise ValueError("observation weights must sum to one")
+
+        backend_vertices = self.backend.index_array(vertices)
+        backend_layers = self.backend.index_array(layers)
+        backend_weights = self.backend.asarray(sample_weights)
+        traces = self.backend.zeros((steps + 1, vertices.shape[0]))
+
+        def sample(row: int) -> None:
+            selected = self.er[backend_vertices, backend_layers[:, None]]
+            traces[row] = (selected * backend_weights).sum(axis=1)
+
+        sample(0)
+        currents = self._source_currents(steps)
+        for offset in range(steps):
+            self._field_step(currents[offset])
+            self.steps += 1
+            self.time_s = self.steps * self.time_step_s
+            sample(offset + 1)
+            if (offset + 1) % synchronize_every == 0:
+                self.backend.synchronize()
+        self.backend.synchronize()
+        return self.to_numpy(traces)
+
     @property
     def memory_bytes(self) -> int:
         return sum(

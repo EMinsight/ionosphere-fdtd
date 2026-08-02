@@ -33,6 +33,9 @@ class ArrayBackend(ABC):
             f"the {self.name} backend does not support compiled field steps"
         )
 
+    def synchronize(self) -> None:
+        """Wait for queued device work when the backend is asynchronous."""
+
     @abstractmethod
     def asarray(self, values: Any) -> Array:
         """Move floating-point values to this backend."""
