@@ -17,23 +17,20 @@ The implementation follows three ideas from the project references:
   TE planes (`Hr`, tangential `Et`) and couple them with regular radial Yee
   differences.
 
-Visualization and field-data persistence are intentionally not implemented
-yet.  The CLI reports only scalar diagnostics.
+The package includes projected surface maps, great-circle radial sections,
+receiver traces, interactive 3-D geodesic meshes, and GIF/MP4 animations.
+Field-data persistence is intentionally deferred.
 
 ## Installation
 
 Python 3.11 or newer is required.
 
 ```bash
-uv sync --extra test
+uv sync --extra test --extra visualization
 ```
 
-Alternatively:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -e '.[test]'
-```
+All commands below are launched through `uv run`; no virtual-environment path
+or separate `pip` invocation is needed.
 
 ## Quick run on a MacBook
 
@@ -41,22 +38,22 @@ The default is deliberately small: subdivision level 2 gives 162 surface
 cells and 24 radial cells between 100 km below and 100 km above sea level.
 
 ```bash
-.venv/bin/python -m ionosphere --steps 200
+uv run ionosphere --steps 200
 ```
 
 Useful variants:
 
 ```bash
 # Very small smoke run: 42 surface cells
-.venv/bin/python -m ionosphere --subdivision 1 --radial-cells 16 --steps 100
+uv run ionosphere --subdivision 1 --radial-cells 16 --steps 100
 
 # The 642-cell surface grid illustrated in the papers
-.venv/bin/python -m ionosphere --subdivision 3 --radial-cells 40 --steps 1000
+uv run ionosphere --subdivision 3 --radial-cells 40 --steps 1000
 
 # Add the paper-like 1.25 km near-surface radial refinement, a low-conductivity
 # Alaska-like lithosphere anomaly, and a 20 Hz carrier.  The expanded 1,200 km
 # anomaly radius is only for a resolvable laptop-scale demonstration.
-.venv/bin/python -m ionosphere --surface-step 1250 --oil-anomaly \
+uv run ionosphere --surface-step 1250 --oil-anomaly \
   --anomaly-radius-km 1200 --source-frequency 20 --steps 150000
 ```
 
@@ -123,13 +120,17 @@ These values and anomaly volumes are configurable.  They isolate data choices
 from the solver so measured ionospheric profiles, bathymetry, topography,
 oceans, or gridded crustal conductivity can be added later.
 
-`GaussianCurrent` injects a vertical current into the closest dual cell and
-radial plane.  Its location, amplitude, Gaussian width/center, and optional
-carrier frequency are configurable.  With a carrier and no explicit width,
-the 1/e half-width is `0.5 / frequency` (25 ms at 20 Hz, close to the paper's
-42.5 ms FWHM envelope).  Use `--source-width` and `--source-center` to override
-it.  The CLI warns when an anomaly is smaller than the selected surface grid.
-The same warning covers an anomaly thinner than the selected radial spacing.
+`GaussianCurrent` defaults to Gwangju, Republic of Korea (`35.1595° N`,
+`126.8526° E`).  It distributes vertical current among the three dual cells of
+the containing primal triangle using barycentric weights, preserving both the
+requested geographic direction and total current on a coarse grid.  The radial
+coordinate uses the closest plane.  Location, amplitude, Gaussian width/center,
+and optional carrier frequency are configurable.  With a carrier and no
+explicit width, the 1/e half-width is `0.5 / frequency` (25 ms at 20 Hz, close
+to the paper's 42.5 ms FWHM envelope).  Use `--source-width` and
+`--source-center` to override it.  The CLI warns when an anomaly is smaller than
+the selected surface grid.  The same warning covers an anomaly thinner than the
+selected radial spacing.
 
 ## Python API
 
@@ -153,16 +154,117 @@ The public field arrays are:
 
 All values use SI units.
 
+## Visualization
+
+Visualization dependencies are optional; the base solver still depends only
+on NumPy.  Static maps, sections, and traces use Matplotlib and Cartopy.  The
+3-D topology and animations use PyVista/VTK.
+
+Render a projected `Er` map after 1,200 warm-up steps:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --radial-cells 24 --steps 1200 \
+  surface --scale symlog --output surface.png
+```
+
+Render a Gwangju-to-antipode distance-height section:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --radial-cells 24 --steps 1200 \
+  section --start-latitude 35.1595 --start-longitude 126.8526 \
+  --end-latitude -35.1595 --end-longitude -53.1474 --output section.png
+```
+
+Inspect the pentagon/hexagon dual mesh over the bundled Earth day-map texture:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --steps 0 mesh --component topology --output mesh.png
+```
+
+Watch the solver advance in a responsive, interactive 3-D window:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --radial-cells 24 --steps 0 \
+  live --component er --steps-per-frame 10 --fps 20
+```
+
+Drag to rotate, use the mouse wheel to zoom, and press `q` or close the window
+to stop.  The bundled PyVista Earth day-map is rendered beneath the geodesic
+grid.  Field cells become transparent near zero and increasingly opaque with
+amplitude, leaving geography visible beneath propagating waves.  A yellow
+marker identifies the exact source location, which defaults to Gwangju.  Use
+`--no-earth-texture` for the original field-only globe, `--no-show-edges` to
+hide grid lines, or `--field-opacity 0.6` to reveal more of the map.
+
+By default, the symmetric color range follows the current field amplitude.
+Add `--color-limit 4` for a fixed scale, or `--frames 1000` to stop calculation
+after a known number of display updates while leaving the final field available
+for inspection.  Smaller `--steps-per-frame` values improve UI responsiveness;
+larger values advance simulation time faster between renders.
+
+Write a fixed-color-scale animation.  Warm-up steps should produce a nonzero
+field before the first frame; an explicit `--color-limit` makes runs directly
+comparable.
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --radial-cells 24 --steps 1200 \
+  animate --frames 120 --steps-per-frame 10 --fps 24 \
+  --color-limit 4 --output field.mp4
+```
+
+Receiver traces are sampled in memory without retaining the full field history:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --steps 40 traces \
+  --trace-steps 4000 --sample-every 10 \
+  --receiver 35.6762 139.6503 0 \
+  --receiver 21.3069 -157.8583 0 --output traces.png
+```
+
+The Python API exposes the same operations:
+
+```python
+from ionosphere import plot_surface_field, sample_radial_section
+
+figure, axes, artist = plot_surface_field(
+    simulation, "er", altitude_m=0.0, scale="symlog"
+)
+section = sample_radial_section(
+    simulation, 35.1595, 126.8526, -35.1595, -53.1474
+)
+```
+
+Surface maps use display-only spherical IDW interpolation onto a regular
+longitude/latitude grid before projection.  This avoids false triangles at the
+map seam; the solver's geodesic values are not modified.  `Er`/`Hr` maps and
+animations always use a symmetric color scale about zero.  The optional
+`--coastlines` flag may cause Cartopy to download Natural Earth data on first
+use.
+
 ## Tests
 
 ```bash
-.venv/bin/pytest -q
+uv run --extra test --extra visualization pytest -q
 ```
 
 The tests cover icosphere counts, pentagon/hexagon topology, exact
 boundary-of-boundary cancellation, spherical area closure, material/anomaly
 selection, zero-field invariance, conductive damping, source launching, and
-Courant-limit rejection.
+Courant-limit rejection.  Visualization tests additionally cover coordinate
+conversion, projected maps, radial interpolation, receiver sampling, and
+PyVista point/cell associations.  The GIF render test is opt-in because CI must
+provide a working OpenGL context:
+
+```bash
+IONOSPHERE_TEST_PYVISTA_RENDER=1 \
+  uv run --extra test --extra visualization pytest -q
+```
 
 ## Current scientific limits
 
@@ -171,8 +273,8 @@ not claim reproduction of the paper's validation curves at the laptop default
 resolution.  Such reproduction additionally requires the paper-scale grid,
 NOAA topography/bathymetry, the referenced Hermance crust profile, the exact
 Bannister ionosphere profile, long observation records, and DFT/windowing.
-Those are data ingestion, validation, visualization, and persistence tasks
-reserved for the next stage.
+Those are data ingestion, benchmark validation, and persistence tasks reserved
+for the next stage.
 
 ## References
 
