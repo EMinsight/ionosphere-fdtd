@@ -117,6 +117,9 @@ class GeodesicFDTD:
 
         self._prepare_geometry()
         self._prepare_material_coefficients()
+        self._source_distribution = (
+            self.source.distribution(self) if self.source is not None else None
+        )
         self.time_s = 0.0
         self.steps = 0
 
@@ -214,22 +217,17 @@ class GeodesicFDTD:
         curl_h_radial = magnetic_circulation / self._dual_areas_tm
 
         current_density = None
-        if self.source is not None:
-            vertex, layer = self.source.location(self)
-            current_density = (
-                vertex,
-                layer,
-                self.source.current_a(
-                    self.time_s + 0.5 * self.time_step_s, self.time_step_s
-                )
-                / self._dual_areas_tm[vertex, layer],
-            )
+        if self.source is not None and self._source_distribution is not None:
+            vertices, layer, weights = self._source_distribution
+            current_density = weights * self.source.current_a(
+                self.time_s + 0.5 * self.time_step_s, self.time_step_s
+            ) / self._dual_areas_tm[vertices, layer]
 
         self.er *= self._ca_er
         self.er += self._cb_er * curl_h_radial
         if current_density is not None:
-            vertex, layer, value = current_density
-            self.er[vertex, layer] -= self._cb_er[vertex, layer] * value
+            vertices, layer, _ = self._source_distribution
+            self.er[vertices, layer] -= self._cb_er[vertices, layer] * current_density
 
         surface_gradient_hr = (
             self.mesh.dual_edge_difference(self.hr) / self._dual_lengths_te

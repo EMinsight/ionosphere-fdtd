@@ -33,6 +33,23 @@ def test_gaussian_source_launches_finite_fields() -> None:
     assert simulation.time_s == pytest.approx(80 * simulation.time_step_s)
 
 
+def test_default_source_is_located_in_gwangju() -> None:
+    source = GaussianCurrent()
+    assert source.latitude_deg == pytest.approx(35.1595)
+    assert source.longitude_deg == pytest.approx(126.8526)
+
+
+def test_source_distribution_preserves_exact_direction() -> None:
+    source = GaussianCurrent()
+    simulation = GeodesicFDTD(config=small_config(), source=source)
+    vertices, _, weights = source.distribution(simulation)
+    represented = weights @ simulation.mesh.vertices[vertices]
+    represented /= np.linalg.norm(represented)
+    assert weights.sum() == pytest.approx(1.0)
+    assert np.all(weights >= 0.0)
+    assert represented @ source.direction() == pytest.approx(1.0)
+
+
 def test_requested_unstable_time_step_is_rejected() -> None:
     baseline = GeodesicFDTD(config=small_config())
     with pytest.raises(ValueError, match="exceeds conservative limit"):

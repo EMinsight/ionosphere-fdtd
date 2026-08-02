@@ -1,4 +1,4 @@
-"""Command-line smoke runner; visualization and persistence are intentionally absent."""
+"""Command-line simulation runner with scalar diagnostics."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ import numpy as np
 
 from .materials import EarthIonosphereMaterial, SphericalAnomaly
 from .solver import GeodesicFDTD, SimulationConfig
-from .sources import GaussianCurrent
+from .sources import (
+    GWANGJU_LATITUDE_DEG,
+    GWANGJU_LONGITUDE_DEG,
+    GaussianCurrent,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -31,8 +35,12 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         help="Gaussian 1/e half-width in seconds",
     )
-    parser.add_argument("--source-latitude", type=float, default=0.0)
-    parser.add_argument("--source-longitude", type=float, default=-47.0)
+    parser.add_argument(
+        "--source-latitude", type=float, default=GWANGJU_LATITUDE_DEG
+    )
+    parser.add_argument(
+        "--source-longitude", type=float, default=GWANGJU_LONGITUDE_DEG
+    )
     parser.add_argument(
         "--oil-anomaly",
         action="store_true",
