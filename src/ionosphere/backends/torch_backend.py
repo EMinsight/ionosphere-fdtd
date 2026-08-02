@@ -34,7 +34,7 @@ class TorchBackend(ArrayBackend):
         self.torch_device = self._resolve_device(device)
         self.device = str(self.torch_device)
         if dtype == "auto":
-            dtype = "float32" if self.torch_device.type == "mps" else "float64"
+            dtype = "float32"
         if dtype not in {"float32", "float64"}:
             raise ValueError("dtype must be 'auto', 'float32', or 'float64'")
         if self.torch_device.type == "mps" and dtype == "float64":

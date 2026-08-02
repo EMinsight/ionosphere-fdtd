@@ -81,6 +81,40 @@ def test_torch_cpu_matches_numpy() -> None:
         np.testing.assert_allclose(actual, expected, rtol=1.0e-11, atol=1.0e-12)
 
 
+def test_torch_auto_float32_tracks_float64_reference() -> None:
+    torch = pytest.importorskip("torch")
+    reference = GeodesicFDTD(
+        config=config(), source=source(), backend="numpy", dtype="float64"
+    )
+    optimized = GeodesicFDTD(
+        config=config(), source=source(), backend="torch", device="cpu"
+    )
+
+    reference.step(80)
+    optimized.step(80)
+
+    assert optimized.er.dtype == torch.float32
+    assert optimized.memory_bytes * 2 == reference.memory_bytes
+    for fields in (("er", "et"), ("hr", "ht")):
+        expected = np.concatenate(
+            tuple(getattr(reference, field).ravel() for field in fields)
+        )
+        actual = np.concatenate(
+            tuple(
+                optimized.to_numpy(getattr(optimized, field)).ravel()
+                for field in fields
+            )
+        )
+        relative_l2_error = np.linalg.norm(actual - expected) / np.linalg.norm(
+            expected
+        )
+        assert relative_l2_error < 2.0e-5
+    radial_magnetic_noise = np.max(
+        np.abs(optimized.to_numpy(optimized.hr) - reference.hr)
+    )
+    assert radial_magnetic_noise < 1.0e-6 * np.max(np.abs(reference.ht))
+
+
 def test_torch_compiled_cpu_matches_eager_with_source() -> None:
     pytest.importorskip("torch")
     eager = GeodesicFDTD(
@@ -141,6 +175,7 @@ def test_torch_auto_selects_an_available_device() -> None:
     )
     simulation = GeodesicFDTD(config=config(), backend="torch", device="auto")
     assert simulation.er.device.type == expected
+    assert simulation.er.dtype == torch.float32
 
 
 def test_torch_fields_cross_the_visualization_boundary_as_numpy() -> None:

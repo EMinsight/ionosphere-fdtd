@@ -59,8 +59,9 @@ uv run --extra pytorch ionosphere \
 
 PyTorch accepts `cpu`, `mps`, `cuda`, `cuda:N`, and the `gpu` alias for CUDA.
 `--device auto` chooses CUDA first, then MPS, then CPU.  Automatic precision is
-`float32` on MPS and `float64` on NumPy, PyTorch CPU, and CUDA; override it with
-`--dtype float32` or `--dtype float64`.  MPS does not support `float64`.
+`float64` on NumPy and `float32` on every PyTorch device; override it with
+`--dtype float32` or `--dtype float64`.  MPS does not support `float64`, while
+PyTorch CPU and CUDA can use explicit `float64` for quantitative comparisons.
 For the deliberately small default grid, accelerator dispatch overhead can
 outweigh its benefit, so compare NumPy CPU and MPS before choosing a backend for
 long runs.
