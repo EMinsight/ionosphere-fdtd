@@ -28,6 +28,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dtype", choices=("auto", "float32", "float64"), default="auto"
     )
+    parser.add_argument(
+        "--torch-compile",
+        action="store_true",
+        help="compile the PyTorch field step for long-running simulations",
+    )
     parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
     parser.add_argument("--radial-cells", type=int, default=24)
     parser.add_argument(
@@ -110,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
             backend=args.backend,
             device=args.device,
             dtype=args.dtype,
+            compile_step=args.torch_compile,
         )
     except BackendUnavailableError as error:
         raise SystemExit(str(error)) from error
@@ -143,7 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(
         f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name}; dt={simulation.time_step_s:.6e} s "
+        f"dtype={simulation.backend.dtype_name} compiled={simulation.compiled}; "
+        f"dt={simulation.time_step_s:.6e} s "
         f"(conservative limit), field memory={simulation.memory_bytes / 2**20:.2f} MiB"
     )
     for start in range(0, args.steps, args.report_every):

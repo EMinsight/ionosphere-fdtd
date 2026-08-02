@@ -27,6 +27,11 @@ def test_numpy_backend_rejects_accelerator_device() -> None:
         GeodesicFDTD(config=config(), backend="numpy", device="mps")
 
 
+def test_numpy_backend_rejects_compiled_step() -> None:
+    with pytest.raises(BackendUnavailableError, match="compiled field steps"):
+        GeodesicFDTD(config=config(), backend="numpy", compile_step=True)
+
+
 def test_torch_cpu_matches_numpy() -> None:
     torch = pytest.importorskip("torch")
     numpy_simulation = GeodesicFDTD(
@@ -49,6 +54,39 @@ def test_torch_cpu_matches_numpy() -> None:
         expected = getattr(numpy_simulation, field)
         actual = torch_simulation.to_numpy(getattr(torch_simulation, field))
         np.testing.assert_allclose(actual, expected, rtol=1.0e-11, atol=1.0e-12)
+
+
+def test_torch_compiled_cpu_matches_eager_with_source() -> None:
+    pytest.importorskip("torch")
+    eager = GeodesicFDTD(
+        config=config(),
+        source=source(),
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+    )
+    compiled = GeodesicFDTD(
+        config=config(),
+        source=source(),
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+        compile_step=True,
+    )
+
+    eager.step(12)
+    compiled.step(12)
+
+    assert compiled.compiled
+    assert compiled.steps == eager.steps
+    assert compiled.time_s == pytest.approx(eager.time_s)
+    for field in ("er", "et", "hr", "ht"):
+        np.testing.assert_allclose(
+            compiled.to_numpy(getattr(compiled, field)),
+            eager.to_numpy(getattr(eager, field)),
+            rtol=1.0e-11,
+            atol=1.0e-12,
+        )
 
 
 def test_torch_auto_selects_an_available_device() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -21,6 +22,15 @@ class ArrayBackend(ABC):
     name: str
     device: str
     dtype_name: str
+
+    def compile_step(
+        self, step: Callable[[Array], None]
+    ) -> Callable[[Array], None]:
+        """Compile a tensor-only field step when supported."""
+
+        raise BackendUnavailableError(
+            f"the {self.name} backend does not support compiled field steps"
+        )
 
     @abstractmethod
     def asarray(self, values: Any) -> Array:

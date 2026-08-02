@@ -49,6 +49,14 @@ uv run --extra pytorch ionosphere \
   --backend torch --device mps --steps 200
 ```
 
+For long PyTorch runs, compile the static field update after selecting the
+grid, device, and precision.  The first step includes compilation warm-up:
+
+```bash
+uv run --extra pytorch ionosphere \
+  --backend torch --device mps --torch-compile --steps 20000
+```
+
 PyTorch accepts `cpu`, `mps`, `cuda`, `cuda:N`, and the `gpu` alias for CUDA.
 `--device auto` chooses CUDA first, then MPS, then CPU.  Automatic precision is
 `float32` on MPS and `float64` on NumPy, PyTorch CPU, and CUDA; override it with

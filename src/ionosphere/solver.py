@@ -74,6 +74,7 @@ class GeodesicFDTD:
         backend: str = "numpy",
         device: str = "auto",
         dtype: str = "auto",
+        compile_step: bool = False,
     ) -> None:
         self.config = config or SimulationConfig()
         self.mesh = mesh or build_geodesic_mesh(
@@ -138,6 +139,12 @@ class GeodesicFDTD:
             )
         self.time_s = 0.0
         self.steps = 0
+        self.compiled = compile_step
+        self._field_step = (
+            self.backend.compile_step(self._advance_fields)
+            if compile_step
+            else self._advance_fields
+        )
 
     def _estimate_stable_time_step(self) -> float:
         smallest_radius = float(self.radii_m.min())
@@ -209,11 +216,45 @@ class GeodesicFDTD:
 
         if count < 0:
             raise ValueError("step count must be non-negative")
+        if self.compiled and count:
+            currents = self._source_currents(count)
+            for offset in range(count):
+                self._field_step(currents[offset])
+            self.steps += count
+            self.time_s = self.steps * self.time_step_s
+            return
         for _ in range(count):
-            self._update_magnetic_fields()
-            self._update_electric_fields()
+            current_a = (
+                self.source.current_a(
+                    self.time_s + 0.5 * self.time_step_s,
+                    self.time_step_s,
+                )
+                if self.source is not None
+                else 0.0
+            )
+            self._field_step(current_a)
             self.steps += 1
             self.time_s = self.steps * self.time_step_s
+
+    def _source_currents(self, count: int) -> Any:
+        if self.source is None:
+            return self.backend.zeros((count,))
+        values = np.fromiter(
+            (
+                self.source.current_a(
+                    (self.steps + offset + 0.5) * self.time_step_s,
+                    self.time_step_s,
+                )
+                for offset in range(count)
+            ),
+            dtype=np.float64,
+            count=count,
+        )
+        return self.backend.asarray(values)
+
+    def _advance_fields(self, current_a: Any) -> None:
+        self._update_magnetic_fields()
+        self._update_electric_fields(current_a)
 
     def _update_magnetic_fields(self) -> None:
         surface_gradient_er = self.backend.edge_difference(
@@ -239,7 +280,7 @@ class GeodesicFDTD:
             electric_circulation / self._face_areas_te
         )
 
-    def _update_electric_fields(self) -> None:
+    def _update_electric_fields(self, current_a: Any = 0.0) -> None:
         magnetic_circulation = self.backend.dual_cell_circulation(
             self.ht * self._dual_lengths_tm
         )
@@ -248,9 +289,9 @@ class GeodesicFDTD:
         current_density = None
         if self.source is not None and self._source_distribution is not None:
             vertices, layer, weights = self._source_distribution
-            current_density = weights * self.source.current_a(
-                self.time_s + 0.5 * self.time_step_s, self.time_step_s
-            ) / self._dual_areas_tm[vertices, layer]
+            current_density = (
+                weights * current_a / self._dual_areas_tm[vertices, layer]
+            )
 
         self.er *= self._ca_er
         self.er += self._cb_er * curl_h_radial
@@ -277,6 +318,7 @@ class GeodesicFDTD:
             "backend": self.backend.name,
             "device": self.backend.device,
             "dtype": self.backend.dtype_name,
+            "compiled": self.compiled,
             "max_abs_er_v_m": self.backend.max_abs(self.er),
             "max_abs_et_v_m": self.backend.max_abs(self.et),
             "max_abs_hr_a_m": self.backend.max_abs(self.hr),

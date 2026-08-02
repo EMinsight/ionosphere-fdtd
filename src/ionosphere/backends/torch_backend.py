@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -41,6 +42,13 @@ class TorchBackend(ArrayBackend):
         self.edge_left_faces = self.index_array(mesh.edge_left_faces)
         self.edge_right_faces = self.index_array(mesh.edge_right_faces)
         self.n_vertices = mesh.n_vertices
+
+    def compile_step(
+        self, step: Callable[[Array], None]
+    ) -> Callable[[Array], None]:
+        """Compile a static-shape field step with TorchInductor."""
+
+        return self.torch.compile(step, fullgraph=True, dynamic=False)
 
     def _resolve_device(self, requested: str) -> Any:
         torch = self.torch

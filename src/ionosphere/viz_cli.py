@@ -36,6 +36,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dtype", choices=("auto", "float32", "float64"), default="auto"
     )
+    parser.add_argument(
+        "--torch-compile",
+        action="store_true",
+        help="compile the PyTorch field step for long-running simulations",
+    )
     parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
     parser.add_argument("--radial-cells", type=int, default=24)
     parser.add_argument("--steps", type=int, default=100, help="warm-up steps")
@@ -156,12 +161,13 @@ def main(argv: list[str] | None = None) -> int:
             backend=args.backend,
             device=args.device,
             dtype=args.dtype,
+            compile_step=args.torch_compile,
         )
     except BackendUnavailableError as error:
         raise SystemExit(str(error)) from error
     print(
         f"backend={simulation.backend.name} device={simulation.backend.device} "
-        f"dtype={simulation.backend.dtype_name}"
+        f"dtype={simulation.backend.dtype_name} compiled={simulation.compiled}"
     )
     simulation.step(args.steps)
     output = getattr(args, "output", None)
