@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/python,macos,windows,linux,visualstudiocode,venv
-# Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,windows,linux,visualstudiocode,venv
+# Created by https://www.toptal.com/developers/gitignore/api/python,macos,windows,linux,visualstudiocode,venv,video
+# Edit at https://www.toptal.com/developers/gitignore?templates=python,macos,windows,linux,visualstudiocode,venv,video
 
 ### Linux ###
 *~
@@ -233,6 +233,24 @@ pyrightconfig.json
 pyvenv.cfg
 pip-selfcheck.json
 
+### Video ###
+*.3g2
+*.3gp
+*.asf
+*.asx
+*.avi
+*.flv
+*.mkv
+*.mov
+*.mp4
+*.mpg
+*.ogv
+*.rm
+*.swf
+*.vob
+*.wmv
+*.webm
+
 ### VisualStudioCode ###
 .vscode/*
 !.vscode/settings.json
@@ -278,4 +296,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/python,macos,windows,linux,visualstudiocode,venv
+# End of https://www.toptal.com/developers/gitignore/api/python,macos,windows,linux,visualstudiocode,venv,video
