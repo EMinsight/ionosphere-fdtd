@@ -315,6 +315,54 @@ animations always use a symmetric color scale about zero.  The optional
 `--coastlines` flag may cause Cartopy to download Natural Earth data on first
 use.
 
+### Simpson–Taflove 2004 validation
+
+The validation command recreates the Figure 7 observation geometry and the
+Figure 8 DFT procedure.  It uses the paper's 3 µs step, 40 radial cells, source
+at 0°, 47° W, Gaussian `1/e` full width of `480 Δt`, center at `960 Δt`, and
+the four receiver-specific truncation lengths.  Natural Earth's land polygons
+provide a reproducible approximation to the unavailable NOAA relief data.  The
+paper does not state the pulse amplitude, so Figure 7 uses a 1 A normalization;
+the Figure 8 spectral ratios are independent of that choice:
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 7 --steps 35000 --device mps
+```
+
+The figures and a self-contained `verification-report.md` are written to
+`artifacts/simpson-taflove-2004`.  The report records the exact command, Git
+revision, runtime configuration, all metrics, pass/fail thresholds, and image
+links.  A level-5 run is useful as a roughly one-minute pipeline check; level 7
+has the paper's 163,842 surface cells and took about ten minutes on the
+development Mac.  The first Natural Earth run may download its public 110-m
+land dataset.  Use `--material uniform` for a data-free symmetry baseline.
+
+This workflow is deliberately a verification test, not a claim of agreement.
+The level-7 approximation reproduced the negative primary pulse and slow-tail
+shape, but its Figure 8 mean absolute errors were 6.15 dB/Mm for A–B and 5.99
+dB/Mm for A′–B′.  Those values fail the paper's reported approximately
+±0.5/±1.0 dB/Mm agreement.  The command prints pulse timings and east/west RMS
+differences so improvements to the material and discretization models can be
+measured rather than judged only by appearance.
+
+The baseline level-7 result, interpretation, and recommended next checks are
+documented in
+[the Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).
+
+The recorded baseline used `float32` on Apple MPS.  MPS does not support
+PyTorch `float64`; a full CPU `float64` retry was manually stopped after more
+than 113 minutes and produced no partial result.  Run the double-precision
+baseline on a CUDA Linux host instead:
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 7 --steps 35000 \
+  --material natural-earth \
+  --backend torch --device cuda --dtype float64 --torch-compile \
+  --output-dir artifacts/simpson-taflove-2004/level-7-float64-cuda
+```
+
 ## Tests
 
 ```bash
@@ -338,18 +386,23 @@ IONOSPHERE_TEST_PYVISTA_RENDER=1 \
 
 ## Scientific scope and validation
 
-The laptop defaults demonstrate the complete 3-D algorithm but are not intended
-to reproduce the paper's validation curves.  Quantitative reproduction requires
-the paper-scale grid, NOAA topography and bathymetry, the referenced Hermance
-crust profile, the exact Bannister ionosphere profile, long observation records,
-and equivalent DFT and windowing procedures.
+The laptop defaults demonstrate the complete 3-D algorithm.  The 2004
+validation workflow supplies the paper-scale grid, observation records, and DFT
+windowing, but substitutes a Natural Earth land mask and bounded Figure 6 layer
+values for the unavailable NOAA topography/bathymetry and full Hermance model.
+Quantitative reproduction still requires those original data, the exact
+Bannister profile, and a discretization study reconciling the paper's merged
+latitude–longitude cells with this project's geodesic dual grid.
 
 ## References
 
 1. D. A. Randall et al., “Climate Modeling with Spherical Geodesic Grids,”
    *Computing in Science & Engineering*, 4(5), 32-41, 2002.
-2. J. J. Simpson, R. P. Heikes, and A. Taflove, “FDTD modeling of a novel ELF
+2. J. J. Simpson and A. Taflove, “Three-dimensional FDTD modeling of impulsive
+   ELF propagation about the entire Earth-sphere,” *IEEE TAP*, 52(2), 443–451,
+   2004.
+3. J. J. Simpson, R. P. Heikes, and A. Taflove, “FDTD modeling of a novel ELF
    Radar for major oil deposits using a three-dimensional geodesic grid of the
    Earth-ionosphere waveguide,” *IEEE TAP*, 54(6), 1734-1741, 2006.
-3. A. Taflove and S. C. Hagness, *Computational Electrodynamics: The
+4. A. Taflove and S. C. Hagness, *Computational Electrodynamics: The
    Finite-Difference Time-Domain Method*, 3rd ed., Chapter 3, 2005.
