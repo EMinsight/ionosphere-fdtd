@@ -31,6 +31,9 @@ class ValidationRunSummary:
     time_step_s: float
     steps: int
     material_model: str
+    ionosphere_reference_height_m: float
+    ionosphere_scale_height_m: float
+    dft_window: str
     backend: str
     device: str
     dtype: str
@@ -39,6 +42,7 @@ class ValidationRunSummary:
     metrics: Mapping[str, float | int]
     figure_7: Path
     figure_8: Path
+    trace_data: Path
 
 
 def write_validation_report(
@@ -55,8 +59,14 @@ def write_validation_report(
     path_apbp_error = float(
         summary.metrics["path_apbp_mean_absolute_error_db_per_mm"]
     )
-    path_ab_passed = path_ab_error <= PAPER_PATH_AB_TOLERANCE_DB_PER_MM
-    path_apbp_passed = path_apbp_error <= PAPER_PATH_APBP_TOLERANCE_DB_PER_MM
+    path_ab_max_error = float(
+        summary.metrics["path_ab_maximum_absolute_error_db_per_mm"]
+    )
+    path_apbp_max_error = float(
+        summary.metrics["path_apbp_maximum_absolute_error_db_per_mm"]
+    )
+    path_ab_passed = path_ab_max_error <= PAPER_PATH_AB_TOLERANCE_DB_PER_MM
+    path_apbp_passed = path_apbp_max_error <= PAPER_PATH_APBP_TOLERANCE_DB_PER_MM
     status = "통과" if path_ab_passed and path_apbp_passed else "실패"
     path_ab_status = "통과" if path_ab_passed else "실패"
     path_apbp_status = "통과" if path_apbp_passed else "실패"
@@ -64,6 +74,7 @@ def write_validation_report(
     path_apbp_tolerance = f"{PAPER_PATH_APBP_TOLERANCE_DB_PER_MM:.1f}"
     figure_7_link = _relative_markdown_link(summary.figure_7, output_path)
     figure_8_link = _relative_markdown_link(summary.figure_8, output_path)
+    trace_data_link = _relative_markdown_link(summary.trace_data, output_path)
     metric_rows = "\n".join(
         f"| `{name}` | {_format_metric(value)} |"
         for name, value in summary.metrics.items()
@@ -91,6 +102,9 @@ def write_validation_report(
 | 시간 간격 | {summary.time_step_s:.3e} s |
 | 시간 스텝 | {summary.steps:,} |
 | 재료 모델 | `{summary.material_model}` |
+| 이온층 reference height | {summary.ionosphere_reference_height_m / 1_000.0:g} km |
+| 이온층 scale height | {summary.ionosphere_scale_height_m / 1_000.0:g} km |
+| DFT window | `{summary.dft_window}` |
 | backend | `{summary.backend}` |
 | device | `{summary.device}` |
 | dtype | `{summary.dtype}` |
@@ -104,15 +118,16 @@ def write_validation_report(
 - Gaussian center: `960 Δt`
 - `Δt = 3.0 μs`
 - 관측점: A/A′는 반대편까지 거리의 1/4, B/B′는 1/2
-- DFT 절단: A 22,849, B 24,165, A′ 22,737, B′ 25,023 samples
+- DFT 절단: `adaptive`는 각 계산 파형의 slow-tail 직전 zero crossing,
+  `paper`는 A 22,849, B 24,165, A′ 22,737, B′ 25,023 samples
 - 유효 비교 주파수: 50–500 Hz
 
 ## 판정
 
-| 경로 | 평균 절대 오차 | 논문 허용 범위 | 결과 |
-|---|---:|---:|---:|
-| A–B | {path_ab_error:.3f} dB/Mm | ≤ {path_ab_tolerance} dB/Mm | {path_ab_status} |
-| A′–B′ | {path_apbp_error:.3f} dB/Mm | ≤ {path_apbp_tolerance} dB/Mm | {path_apbp_status} |
+| 경로 | 평균 절대 오차 | 최대 절대 오차 | 논문 보고 범위 | 결과 |
+|---|---:|---:|---:|---:|
+| A–B | {path_ab_error:.3f} dB/Mm | {path_ab_max_error:.3f} dB/Mm | ±{path_ab_tolerance} dB/Mm | {path_ab_status} |
+| A′–B′ | {path_apbp_error:.3f} dB/Mm | {path_apbp_max_error:.3f} dB/Mm | ±{path_apbp_tolerance} dB/Mm | {path_apbp_status} |
 
 ## 전체 지표
 
@@ -125,6 +140,8 @@ def write_validation_report(
 ![Figure 7 verification]({figure_7_link})
 
 ![Figure 8 verification]({figure_8_link})
+
+[Receiver traces (NPZ)]({trace_data_link})
 
 ## 해석 시 주의사항
 

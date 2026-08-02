@@ -9,10 +9,15 @@ import subprocess
 import time
 from pathlib import Path
 
+import numpy as np
+
 from .backends import BackendUnavailableError
 from .simpson_taflove_2004 import (
+    PAPER_DFT_TRUNCATIONS,
     PAPER_MINIMUM_SIMULATION_STEPS,
     PAPER_TRACE_STEPS,
+    REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M,
+    REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     compute_attenuation,
     create_validation_simulation,
     record_validation_traces,
@@ -34,7 +39,7 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("artifacts/simpson-taflove-2004"),
     )
-    parser.add_argument("--subdivision", type=int, choices=range(0, 8), default=7)
+    parser.add_argument("--subdivision", type=int, choices=range(0, 9), default=7)
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
         "--material", choices=("natural-earth", "uniform"), default="natural-earth"
@@ -48,6 +53,22 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--torch-threads", type=int)
     parser.add_argument("--synchronize-every", type=int, default=128)
     parser.add_argument(
+        "--dft-window",
+        choices=("adaptive", "paper"),
+        default="adaptive",
+        help="truncate at each simulated zero crossing or use the paper's samples",
+    )
+    parser.add_argument(
+        "--ionosphere-reference-height-km",
+        type=float,
+        default=REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M / 1_000.0,
+    )
+    parser.add_argument(
+        "--ionosphere-scale-height-km",
+        type=float,
+        default=REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M / 1_000.0,
+    )
+    parser.add_argument(
         "--report",
         type=Path,
         help="Markdown report path (default: OUTPUT_DIR/verification-report.md)",
@@ -60,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.steps < PAPER_MINIMUM_SIMULATION_STEPS:
         raise SystemExit(
             "--steps must be at least "
-            f"{PAPER_MINIMUM_SIMULATION_STEPS} for the paper DFT windows"
+            f"{PAPER_MINIMUM_SIMULATION_STEPS} for the validation DFT windows"
         )
     started = time.perf_counter()
     try:
@@ -72,6 +93,10 @@ def main(argv: list[str] | None = None) -> int:
             dtype=args.dtype,
             compile_step=args.torch_compile,
             torch_threads=args.torch_threads,
+            ionosphere_reference_height_m=(
+                1_000.0 * args.ionosphere_reference_height_km
+            ),
+            ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -87,17 +112,40 @@ def main(argv: list[str] | None = None) -> int:
         steps=args.steps,
         synchronize_every=args.synchronize_every,
     )
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    trace_data = args.output_dir / "simpson-taflove-2004-traces.npz"
+    np.savez_compressed(
+        trace_data,
+        time_steps=traces.time_steps,
+        time_s=traces.time_s,
+        er_v_m=traces.er_v_m,
+        labels=np.asarray(traces.labels),
+    )
     figure_7 = render_figure_7(
         traces,
         args.output_dir / "simpson-taflove-2004-fig-7.png",
     )
-    curves = compute_attenuation(traces)
+    try:
+        curves = compute_attenuation(
+            traces,
+            truncations=(
+                PAPER_DFT_TRUNCATIONS if args.dft_window == "paper" else None
+            ),
+        )
+    except ValueError as error:
+        raise SystemExit(f"invalid DFT window: {error}") from error
     figure_8 = render_figure_8(
         curves,
         args.output_dir / "simpson-taflove-2004-fig-8.png",
     )
     metrics = validation_metrics(curves)
     metrics.update(trace_metrics(traces))
+    metrics.update(
+        {
+            f"{label}_dft_cutoff_step": cutoff
+            for label, cutoff in curves.dft_truncations.items()
+        }
+    )
     elapsed_s = time.perf_counter() - started
     report = write_validation_report(
         ValidationRunSummary(
@@ -110,6 +158,11 @@ def main(argv: list[str] | None = None) -> int:
             time_step_s=simulation.time_step_s,
             steps=args.steps,
             material_model=args.material,
+            ionosphere_reference_height_m=(
+                1_000.0 * args.ionosphere_reference_height_km
+            ),
+            ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
+            dft_window=args.dft_window,
             backend=simulation.backend.name,
             device=simulation.backend.device,
             dtype=simulation.backend.dtype_name,
@@ -118,11 +171,13 @@ def main(argv: list[str] | None = None) -> int:
             metrics=metrics,
             figure_7=figure_7,
             figure_8=figure_8,
+            trace_data=trace_data,
         ),
         args.report or args.output_dir / "verification-report.md",
     )
     print(f"figure 7: {figure_7}")
     print(f"figure 8: {figure_8}")
+    print(f"traces: {trace_data}")
     print(f"report: {report}")
     for name, value in metrics.items():
         rendered = str(value) if isinstance(value, int) else f"{value:.3f}"
@@ -142,6 +197,10 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"--backend {quote(args.backend)}",
         f"--device {quote(args.device)}",
         f"--dtype {quote(args.dtype)}",
+        f"--dft-window {quote(args.dft_window)}",
+        "--ionosphere-reference-height-km "
+        f"{args.ionosphere_reference_height_km:g}",
+        f"--ionosphere-scale-height-km {args.ionosphere_scale_height_km:g}",
         compile_flag,
         f"--synchronize-every {args.synchronize_every}",
         f"--output-dir {quote(str(args.output_dir))}",

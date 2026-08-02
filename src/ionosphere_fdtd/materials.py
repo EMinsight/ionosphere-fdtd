@@ -137,6 +137,9 @@ class SimpsonTaflove2004Material:
     5-km ocean layer, and a caller-provided land classifier.  It therefore
     reproduces the paper's land/ocean mechanism while making the missing NOAA
     relief data explicit instead of presenting the approximation as exact.
+    The ionosphere defaults use the representative 70-km reference height and
+    3.33-km scale height of the standard daytime exponential profile; callers
+    can override both when path-specific Bannister parameters are available.
     """
 
     land_classifier: LandClassifier
@@ -150,8 +153,8 @@ class SimpsonTaflove2004Material:
     lithosphere_relative_permittivity: float = 10.0
     sea_water_relative_permittivity: float = 80.0
     atmosphere_relative_permittivity: float = 1.0
-    ionosphere_reference_height_m: float = 74_000.0
-    ionosphere_scale_height_m: float = 6_000.0
+    ionosphere_reference_height_m: float = 70_000.0
+    ionosphere_scale_height_m: float = 3_330.0
     ionosphere_prefactor_hz: float = 2.5e5
 
     def __post_init__(self) -> None:

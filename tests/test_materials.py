@@ -47,3 +47,5 @@ def test_simpson_taflove_material_distinguishes_land_water_and_rock() -> None:
     assert sigma[1, 1] == sigma[0, 1]
     assert epsilon_r[1, 0] == material.sea_water_relative_permittivity
     assert sigma[0, 2] == sigma[1, 2]
+    assert material.ionosphere_reference_height_m == 70_000.0
+    assert material.ionosphere_scale_height_m == 3_330.0

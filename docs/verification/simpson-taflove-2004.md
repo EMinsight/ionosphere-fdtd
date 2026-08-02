@@ -1,4 +1,4 @@
-# Simpson–Taflove 2004 Fig. 7·8 float32 기준 검증 결과
+# Simpson–Taflove 2004 Fig. 7·8 기준 및 수정 검증 결과
 
 > 정량 검증 상태: **실패**
 
@@ -93,27 +93,69 @@ Fig. 8의 이전 결과 기준선은 논문 그림에서 판독한 log-log 근�
 Fig. 8을 정량적으로 재현하지 못한다. 따라서 이 결과를 논문 재현 성공으로
 사용하면 안 된다.
 
-## float64 재검증 상태
+## float64 재검증 결과
 
-Apple MPS는 PyTorch `float64`를 지원하지 않는다. 같은 level-7 격자와
-35,000스텝을 PyTorch CPU 8스레드에서 재실행했으나 113분 이상 계산 후
-수동으로 중단했다. 시간 적분 중에 중단했기 때문에 Fig. 7, Fig. 8 또는
-Markdown 보고서는 생성되지 않았으며, 이 시도를 검증 결과로 사용하지
-않는다.
-
-다음 검증은 CUDA가 있는 Linux 시스템에서 아래 명령으로 수행한다.
+Apple MPS가 PyTorch `float64`를 지원하지 않아 CUDA가 있는 Linux 시스템의
+NVIDIA GeForce RTX 3060에서 같은 level-7 격자와 35,000스텝을 재실행했다.
+실행 시간은 1,083.6초였으며 PyTorch compiled step을 사용했다.
 
 ```bash
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
   --subdivision 7 --steps 35000 \
   --material natural-earth \
-  --backend torch --device cuda --dtype float64 --torch-compile \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --output-dir artifacts/simpson-taflove-2004/level-7-float64-cuda
 ```
 
-완료된 실행은 출력 디렉터리에 `verification-report.md`를 자동 생성한다.
-해당 보고서에서 `device=cuda`, `dtype=float64`, 35,000스텝과 Git revision을
-확인한 뒤 이 문서의 float32 오차와 비교해야 한다.
+[전체 float64 실행 보고서](../../artifacts/simpson-taflove-2004/level-7-float64-cuda/verification-report.md)
+
+| dtype | A–B 평균 절대 오차 | A′–B′ 평균 절대 오차 |
+|---|---:|---:|
+| float32 | 6.146 dB/Mm | 5.991 dB/Mm |
+| float64 | 6.148 dB/Mm | 5.992 dB/Mm |
+
+float64 결과도 두 경로 모두 논문의 보고 범위를 크게 벗어나 정량 검증에
+실패했다. float32 대비 오차 변화는 A–B에서 +0.002 dB/Mm,
+A′–B′에서 +0.001 dB/Mm에 불과하므로, 기존 불일치는 부동소수점
+정밀도 부족으로 설명되지 않는다.
+
+## 원인 수정 후 CUDA float64 재검증
+
+기존 검증은 완만한 74 km/6 km 이온층 전도도 프로파일을 사용해
+주펌스 도달이 늦었고, 양의 overshoot와 slow-tail 직전 zero
+crossing이 사라졌다. 그 상태에서 논문의 고정 절단 스텝을 적용해
+DFT 스펙트럼이 추가로 왜곡되었다.
+
+대표 daytime exponential profile인 reference height 70 km, scale height
+3.33 km를 적용하고 각 계산 파형의 post-overshoot zero crossing을
+자동으로 찾아 DFT를 잘라 다시 검증했다.
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 7 --steps 25023 \
+  --material natural-earth \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.33 \
+  --output-dir artifacts/simpson-taflove-2004/level-7-float64-cuda-corrected
+```
+
+[수정 level-7 전체 보고서](../../artifacts/simpson-taflove-2004/level-7-float64-cuda-corrected/verification-report.md)
+
+| 항목 | 기존 float64 | 수정 float64 |
+|---|---:|---:|
+| A 음의 피크 스텝 | 8,760 | 7,513 |
+| B 음의 피크 스텝 | 18,222 | 14,459 |
+| A–B 평균 절대 오차 | 6.148 dB/Mm | 0.241 dB/Mm |
+| A′–B′ 평균 절대 오차 | 5.992 dB/Mm | 0.249 dB/Mm |
+| A–B 최대 절대 오차 | 미측정 | 2.389 dB/Mm |
+| A′–B′ 최대 절대 오차 | 미측정 | 2.433 dB/Mm |
+
+자동 선택된 DFT 절단은 A 21,784, A′ 21,721, B/B′ 22,442
+samples였다. Fig. 8의 전체 기울기와 대부분의 점은 크게 개선되었지만,
+488.281 Hz의 잔차가 약 +2.4 dB/Mm이어 논문의 보고 범위를
+최대 절대 오차 기준으로 엄격하게 적용하면 아직 실패다.
 
 가능성이 큰 차이 원인은 다음과 같다.
 
@@ -127,13 +169,12 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
 
 ## 다음 검증 순서
 
-1. NOAA relief와 Hermance 전도도 자료를 동일한 해상도로 준비한다.
+1. 488 Hz 스펙트럼 잔차가 subdivision 8에서 수렴하는지 확인한다.
 2. 균질 모델에서 subdivision별 위상속도와 도달 시간을 수렴 검증한다.
-3. 각 실행이 자동 생성하는 Markdown 보고서의 peak step과 east/west RMS를
-   이 기준 결과와 비교한다.
-4. 원 논문 절단값과 현재 파형의 zero-crossing 기반 절단값을 각각 계산해
-   DFT 창 효과를 분리한다.
-5. 원시 Bannister 곡선을 확보한 뒤 digitized guide를 교체한다.
+3. NOAA relief와 Hermance 전도도 자료를 동일한 해상도로 준비해
+   동서 파형 비대칭을 재현한다.
+4. 원시 Bannister 곡선을 확보한 뒤 digitized guide를 교체한다.
+5. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
 
 ## 참고문헌
 

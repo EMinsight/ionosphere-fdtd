@@ -4,14 +4,16 @@ import numpy as np
 import pytest
 
 from ionosphere_fdtd.simpson_taflove_2004 import (
-    PAPER_DFT_TRUNCATIONS,
     PAPER_RECEIVERS,
     PAPER_SOURCE_CENTER_STEPS,
     PAPER_SOURCE_FULL_WIDTH_STEPS,
     PAPER_TIME_STEP_S,
+    REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M,
+    REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     ValidationTraces,
     compute_attenuation,
     create_validation_simulation,
+    find_dft_truncations,
     record_validation_traces,
     trace_metrics,
 )
@@ -41,6 +43,12 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     assert simulation.source.one_over_e_half_width_s == pytest.approx(
         0.5 * PAPER_SOURCE_FULL_WIDTH_STEPS * PAPER_TIME_STEP_S
     )
+    assert simulation.material.ionosphere_reference_height_m == pytest.approx(
+        REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M
+    )
+    assert simulation.material.ionosphere_scale_height_m == pytest.approx(
+        REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M
+    )
 
 
 def test_receiver_longitudes_follow_east_and_west_quarter_arcs() -> None:
@@ -68,10 +76,13 @@ def test_short_validation_record_has_four_interpolated_receivers() -> None:
 
 
 def test_attenuation_recovers_known_spectral_ratio() -> None:
-    count = max(PAPER_DFT_TRUNCATIONS.values()) + 1
+    count = 4_000
     time_steps = np.arange(count, dtype=np.int64)
     time = time_steps * PAPER_TIME_STEP_S
-    wave = -np.exp(-((time - 0.02) / 0.003) ** 2)
+    wave = np.zeros(count)
+    wave[1_000:2_000] = -np.sin(np.linspace(0.0, np.pi, 1_000))
+    wave[2_000:2_500] = 0.2 * np.sin(np.linspace(0.0, np.pi, 500))
+    wave[2_500:] = -0.02 * (1.0 - np.exp(-np.arange(count - 2_500) / 200.0))
     values = np.column_stack((wave, wave, 0.5 * wave, 0.25 * wave))
     traces = ValidationTraces(
         time_steps=time_steps,
@@ -81,6 +92,12 @@ def test_attenuation_recovers_known_spectral_ratio() -> None:
     )
 
     curves = compute_attenuation(traces)
+    assert curves.dft_truncations == {
+        "A": 2_501,
+        "A′": 2_501,
+        "B": 2_501,
+        "B′": 2_501,
+    }
     index = int(np.argmin(np.abs(curves.frequency_hz - 200.0)))
     assert curves.path_ab_db_per_mm[index] > 0.0
     assert curves.path_apbp_db_per_mm[index] > curves.path_ab_db_per_mm[index]
@@ -88,6 +105,20 @@ def test_attenuation_recovers_known_spectral_ratio() -> None:
     metrics = trace_metrics(traces)
     assert metrics["A_negative_peak_step"] == int(np.argmin(wave))
     assert metrics["quarter_east_west_relative_rms"] == pytest.approx(0.0)
+
+
+def test_adaptive_dft_window_rejects_trace_without_positive_overshoot() -> None:
+    time_steps = np.arange(4_000, dtype=np.int64)
+    wave = -np.exp(-((time_steps - 2_000) / 300.0) ** 2)
+    traces = ValidationTraces(
+        time_steps=time_steps,
+        time_s=time_steps * PAPER_TIME_STEP_S,
+        er_v_m=np.column_stack((wave, wave, wave, wave)),
+        labels=("A", "A′", "B", "B′"),
+    )
+
+    with pytest.raises(ValueError, match="no positive overshoot"):
+        find_dft_truncations(traces)
 
 
 def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -> None:
@@ -103,6 +134,9 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         time_step_s=3.0e-6,
         steps=35_000,
         material_model="natural-earth",
+        ionosphere_reference_height_m=70_000.0,
+        ionosphere_scale_height_m=3_330.0,
+        dft_window="adaptive",
         backend="torch",
         device="mps",
         dtype="float32",
@@ -111,10 +145,13 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         metrics={
             "path_ab_mean_absolute_error_db_per_mm": 6.146,
             "path_apbp_mean_absolute_error_db_per_mm": 5.991,
+            "path_ab_maximum_absolute_error_db_per_mm": 9.0,
+            "path_apbp_maximum_absolute_error_db_per_mm": 8.0,
             "A_negative_peak_step": 8_800,
         },
         figure_7=figure_7,
         figure_8=figure_8,
+        trace_data=tmp_path / "traces.npz",
     )
 
     report = write_validation_report(summary, tmp_path / "report.md")
@@ -123,5 +160,8 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "정량 검증 상태: **실패**" in text
     assert "163,842" in text
     assert "6.146 dB/Mm" in text
+    assert "9.000 dB/Mm" in text
+    assert "`adaptive`" in text
     assert "![Figure 7 verification](fig-7.png)" in text
+    assert "[Receiver traces (NPZ)](traces.npz)" in text
     assert "uv run ionosphere-verify-2004" in text

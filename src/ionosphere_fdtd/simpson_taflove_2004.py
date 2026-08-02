@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
@@ -26,6 +26,8 @@ PAPER_SOURCE_FULL_WIDTH_STEPS = 480
 PAPER_SOURCE_CENTER_STEPS = 960
 PAPER_TRACE_STEPS = 35_000
 PAPER_DFT_TRUNCATIONS = {"A": 22_849, "B": 24_165, "A′": 22_737, "B′": 25_023}
+REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M = 70_000.0
+REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M = 3_330.0
 PAPER_VALID_FREQUENCY_HZ = (50.0, 500.0)
 PAPER_PATH_AB_TOLERANCE_DB_PER_MM = 0.5
 PAPER_PATH_APBP_TOLERANCE_DB_PER_MM = 1.0
@@ -74,6 +76,7 @@ class AttenuationCurves:
     path_ab_db_per_mm: FloatArray
     path_apbp_db_per_mm: FloatArray
     benchmark_db_per_mm: FloatArray
+    dft_truncations: Mapping[str, int]
     valid_frequency_hz: tuple[float, float] = PAPER_VALID_FREQUENCY_HZ
 
 
@@ -121,15 +124,24 @@ def create_validation_simulation(
     dtype: str = "float32",
     compile_step: bool = True,
     torch_threads: int | None = None,
+    ionosphere_reference_height_m: float = (
+        REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M
+    ),
+    ionosphere_scale_height_m: float = REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
     if material_model == "natural-earth":
         material: Any = SimpsonTaflove2004Material(
-            land_classifier=natural_earth_land_classifier()
+            land_classifier=natural_earth_land_classifier(),
+            ionosphere_reference_height_m=ionosphere_reference_height_m,
+            ionosphere_scale_height_m=ionosphere_scale_height_m,
         )
     elif material_model == "uniform":
-        material = EarthIonosphereMaterial()
+        material = EarthIonosphereMaterial(
+            ionosphere_reference_height_m=ionosphere_reference_height_m,
+            ionosphere_scale_height_m=ionosphere_scale_height_m,
+        )
     else:
         raise ValueError("material_model must be 'natural-earth' or 'uniform'")
     source = GaussianCurrent(
@@ -203,16 +215,33 @@ def compute_attenuation(
     *,
     time_step_s: float = PAPER_TIME_STEP_S,
     n_fft: int = 32_768,
+    truncations: Mapping[str, int] | None = None,
 ) -> AttenuationCurves:
-    """Apply the paper's receiver-specific rectangular DFT truncations."""
+    """Compute attenuation using receiver-specific rectangular DFT windows.
 
-    required = max(PAPER_DFT_TRUNCATIONS.values())
-    if len(traces.time_steps) < required:
-        raise ValueError(f"at least {required} time samples are required")
+    By default, each record is truncated at its own positive-to-negative zero
+    crossing following the primary pulse and overshoot.  This implements the
+    physical windowing criterion described by Simpson and Taflove instead of
+    assuming that their reported sample numbers apply to a different waveform.
+    """
+
+    selected_truncations = dict(
+        find_dft_truncations(traces) if truncations is None else truncations
+    )
+    missing = set(traces.labels) - set(selected_truncations)
+    if missing:
+        raise ValueError(f"missing DFT truncations for: {', '.join(sorted(missing))}")
+    required = max(selected_truncations.values())
     if n_fft < required:
         raise ValueError(f"n_fft must be at least {required}")
     spectra: dict[str, FloatArray] = {}
-    for label, cutoff in PAPER_DFT_TRUNCATIONS.items():
+    for label in traces.labels:
+        cutoff = selected_truncations[label]
+        if not 2 <= cutoff <= len(traces.time_steps):
+            raise ValueError(
+                f"DFT truncation for {label} must be between 2 and "
+                f"{len(traces.time_steps)}"
+            )
         signal = traces.trace(label)[:cutoff]
         spectra[label] = np.abs(np.fft.rfft(signal, n=n_fft))
     tiny = np.finfo(np.float64).tiny
@@ -225,7 +254,49 @@ def compute_attenuation(
     ) / path_distance_mm
     frequency = np.fft.rfftfreq(n_fft, d=time_step_s)
     benchmark = bannister_figure_8_guide(frequency)
-    return AttenuationCurves(frequency, path_ab, path_apbp, benchmark)
+    return AttenuationCurves(
+        frequency,
+        path_ab,
+        path_apbp,
+        benchmark,
+        selected_truncations,
+    )
+
+
+def find_dft_truncations(traces: ValidationTraces) -> dict[str, int]:
+    """Locate the post-overshoot zero crossing that precedes each slow tail."""
+
+    truncations: dict[str, int] = {}
+    for label in traces.labels:
+        signal = traces.trace(label)
+        negative_peak = int(np.argmin(signal))
+        negative_amplitude = abs(float(signal[negative_peak]))
+        if negative_amplitude == 0.0:
+            raise ValueError(f"{label} trace has no negative primary pulse")
+        positive_threshold = max(
+            1.0e-6 * negative_amplitude,
+            np.finfo(np.float64).eps * negative_amplitude,
+        )
+        overshoot_candidates = np.flatnonzero(
+            signal[negative_peak + 1 :] > positive_threshold
+        )
+        if not len(overshoot_candidates):
+            raise ValueError(
+                f"{label} trace has no positive overshoot after its primary pulse; "
+                "the paper's DFT window is undefined"
+            )
+        overshoot = negative_peak + 1 + int(overshoot_candidates[0])
+        crossings = np.flatnonzero(
+            (signal[overshoot:-1] >= 0.0) & (signal[overshoot + 1 :] < 0.0)
+        )
+        if not len(crossings):
+            raise ValueError(
+                f"{label} trace has no post-overshoot zero crossing before the "
+                "slow tail"
+            )
+        crossing = overshoot + int(crossings[0])
+        truncations[label] = crossing + 1
+    return truncations
 
 
 def bannister_figure_8_guide(frequency_hz: FloatArray) -> FloatArray:
@@ -339,22 +410,25 @@ def validation_metrics(curves: AttenuationCurves) -> dict[str, float]:
     )
     finite_ab = valid & np.isfinite(curves.path_ab_db_per_mm)
     finite_apbp = valid & np.isfinite(curves.path_apbp_db_per_mm)
+    ab_residual = curves.path_ab_db_per_mm[finite_ab] - curves.benchmark_db_per_mm[
+        finite_ab
+    ]
+    apbp_residual = (
+        curves.path_apbp_db_per_mm[finite_apbp]
+        - curves.benchmark_db_per_mm[finite_apbp]
+    )
     return {
         "path_ab_mean_absolute_error_db_per_mm": float(
-            np.mean(
-                np.abs(
-                    curves.path_ab_db_per_mm[finite_ab]
-                    - curves.benchmark_db_per_mm[finite_ab]
-                )
-            )
+            np.mean(np.abs(ab_residual))
         ),
         "path_apbp_mean_absolute_error_db_per_mm": float(
-            np.mean(
-                np.abs(
-                    curves.path_apbp_db_per_mm[finite_apbp]
-                    - curves.benchmark_db_per_mm[finite_apbp]
-                )
-            )
+            np.mean(np.abs(apbp_residual))
+        ),
+        "path_ab_maximum_absolute_error_db_per_mm": float(
+            np.max(np.abs(ab_residual))
+        ),
+        "path_apbp_maximum_absolute_error_db_per_mm": float(
+            np.max(np.abs(apbp_residual))
         ),
     }
 
