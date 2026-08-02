@@ -12,9 +12,17 @@ dependencies = ["numpy>=2.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+visualization = [
+    "cartopy>=0.24",
+    "imageio>=2.36",
+    "imageio-ffmpeg>=0.5",
+    "matplotlib>=3.9",
+    "pyvista>=0.45",
+]
 
 [project.scripts]
 ionosphere = "ionosphere.cli:main"
+ionosphere-visualize = "ionosphere.viz_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
