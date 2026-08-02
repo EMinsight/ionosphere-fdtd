@@ -267,6 +267,25 @@ uv run --extra visualization ionosphere-visualize \
   --color-limit 4 --output field.mp4
 ```
 
+Reproduce Taflove and Hagness Figure 3.11 with the source moved from the
+original equatorial location to Gwangju.  This command performs the FDTD run
+once, records only the sea-level `Er` surface, and renders those same computed
+frames as a 1920x1080 YouTube MP4 and a looping 1280x640 social GIF.  It uses
+the 1 A Gaussian source and fixed `Er = ±6 µV/m` color range shown by Figures
+1.1 and 3.11; only the source location and requested white background differ:
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-figure-3-11 \
+  --backend torch --device mps --torch-compile
+```
+
+![Taflove Figure 3.11 reproduction with an ELF source in Gwangju](artifacts/figure-3-11/taflove-fig-3-11-gwangju-social.gif)
+
+The default level-7 grid has the paper's 163,842 surface cells and 40 radial
+cells, so it is a several-minute calculation on Apple Silicon.  For a quick
+rendering check before the paper-resolution run, add `--subdivision 4
+--frames 20 --first-step 8000 --steps-per-frame 300`.
+
 Receiver traces are sampled in memory without retaining the full field history:
 
 ```bash
