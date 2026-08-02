@@ -1,9 +1,9 @@
 # Ionosphere geodesic FDTD
 
-NumPy implementation of a three-dimensional geodesic finite-difference
-time-domain (FDTD) model for the Earth-ionosphere waveguide.  It replaces the
-incomplete `cpu.cc` prototype with a working spherical mesh, lossy-material
-updates, a vertical current source, and a staggered 3-D solver.
+NumPy and PyTorch implementation of a three-dimensional geodesic
+finite-difference time-domain (FDTD) model for the Earth-ionosphere waveguide.
+It replaces the incomplete `cpu.cc` prototype with a working spherical mesh,
+lossy-material updates, a vertical current source, and a staggered 3-D solver.
 
 The implementation follows three ideas from the project references:
 
@@ -26,7 +26,7 @@ Field-data persistence is intentionally deferred.
 Python 3.11 or newer is required.
 
 ```bash
-uv sync --extra test --extra visualization
+uv sync --extra test --extra visualization --extra pytorch
 ```
 
 All commands below are launched through `uv run`; no virtual-environment path
@@ -40,6 +40,22 @@ cells and 24 radial cells between 100 km below and 100 km above sea level.
 ```bash
 uv run ionosphere --steps 200
 ```
+
+NumPy on the CPU remains the default.  Select PyTorch explicitly to run on a
+Mac GPU through Metal:
+
+```bash
+uv run --extra pytorch ionosphere \
+  --backend torch --device mps --steps 200
+```
+
+PyTorch accepts `cpu`, `mps`, `cuda`, `cuda:N`, and the `gpu` alias for CUDA.
+`--device auto` chooses CUDA first, then MPS, then CPU.  Automatic precision is
+`float32` on MPS and `float64` on NumPy, PyTorch CPU, and CUDA; override it with
+`--dtype float32` or `--dtype float64`.  MPS does not support `float64`.
+For the deliberately small default grid, accelerator dispatch overhead can
+outweigh its benefit, so compare NumPy CPU and MPS before choosing a backend for
+long runs.
 
 Useful variants:
 
@@ -140,12 +156,14 @@ from ionosphere import GeodesicFDTD, GaussianCurrent, SimulationConfig
 simulation = GeodesicFDTD(
     SimulationConfig(subdivision=2, radial_cells=24),
     source=GaussianCurrent(carrier_frequency_hz=20.0),
+    backend="torch",
+    device="mps",
 )
 simulation.step(1000)
 print(simulation.diagnostics())
 ```
 
-The public field arrays are:
+The public field arrays are backend-native NumPy arrays or PyTorch tensors:
 
 - `er[dual_cell, radial_node]`
 - `ht[edge, radial_node]`
@@ -154,11 +172,16 @@ The public field arrays are:
 
 All values use SI units.
 
+Use `simulation.to_numpy(simulation.er)` when analysis, plotting, or export code
+requires a host NumPy array.  `simulation.field_value("er", vertex, layer)`
+reads an individual value without depending on backend scalar behavior.
+
 ## Visualization
 
-Visualization dependencies are optional; the base solver still depends only
-on NumPy.  Static maps, sections, and traces use Matplotlib and Cartopy.  The
-3-D topology and animations use PyVista/VTK.
+Visualization dependencies are optional.  Static maps, sections, and traces
+use Matplotlib and Cartopy.  The 3-D topology and animations use PyVista/VTK.
+Backend tensors are copied to CPU only when a frame or plot is rendered; the
+FDTD update remains on the selected device.
 
 Render a projected `Er` map after 1,200 warm-up steps:
 
@@ -188,6 +211,15 @@ Watch the solver advance in a responsive, interactive 3-D window:
 
 ```bash
 uv run --extra visualization ionosphere-visualize \
+  --subdivision 2 --radial-cells 24 --steps 0 \
+  live --component er --steps-per-frame 10 --fps 20
+```
+
+The same live view can advance the field on Apple Silicon MPS:
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-visualize \
+  --backend torch --device mps \
   --subdivision 2 --radial-cells 24 --steps 0 \
   live --component er --steps-per-frame 10 --fps 20
 ```
@@ -250,20 +282,22 @@ use.
 ## Tests
 
 ```bash
-uv run --extra test --extra visualization pytest -q
+uv run --extra test --extra visualization --extra pytorch pytest -q
 ```
 
 The tests cover icosphere counts, pentagon/hexagon topology, exact
 boundary-of-boundary cancellation, spherical area closure, material/anomaly
 selection, zero-field invariance, conductive damping, source launching, and
-Courant-limit rejection.  Visualization tests additionally cover coordinate
+Courant-limit rejection.  Backend tests compare NumPy and PyTorch CPU fields
+and exercise MPS or CUDA when the corresponding device is available.
+Visualization tests additionally cover coordinate
 conversion, projected maps, radial interpolation, receiver sampling, and
 PyVista point/cell associations.  The GIF render test is opt-in because CI must
 provide a working OpenGL context:
 
 ```bash
 IONOSPHERE_TEST_PYVISTA_RENDER=1 \
-  uv run --extra test --extra visualization pytest -q
+  uv run --extra test --extra visualization --extra pytorch pytest -q
 ```
 
 ## Current scientific limits

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .backends import BackendUnavailableError
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import (
     GWANGJU_LATITUDE_DEG,
@@ -26,6 +27,15 @@ from .visualization import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="compute device: auto, cpu, mps, cuda, cuda:N, or gpu",
+    )
+    parser.add_argument(
+        "--dtype", choices=("auto", "float32", "float64"), default="auto"
+    )
     parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
     parser.add_argument("--radial-cells", type=int, default=24)
     parser.add_argument("--steps", type=int, default=100, help="warm-up steps")
@@ -132,16 +142,26 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.steps < 0:
         raise SystemExit("--steps must be non-negative")
-    simulation = GeodesicFDTD(
-        config=SimulationConfig(
-            subdivision=args.subdivision, radial_cells=args.radial_cells
-        ),
-        source=GaussianCurrent(
-            latitude_deg=args.source_latitude,
-            longitude_deg=args.source_longitude,
-            peak_current_a=args.source_current,
-            carrier_frequency_hz=args.source_frequency,
-        ),
+    try:
+        simulation = GeodesicFDTD(
+            config=SimulationConfig(
+                subdivision=args.subdivision, radial_cells=args.radial_cells
+            ),
+            source=GaussianCurrent(
+                latitude_deg=args.source_latitude,
+                longitude_deg=args.source_longitude,
+                peak_current_a=args.source_current,
+                carrier_frequency_hz=args.source_frequency,
+            ),
+            backend=args.backend,
+            device=args.device,
+            dtype=args.dtype,
+        )
+    except BackendUnavailableError as error:
+        raise SystemExit(str(error)) from error
+    print(
+        f"backend={simulation.backend.name} device={simulation.backend.device} "
+        f"dtype={simulation.backend.dtype_name}"
     )
     simulation.step(args.steps)
     output = getattr(args, "output", None)

@@ -6,6 +6,7 @@ import argparse
 
 import numpy as np
 
+from .backends import BackendUnavailableError
 from .materials import EarthIonosphereMaterial, SphericalAnomaly
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import (
@@ -18,6 +19,15 @@ from .sources import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, default=100)
+    parser.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="compute device: auto, cpu, mps, cuda, cuda:N, or gpu",
+    )
+    parser.add_argument(
+        "--dtype", choices=("auto", "float32", "float64"), default="auto"
+    )
     parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
     parser.add_argument("--radial-cells", type=int, default=24)
     parser.add_argument(
@@ -80,23 +90,29 @@ def main(argv: list[str] | None = None) -> int:
                 conductivity_factor=0.1,
             ),
         )
-    simulation = GeodesicFDTD(
-        config=SimulationConfig(
-            subdivision=args.subdivision,
-            radial_cells=args.radial_cells,
-            courant_factor=args.courant,
-            radial_altitudes_m=radial_altitudes,
-        ),
-        material=EarthIonosphereMaterial(anomalies=anomalies),
-        source=GaussianCurrent(
-            latitude_deg=args.source_latitude,
-            longitude_deg=args.source_longitude,
-            peak_current_a=args.source_current,
-            carrier_frequency_hz=args.source_frequency,
-            center_time_s=args.source_center,
-            one_over_e_half_width_s=args.source_width,
-        ),
-    )
+    try:
+        simulation = GeodesicFDTD(
+            config=SimulationConfig(
+                subdivision=args.subdivision,
+                radial_cells=args.radial_cells,
+                courant_factor=args.courant,
+                radial_altitudes_m=radial_altitudes,
+            ),
+            material=EarthIonosphereMaterial(anomalies=anomalies),
+            source=GaussianCurrent(
+                latitude_deg=args.source_latitude,
+                longitude_deg=args.source_longitude,
+                peak_current_a=args.source_current,
+                carrier_frequency_hz=args.source_frequency,
+                center_time_s=args.source_center,
+                one_over_e_half_width_s=args.source_width,
+            ),
+            backend=args.backend,
+            device=args.device,
+            dtype=args.dtype,
+        )
+    except BackendUnavailableError as error:
+        raise SystemExit(str(error)) from error
     if args.oil_anomaly:
         anomaly = anomalies[0]
         points = np.concatenate(
@@ -126,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(simulation.radial_steps_m)} radial cells"
     )
     print(
-        f"dt={simulation.time_step_s:.6e} s "
+        f"backend={simulation.backend.name} device={simulation.backend.device} "
+        f"dtype={simulation.backend.dtype_name}; dt={simulation.time_step_s:.6e} s "
         f"(conservative limit), field memory={simulation.memory_bytes / 2**20:.2f} MiB"
     )
     for start in range(0, args.steps, args.report_every):
