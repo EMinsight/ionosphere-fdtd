@@ -2,8 +2,8 @@
 
 NumPy and PyTorch implementation of a three-dimensional geodesic
 finite-difference time-domain (FDTD) model for the Earth-ionosphere waveguide.
-It replaces the incomplete `cpu.cc` prototype with a working spherical mesh,
-lossy-material updates, a vertical current source, and a staggered 3-D solver.
+It provides spherical primal-dual mesh generation, lossy-material updates, a
+vertical current source, and a staggered 3-D solver.
 
 The implementation follows three ideas from the project references:
 
@@ -19,7 +19,6 @@ The implementation follows three ideas from the project references:
 
 The package includes projected surface maps, great-circle radial sections,
 receiver traces, interactive 3-D geodesic meshes, and GIF/MP4 animations.
-Field-data persistence is intentionally deferred.
 
 ## Installation
 
@@ -95,8 +94,8 @@ Surface cell counts are `10 * 4**level + 2`:
 
 | Level | Dual cells | Approximate center spacing |
 | ---: | ---: | ---: |
-| 0 | 12 | 3,717 km |
-| 1 | 42 | 3,717 km |
+| 0 | 12 | 7,054 km |
+| 1 | 42 | 3,765 km |
 | 2 | 162 | 1,910 km |
 | 3 | 642 | 962 km |
 | 4 | 2,562 | 482 km |
@@ -150,9 +149,9 @@ node sequence through `SimulationConfig.radial_altitudes_m`.
   `2.5e5 * epsilon0 * exp((height - 74 km) / 6 km)`;
 - optional spherical subsurface conductivity anomalies.
 
-These values and anomaly volumes are configurable.  They isolate data choices
-from the solver so measured ionospheric profiles, bathymetry, topography,
-oceans, or gridded crustal conductivity can be added later.
+These values and anomaly volumes are configurable.  Material sampling is
+isolated from the solver so alternative ionospheric and crustal profiles can
+be supplied without changing the field-update equations.
 
 `GaussianCurrent` defaults to Gwangju, Republic of Korea (`35.1595° N`,
 `126.8526° E`).  It distributes vertical current among the three dual cells of
@@ -337,15 +336,13 @@ IONOSPHERE_TEST_PYVISTA_RENDER=1 \
   uv run --extra test --extra visualization --extra pytorch pytest -q
 ```
 
-## Current scientific limits
+## Scientific scope and validation
 
-This repository now contains a complete runnable 3-D algorithm, but it does
-not claim reproduction of the paper's validation curves at the laptop default
-resolution.  Such reproduction additionally requires the paper-scale grid,
-NOAA topography/bathymetry, the referenced Hermance crust profile, the exact
-Bannister ionosphere profile, long observation records, and DFT/windowing.
-Those are data ingestion, benchmark validation, and persistence tasks reserved
-for the next stage.
+The laptop defaults demonstrate the complete 3-D algorithm but are not intended
+to reproduce the paper's validation curves.  Quantitative reproduction requires
+the paper-scale grid, NOAA topography and bathymetry, the referenced Hermance
+crust profile, the exact Bannister ionosphere profile, long observation records,
+and equivalent DFT and windowing procedures.
 
 ## References
 
