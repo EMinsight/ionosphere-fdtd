@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ionosphere.taflove_fig_3_11 import (
+from ionosphere_fdtd.taflove_fig_3_11 import (
     FIGURE_3_11_SOURCE_CURRENT_A,
     FIGURE_3_11_SOURCE_CENTER_STEPS,
     FIGURE_3_11_SOURCE_FULL_WIDTH_STEPS,
@@ -10,7 +10,7 @@ from ionosphere.taflove_fig_3_11 import (
     create_figure_3_11_simulation,
     record_figure_3_11_frames,
 )
-from ionosphere.sources import GWANGJU_LATITUDE_DEG, GWANGJU_LONGITUDE_DEG
+from ionosphere_fdtd.sources import GWANGJU_LATITUDE_DEG, GWANGJU_LONGITUDE_DEG
 
 
 def test_figure_3_11_setup_preserves_paper_timing_at_gwangju() -> None:

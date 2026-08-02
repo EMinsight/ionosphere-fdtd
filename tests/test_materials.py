@@ -1,6 +1,6 @@
 import numpy as np
 
-from ionosphere.materials import (
+from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
     SphericalAnomaly,

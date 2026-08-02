@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
 
-from ionosphere.backends import BackendUnavailableError
-from ionosphere.backends.numpy_backend import NumPyBackend
-from ionosphere.mesh import build_geodesic_mesh
-from ionosphere.solver import GeodesicFDTD, SimulationConfig
-from ionosphere.sources import GaussianCurrent
+from ionosphere_fdtd.backends import BackendUnavailableError
+from ionosphere_fdtd.backends.numpy_backend import NumPyBackend
+from ionosphere_fdtd.mesh import build_geodesic_mesh
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import GaussianCurrent
 
 
 def config() -> SimulationConfig:
@@ -180,7 +180,7 @@ def test_torch_auto_selects_an_available_device() -> None:
 
 def test_torch_fields_cross_the_visualization_boundary_as_numpy() -> None:
     pytest.importorskip("torch")
-    from ionosphere.visualization import _surface_values
+    from ionosphere_fdtd.visualization import _surface_values
 
     simulation = GeodesicFDTD(
         config=config(), source=source(), backend="torch", device="cpu"

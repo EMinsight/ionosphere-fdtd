@@ -168,7 +168,7 @@ selected radial spacing.
 ## Python API
 
 ```python
-from ionosphere import GeodesicFDTD, GaussianCurrent, SimulationConfig
+from ionosphere_fdtd import GeodesicFDTD, GaussianCurrent, SimulationConfig
 
 simulation = GeodesicFDTD(
     SimulationConfig(subdivision=2, radial_cells=24),
@@ -298,7 +298,7 @@ uv run --extra visualization ionosphere-visualize \
 The Python API exposes the same operations:
 
 ```python
-from ionosphere import plot_surface_field, sample_radial_section
+from ionosphere_fdtd import plot_surface_field, sample_radial_section
 
 figure, axes, artist = plot_surface_field(
     simulation, "er", altitude_m=0.0, scale="symlog"

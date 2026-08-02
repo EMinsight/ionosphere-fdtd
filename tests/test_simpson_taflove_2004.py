@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
-from ionosphere.simpson_taflove_2004 import (
+from ionosphere_fdtd.simpson_taflove_2004 import (
     PAPER_DFT_TRUNCATIONS,
     PAPER_RECEIVERS,
     PAPER_SOURCE_CENTER_STEPS,
@@ -15,7 +15,7 @@ from ionosphere.simpson_taflove_2004 import (
     record_validation_traces,
     trace_metrics,
 )
-from ionosphere.simpson_taflove_2004_report import (
+from ionosphere_fdtd.simpson_taflove_2004_report import (
     ValidationRunSummary,
     write_validation_report,
 )

@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from ionosphere.materials import EarthIonosphereMaterial
-from ionosphere.solver import GeodesicFDTD, SimulationConfig
-from ionosphere.sources import GaussianCurrent
+from ionosphere_fdtd.materials import EarthIonosphereMaterial
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import GaussianCurrent
 
 
 def small_config(**changes: object) -> SimulationConfig:

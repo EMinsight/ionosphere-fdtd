@@ -14,9 +14,9 @@ matplotlib.use("Agg")
 
 import numpy as np
 
-from ionosphere.solver import GeodesicFDTD, SimulationConfig
-from ionosphere.sources import GaussianCurrent
-from ionosphere.visualization import (
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import GaussianCurrent
+from ionosphere_fdtd.visualization import (
     Receiver,
     animate_surface_field,
     directions_to_lon_lat,
@@ -100,7 +100,7 @@ def test_pyvista_dual_and_primal_surface_associations(
 def test_live_surface_advances_and_updates_without_rendering(
     simulation: GeodesicFDTD, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import ionosphere.visualization as visualization
+    import ionosphere_fdtd.visualization as visualization
 
     class FakeDataset:
         def __init__(self, values: np.ndarray) -> None:
@@ -186,7 +186,7 @@ def test_live_surface_validates_update_rate(simulation: GeodesicFDTD) -> None:
 
 
 def test_field_opacity_transfer_uses_vtk_alpha_range() -> None:
-    from ionosphere.visualization import _field_opacity_transfer
+    from ionosphere_fdtd.visualization import _field_opacity_transfer
 
     opacity = _field_opacity_transfer(0.8)
     assert opacity.dtype == np.uint8

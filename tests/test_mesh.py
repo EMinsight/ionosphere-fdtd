@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ionosphere.mesh import build_geodesic_mesh
+from ionosphere_fdtd.mesh import build_geodesic_mesh
 
 
 @pytest.mark.parametrize("level", range(4))
