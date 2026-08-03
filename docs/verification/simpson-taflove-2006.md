@@ -23,13 +23,14 @@ absolute errors of 2.064/0.277 dB/Mm and maximum absolute errors of
 5.026/1.650 dB/Mm. Both paths fail the paper's pointwise ±0.5 dB/Mm statement
 over 50–500 Hz.
 
-Figure 7 reproduces only the direction of the claimed sensitivity. Its
-`ΔHtan` median is −35.75 dB and 99.70% of nonsingular samples are below
-−25 dB, but `ΔHr` has a +100.30 dB median rather than a curve peaking near
-+20 dB. The computed 136.03 dB median radial-over-tangential advantage is not
-the paper's approximate 45 dB. The failure comes from a nearly zero reference
-`Hr`, not an unusually large radial scattered field. Consequently the three
-figures are not reproduced as a complete quantitative set.
+Figure 7 also retains only the direction of the claimed sensitivity after its
+transmitter is corrected from the opposite hemisphere to Clam Lake. Its
+`ΔHtan` median is −36.75 dB and 97.49% of nonsingular samples are below
+−25 dB, but `ΔHr` has a +95.69 dB median rather than a curve near +20 dB.
+The computed 137.45 dB median radial-over-tangential advantage is not the
+paper's approximate 45 dB. The failure still comes from a nearly zero
+reference `Hr`, not an unusually large radial scattered field. Consequently
+the three figures are not reproduced as a complete quantitative set.
 
 ## Target paper and source record
 
@@ -111,8 +112,10 @@ centroid and total current.
 | Oil-field depth | 1.25 km thick at median depth 1.2 km |
 | Conductivity contrast | 0.1 times surrounding strata |
 | Backend | compiled PyTorch, two CUDA GPUs, float64 |
-| Production revision | `1e3d939` |
-| Wall time | 1,832.2 s reference / 2,249.0 s anomaly |
+| Production revision | `2ffebdf` |
+| Wall time | 1,825.0 s reference / 2,218.9 s anomaly |
+| Reference trace SHA-256 | `04ea415a566034affbffd88b89c547cafe0516dbe71dd2351da2f2b513e01f67` |
+| Anomaly trace SHA-256 | `6c4b541285f1830b206049d443d93df304f31b3bbba8ed04cad5bc11f9b23b8d` |
 
 The ground-line source is projected onto all three oriented primal edges of
 the containing face. Each contribution is scaled by `L/Δl`, which preserves
@@ -311,40 +314,48 @@ verification.
 
 ![Published and reproduced Figure 7](images/simpson-taflove-2006-fig-7-comparison.png)
 
-The paper-scale result is mixed. The tangential curve is approximately flat at
-−36 dB away from its reference zero crossings. Its median is −35.749 dB, and
-99.698% of nonsingular samples are below −25 dB. This satisfies the paper's
-stated tangential suppression criterion.
+The original production run placed the Clam Lake transmitter at its antipode,
+46.46° S, 89.15° E, while the oil-field receiver remained at the requested
+Alaska location. Those results are superseded. The panel and metrics below use
+a complete corrected-location reference/anomaly pair.
 
-The radial curve does not reproduce the published scale or morphology. It is
-above the plot's +30 dB limit for almost the entire window, with a +100.304 dB
-median and +118.548 dB 95th percentile. The median radial-over-tangential
-advantage is 136.028 dB, not approximately 45 dB.
+The corrected tangential curve is approximately flat near −37 dB away from
+reference zero crossings. Its median is −36.746 dB, and 97.487% of
+nonsingular samples are below −25 dB. This satisfies the paper's stated
+tangential suppression criterion.
+
+The radial curve still does not reproduce the published scale or morphology.
+It is above the plot's +30 dB limit for almost the entire window, with a
++95.691 dB median and +107.434 dB 95th percentile. The median
+radial-over-tangential advantage is 137.450 dB, not approximately 45 dB.
 
 | Metric | Paper behavior | Reproduction | Result |
 |---|---:|---:|---:|
-| Median pointwise `ΔHtan` | mostly below −25 dB | −35.749 dB | **PASS** |
-| Fraction of `ΔHtan < −25 dB` | almost every time | 99.698% | **PASS** |
-| Pointwise `ΔHr` scale | reaches about +20 dB | +100.304 dB median | **FAIL** |
-| Median `ΔHr−ΔHtan` | about 45 dB | 136.028 dB | **FAIL** |
+| Median pointwise `ΔHtan` | mostly below −25 dB | −36.746 dB | **PASS** |
+| Fraction of `ΔHtan < −25 dB` | almost every time | 97.487% | **PASS** |
+| Pointwise `ΔHr` scale | reaches about +20 dB | +95.691 dB median | **FAIL** |
+| Median `ΔHr−ΔHtan` | about 45 dB | 137.450 dB | **FAIL** |
 
 The absolute fields identify the mechanism:
 
 | Quantity | Peak magnitude |
 |---|---:|
-| Reference `Htan` | `3.1393e-12 A/m` |
-| Oil-model `Htan` | `3.0889e-12 A/m` |
-| Absolute `Htan` difference | `5.0390e-14 A/m` |
-| Reference `Hr` | `1.0635e-20 A/m` |
-| Oil-model `Hr` | `1.7823e-15 A/m` |
-| Absolute `Hr` difference | `1.7823e-15 A/m` |
+| Reference `Htan` | `1.3305e-8 A/m` |
+| Oil-model `Htan` | `1.3101e-8 A/m` |
+| Absolute `Htan` difference | `2.0521e-10 A/m` |
+| Reference `Hr` | `4.7439e-17 A/m` |
+| Oil-model `Hr` | `7.5107e-12 A/m` |
+| Absolute `Hr` difference | `7.5108e-12 A/m` |
 
-The tangential scattered field is actually 28.02 dB stronger than the radial
-scattered field. The apparent radial advantage is caused by the reference
-`Hr` being almost seven orders of magnitude smaller than the radial scattered
-field. Applying the body text's peak normalization instead of the caption's
-pointwise normalization gives −35.890 dB for `ΔHtan` and +104.485 dB for
-`ΔHr`; it therefore fails the published +20 dB scale under either reading.
+The corrected short propagation path raises the reference tangential field by
+more than three orders of magnitude compared with the superseded antipodal
+run. Nevertheless, the tangential scattered field is still 28.73 dB stronger
+than the radial scattered field. The apparent radial advantage is caused by
+the reference `Hr` being more than five orders of magnitude smaller than the
+radial scattered field. Applying the body text's peak normalization instead
+of the caption's pointwise normalization gives −36.236 dB for `ΔHtan` and
++103.991 dB for `ΔHr`; it therefore fails the published +20 dB scale under
+either reading.
 
 Figure 7 is a **quantitative fail**, although it qualitatively confirms that a
 buried conductivity anomaly can generate a radial magnetic component while
@@ -352,39 +363,39 @@ only weakly perturbing the dominant tangential reference field.
 
 ## Failure analysis and corrective work
 
-The initial implementation could not perform Figure 7 as stated. The following
-issues were found and corrected before the production result was accepted:
+The following implementation issues were found and corrected before the final
+production results were accepted:
 
-1. The solver could inject only radial current and record only `Er`. A
+1. The unsigned spherical-triangle test accepted both a requested direction
+   and its antipode. Candidate faces are now ranked by positive alignment with
+   the requested direction. This separates B/B′ in Figures 5–6 and moves the
+   Figure 7 transmitter from the opposite hemisphere back to Clam Lake.
+   Regression tests cover all paper locations, including the non-equatorial
+   transmitter and oil-field receiver.
+2. The solver could inject only radial current and record only `Er`. A
    tangential ground-line source and backend-native `Hr`/signed-`Htan` recorder
    were added. Recording stays on the CUDA device until the run completes.
-2. The ETOPO5 layered lithosphere could not carry a local anomaly. The common
+3. The ETOPO5 layered lithosphere could not carry a local anomaly. The common
    spherical-volume anomaly mechanism was extended to that material without
    replacing its relief, ocean, or depth profiles. A subsequent material audit
    found that a broad lateral cap could also multiply seawater; both the Shield
    and oil anomalies are now restricted to background conductivity at or below
    `0.01 S/m`, leaving water layers unchanged.
-3. The 1.25 km subgrid reduced the conservative time step from the 3 μs used by
+4. The 1.25 km subgrid reduced the conservative time step from the 3 μs used by
    Figures 5–6. A paired level-5 CUDA float64 experiment showed that Courant
    factors 0.4 and 1.0 agree in field maxima to about `1e-8` relative and in
    perturbation metrics within 0.001 dB; the stable 1.0 setting reduces the
    production run from 193,759 to 77,542 steps.
-4. The first tangential source projection preserved direction but not the
+5. The first tangential source projection preserved direction but not the
    subcell line moment. Scaling each edge by the line-length/edge-length ratio
-   corrected the absolute field. A second paired level-5 run showed that the
-   normalized sensitivity ordering was unchanged, ruling out source amplitude
-   as the cause of the coarse-grid discrepancy.
-5. A second source-deposition hypothesis snapped each north–south/east–west
-   line to its nearest geodesic edge instead of projecting it over three edges.
-   At level 5 it produced a reference `Hr` peak of `1.06e-19 A/m` and a
-   peak-normalized radial perturbation of +99.35 dB, the same pathological
-   scale as the projected source. Edge cancellation was therefore rejected as
-   the primary cause and the direction-preserving projection was retained.
-6. At subdivision 5 the 39.1 km-radius oil body contains no electric vertex and
-   is represented only on nearby edges. That deliberately coarse diagnostic
-   produced a qualitatively correct but grossly exaggerated radial advantage.
-   The final result therefore uses the paper-scale subdivision 7, where two
-   electric vertices and five electric edges lie inside the circular footprint.
+   corrected the absolute field while retaining the line direction. The final
+   source is distributed over the three oriented edges of the containing face.
+
+Coarse source-deposition and resolution diagnostics performed before the
+geographic correction are retained in git history as implementation tests, but
+their numerical radar metrics are excluded from this report because they used
+the antipodal transmitter. The final Figure 7 verdict is based only on the new
+paper-scale corrected-location pair.
 
 At level 7 the two selected dual cells have a combined area of 7,013.6 km²,
 larger than the disk's geometric 4,800 km² because material sampling is binary
@@ -392,29 +403,24 @@ at geodesic electric-field points. The five selected edge samples and both
 selected vertices are over land in ETOPO5 (elevations 250–450 m). This removes
 water contamination but leaves a disclosed horizontal voxelization error.
 
-The final-code resolution study confirms that this is not a smooth convergent
-observable:
+The corrected Figure 7 absolute fields show that the solver does generate a
+radial scattered field, but not a radial absolute-field advantage: the
+tangential difference is 28.73 dB larger. The reported 137.45 dB advantage is
+created by dividing by an almost-zero reference `Hr`. The paper does not
+publish enough information to determine whether the discrepancy comes from
+its exact optimized cell positions, ground-line phase/deposition, Canadian
+Shield mask, conductivity realization, oil-body voxelization, or the
+internally inconsistent normalization description. Undocumented tuning of any
+of those inputs was not used.
 
-| Subdivision | Cells | Peak-normalized `ΔHtan` | Peak-normalized `ΔHr` | Reference `Hr` peak |
-|---:|---:|---:|---:|---:|
-| 5 | 10,242 | −64.103 dB | +95.341 dB | `1.679e-19 A/m` |
-| 6 | 40,962 | −49.932 dB | +125.269 dB | `2.081e-20 A/m` |
-| 7 | 163,842 | −35.890 dB | +104.485 dB | `1.064e-20 A/m` |
-
-The radial value moves by +29.93 dB and then −20.78 dB under successive
-refinement, while the tangential perturbation grows monotonically. The oil
-disk is represented by a different small set of binary electric samples at
-each level, so no Richardson-style convergence order can be assigned. This
-rules out interpreting the level-7 mismatch as a simple remaining truncation
-error that could safely be extrapolated to the paper's curve.
-
-The remaining Figure 6 error cannot be removed by float64 precision, DFT
-zero-padding, source staggering, or ETOPO5 relief. Those cases were already
-isolated in the 2004 campaign. Horizontal refinement reduces the mean error,
-but the present geodesic dual grid must be retained, and the paper's exact
-Hermance-derived three-dimensional conductivity realization is not published.
-The final high-frequency mismatch is therefore reported rather than tuned
-away.
+For Figures 5–6, fixed-depth material restores east/west symmetry but not the
+pointwise high-frequency attenuation tolerance. Float64 precision, DFT
+zero-padding, source staggering, radial metric weighting, and horizontal
+refinement were already isolated in this and the 2004 campaign. The present
+geodesic dual grid must be retained, and the paper's exact Hermance-derived
+three-dimensional conductivity realization is not published. The final
+bathymetry and high-frequency mismatches are therefore reported rather than
+tuned away.
 
 ## Reproduction commands
 
@@ -437,10 +443,10 @@ Figures 5 and 6 use the exact ETOPO5 level-7 trace configuration:
   --output-dir artifacts/simpson-taflove-2006/figures-5-6
 ```
 
-The polar-orientation diagnostic changes `--mesh-orientation native` to
-`--mesh-orientation polar`. The production-resolution ionosphere sensitivity
-case keeps the native orientation and changes only
-`--ionosphere-scale-height-km 3.33` to `3.00`.
+The fixed-depth isolation changes `--material etopo5` to
+`--material natural-earth` and omits `--etopo5-path`. The subdivision-5
+ionosphere sensitivity cases keep the ETOPO5 material and change only the
+reference or scale height documented in the table above.
 
 The paired Figure 7 runs were:
 
@@ -477,8 +483,8 @@ The paired Figure 7 runs were:
   retuning is used to force an effective 4,800 km² voxel area.
 - The paper uses an optimized geodesic grid. This project retains its existing
   recursively subdivided geodesic dual grid, as required. The production result
-  is not tuned by changing topology or orientation; a disclosed rigid-rotation
-  diagnostic tests the paper-like polar placement without changing any metric.
+  is not tuned by changing topology or orientation. A pre-correction
+  rigid-rotation diagnostic is explicitly excluded from the final metrics.
 - Figure 7 does not define source phase, Gaussian center time, or a formal
   error norm. The simulation begins three Gaussian `1/e` half-widths before the
   envelope center, and its displayed time is referenced to that center.
@@ -488,23 +494,27 @@ The paired Figure 7 runs were:
 
 ## Final conclusion
 
-The current implementation can qualitatively reproduce Figure 5 and the broad
-Figure 6 attenuation trend. It cannot meet Figure 6's pointwise ±0.5 dB/Mm
-claim, and it cannot reproduce Figure 7's +20 dB radial perturbation or roughly
-45 dB sensitivity advantage. The final status is therefore **FAIL**.
+The current implementation reproduces Figure 5 timing and morphology but not
+all four relative amplitudes. It follows the broad Figure 6 attenuation trend
+but cannot meet the pointwise ±0.5 dB/Mm claim. It also cannot reproduce
+Figure 7's +20 dB radial perturbation or roughly 45 dB sensitivity advantage.
+The final status is therefore **FAIL**.
 
 The corrective work did produce reusable, tested capabilities: physically
 scaled horizontal ground-line sources, CUDA-native radial/tangential magnetic
 recording, buried anomalies in the ETOPO5 layered material, protected water
 layers, and a reproducible Figure 5–7 analysis CLI. Precision, time-step
-stability, source moment, nearest-edge deposition, radial metric weighting, and
-rigid polar orientation were tested and rejected as explanations for the
-remaining discrepancy.
+stability, source moment, radial metric weighting, and ionosphere-profile
+sensitivity were tested. The geographic locator defect was corrected and all
+paper-scale production traces affected by it were recomputed.
 
-The strongest remaining causes are inputs that cannot be reconstructed from
-the paper: its optimized cell locations, exact three-dimensional lithosphere
-conductivity realization, Canadian Shield mask, horizontal subcell treatment
-of the 4,800 km² body, and exact ground-line deposition. With the required
-current geodesic dual grid retained, forcing the published Figure 7 values
-would require undocumented material or normalization tuning and would not be a
-valid verification.
+For Figure 5, the strongest identified cause is actionable: binary material
+sampling on a 5-km radial grid omits shallow water layers. A future fractional
+or subcell water/rock interface treatment can address that error without
+replacing the required geodesic grid. Figure 6 additionally retains the known
+high-frequency spatial-dispersion residual. Figure 7 remains limited by inputs
+that cannot be reconstructed from the paper: optimized cell positions, exact
+three-dimensional lithosphere conductivity, Canadian Shield mask, horizontal
+subcell treatment of the 4,800 km² body, source phase/deposition, and a
+consistent normalization definition. Forcing the published Figure 7 values by
+undocumented tuning would not be a valid verification.
