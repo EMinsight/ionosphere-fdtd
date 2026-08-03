@@ -120,7 +120,8 @@ def write_validation_report(
 - 관측점: A/A′는 반대편까지 거리의 1/4, B/B′는 1/2
 - DFT 절단: `adaptive`는 각 계산 파형의 slow-tail 직전 zero crossing,
   `paper`는 A 22,849, B 24,165, A′ 22,737, B′ 25,023 samples
-- 유효 비교 주파수: 50–500 Hz
+- 고정 비교 주파수: Fig. 8 marker 간격과 일치하는 32,768-point
+  DFT의 50–500 Hz 구간 45개 bin (50.863–498.454 Hz)
 
 ## 판정
 
@@ -148,8 +149,8 @@ def write_validation_report(
 - NOAA-NGDC relief 원본 대신 Natural Earth 110-m 육지 마스크를 사용한다.
 - Fig. 6의 부등식 경계값으로 지각 층을 근사하며 전체 Hermance 모델은
   아니다.
-- Fig. 8 기준선은 원시 Bannister 자료가 아니라 논문 그림을 근사한
-  `0.0265 f^0.938` log-log guide이다.
+- Fig. 8 기준선은 Bannister (1984), 식 (5), (7), (8)의 daytime attenuation
+  모델을 `H = 70 km`, `ξ₀ = ξ₁ = 1/0.3 km`로 계산한다.
 - 원 논문의 병합 위경도 격자와 이 프로젝트의 geodesic dual grid는 서로
   다르다.
 - 논문에 전류 진폭이 명시되지 않아 Fig. 7은 1 A로 정규화한다. Fig. 8의

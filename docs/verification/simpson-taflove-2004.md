@@ -73,8 +73,9 @@ samples로 설정했다. 논문에는 소스 전류 진폭이 명시되지 않�
 
 ### Fig. 8 감쇠율
 
-Fig. 8의 이전 결과 기준선은 논문 그림에서 판독한 log-log 근사식
-`0.0265 f^0.938`을 사용했다. 원시 Bannister 데이터는 아니다.
+이 초기 Fig. 8 결과는 논문 그림에서 판독한 log-log 근사식
+`0.0265 f^0.938`을 사용했다. 현재 판정은 아래의 Bannister
+원문 공식 재분석으로 대체했다.
 
 ![Figure 8 level-7 verification](../../artifacts/simpson-taflove-2004/level-7/simpson-taflove-2004-fig-8.png)
 
@@ -143,18 +144,23 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
 
 [수정 level-7 전체 보고서](../../artifacts/simpson-taflove-2004/level-7-float64-cuda-corrected/verification-report.md)
 
+위 링크의 자동 보고서는 당시 사용한 `0.0265 f^0.938` 그림 회귀식을
+보존한다. 아래 표의 수정 결과는 이후 확보한 Bannister 원문 식과
+Fig. 8 marker 기반 고정 주파수로 재계산했으며, 현재 판정에는 이
+값을 사용한다.
+
 | 항목 | 기존 float64 | 수정 float64 |
 |---|---:|---:|
 | A 음의 피크 스텝 | 8,760 | 7,513 |
 | B 음의 피크 스텝 | 18,222 | 14,459 |
-| A–B 평균 절대 오차 | 6.148 dB/Mm | 0.241 dB/Mm |
-| A′–B′ 평균 절대 오차 | 5.992 dB/Mm | 0.249 dB/Mm |
-| A–B 최대 절대 오차 | 미측정 | 2.389 dB/Mm |
-| A′–B′ 최대 절대 오차 | 미측정 | 2.433 dB/Mm |
+| A–B 평균 절대 오차 | 6.148 dB/Mm | 0.387 dB/Mm |
+| A′–B′ 평균 절대 오차 | 5.992 dB/Mm | 0.399 dB/Mm |
+| A–B 최대 절대 오차 | 미측정 | 2.708 dB/Mm |
+| A′–B′ 최대 절대 오차 | 미측정 | 2.753 dB/Mm |
 
 자동 선택된 DFT 절단은 A 21,784, A′ 21,721, B/B′ 22,442
 samples였다. Fig. 8의 전체 기울기와 대부분의 점은 크게 개선되었지만,
-488.281 Hz의 잔차가 약 +2.4 dB/Mm이어 논문의 보고 범위를
+488.281 Hz의 잔차가 약 +2.7 dB/Mm이어 논문의 보고 범위를
 최대 절대 오차 기준으로 엄격하게 적용하면 아직 실패다.
 
 ## subdivision 8 CUDA float64 수렴 검증
@@ -180,46 +186,50 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
 
 [subdivision 8 전체 보고서](../../artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected/verification-report.md)
 
+Simpson–Taflove Fig. 8이 인용한 Bannister (1984) 원문을 확인해 식 (5),
+(7), (8)을 `H = 70 km`, `ξ₀ = ξ₁ = 1/0.3 km`로 직접 구현했다.
+평가점은 Fig. 8 marker 간격과 일치하는 `Δt = 3 µs`,
+`N = 32,768` DFT의 bin 5–49, 즉
+50.862630–498.453776 Hz의 45개로 고정했다.
+
+[Bannister 기준식 고정 주파수 재분석](../../artifacts/simpson-taflove-2004/fixed-frequency-reanalysis/verification-report.md)
+
 | subdivision | 표면 셀 | A–B 평균/최대 오차 | A′–B′ 평균/최대 오차 |
 |---:|---:|---:|---:|
-| 6 | 40,962 | 0.572 / 2.028 dB/Mm | 0.584 / 2.130 dB/Mm |
-| 7 | 163,842 | 0.241 / 2.389 dB/Mm | 0.249 / 2.433 dB/Mm |
-| 8 | 655,362 | 0.156 / 0.906 dB/Mm | 0.156 / 0.913 dB/Mm |
+| 6 | 40,962 | 0.681 / 2.282 dB/Mm | 0.696 / 2.420 dB/Mm |
+| 7 | 163,842 | 0.387 / 2.708 dB/Mm | 0.399 / 2.753 dB/Mm |
+| 8 | 655,362 | 0.274 / 1.218 dB/Mm | 0.275 / 1.225 dB/Mm |
 
-subdivision 7의 488.281 Hz 잔차는 A–B에서 +2.389 dB/Mm였으나
-subdivision 8에서 +0.412 dB/Mm로 감소했다. 평균 오차도 두 경로에서
-각각 35%, 37% 감소해 공간 해상도 증가에 따른 전반적인 수렴을 확인했다.
+subdivision 7의 488.281 Hz 잔차는 A–B에서 +2.708 dB/Mm였으나
+subdivision 8에서 +0.731 dB/Mm로 감소했다. 평균 오차도 두 경로에서
+각각 약 29%, 31% 감소해 공간 해상도 증가에 따른 전반적인 수렴을
+확인했다.
 음의 주펄스 위치는 A/A′ 7,489, B/B′ 14,446스텝이며 adaptive DFT 절단은
 A 21,788, A′ 21,722, B/B′ 22,436 samples였다.
 
-다만 subdivision 8의 최대 잔차는 478.109 Hz에서 +0.906/+0.913 dB/Mm로
-이동했다. 따라서 A′–B′의 ±1.0 dB/Mm 범위는 통과하지만 A–B의 ±0.5
-dB/Mm 범위는 통과하지 못해 전체 정량 상태는 여전히 실패다. 절단점을
+다만 subdivision 8의 최대 잔차는 478.109 Hz에서 +1.218/+1.225 dB/Mm로
+이동했다. 따라서 A–B의 ±0.5 dB/Mm와 A′–B′의 ±1.0 dB/Mm 범위를 모두
+통과하지 못해 전체 정량 상태는 여전히 실패다. 절단점을
 ±16 samples 바꿔도 최대 오차 변화는 약 0.01 dB/Mm에 불과해 adaptive
-cutoff가 원인은 아니다. 반면 zero-padding을 32,768에서 65,536으로 늘리면
-MAE는 약 0.156 dB/Mm로 유지되지만 483.195 Hz의 좁은 peak를 더 촘촘히
-표본화해 최대 오차가 1.736/1.744 dB/Mm로 증가한다. 원시 Bannister
-비교점이 없는 상태에서 임의 FFT bin 전체의 최대값은 주파수 표본화에
-민감하므로, 현재 결과를 완전한 정량 재현으로 판정해서는 안 된다.
+cutoff가 원인은 아니다. 고정 45개 평가점을 사용하면 zero-padding을
+32,768에서 65,536으로 늘려도 모든 지표가 약 `1e-12` 상대 오차 내에서
+일치한다. 남은 불일치는 400–500 Hz의 진동성 잔차에 집중된다.
 
 가능성이 큰 차이 원인은 다음과 같다.
 
 1. NOAA-NGDC 지형·수심 원본 대신 해안선 기반 육지 마스크를 사용했다.
 2. 전체 Hermance 지각 모델 대신 Fig. 6의 저항률 경계값으로 층을 근사했다.
-3. 정확한 Bannister 대기 전도도 자료와 원시 비교 데이터가 없다.
-4. 원 논문의 adaptive merged latitude–longitude grid와 현재 geodesic dual
+3. 원 논문의 adaptive merged latitude–longitude grid와 현재 geodesic dual
    grid의 수치 분산 특성이 다르다.
-5. 논문 DFT 절단 스텝은 원 논문 파형의 zero-crossing에 맞춘 값이므로,
+4. 논문 DFT 절단 스텝은 원 논문 파형의 zero-crossing에 맞춘 값이므로,
    도달 시간이 다른 현재 파형에는 동일한 절단이 추가 오차를 만든다.
 
 ## 다음 검증 순서
 
-1. 원시 Bannister 비교점 또는 Fig. 8 digitization을 확보해 평가 주파수를
-   고정하고, FFT zero-padding에 불변인 점별 판정을 정의한다.
-2. 균질 모델에서 subdivision별 위상속도와 도달 시간을 수렴 검증한다.
-3. NOAA relief와 Hermance 전도도 자료를 동일한 해상도로 준비해
+1. 균질 모델에서 subdivision별 위상속도와 도달 시간을 수렴 검증한다.
+2. NOAA relief와 Hermance 전도도 자료를 동일한 해상도로 준비해
    동서 파형 비대칭을 재현한다.
-4. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
+3. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
 
 ## 참고문헌
 

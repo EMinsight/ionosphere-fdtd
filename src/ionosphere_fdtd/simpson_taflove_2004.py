@@ -26,12 +26,24 @@ PAPER_SOURCE_FULL_WIDTH_STEPS = 480
 PAPER_SOURCE_CENTER_STEPS = 960
 PAPER_TRACE_STEPS = 35_000
 PAPER_DFT_TRUNCATIONS = {"A": 22_849, "B": 24_165, "A′": 22_737, "B′": 25_023}
+PAPER_DFT_SIZE = 32_768
 REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M = 70_000.0
 REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M = 3_330.0
 PAPER_VALID_FREQUENCY_HZ = (50.0, 500.0)
 PAPER_PATH_AB_TOLERANCE_DB_PER_MM = 0.5
 PAPER_PATH_APBP_TOLERANCE_DB_PER_MM = 1.0
 PAPER_MINIMUM_SIMULATION_STEPS = max(PAPER_DFT_TRUNCATIONS.values()) - 1
+BANNISTER_REFERENCE_HEIGHT_KM = 70.0
+BANNISTER_SCALE_HEIGHT_KM = 1.0 / 0.3
+
+_paper_frequency_resolution_hz = 1.0 / (PAPER_DFT_SIZE * PAPER_TIME_STEP_S)
+PAPER_EVALUATION_FREQUENCIES_HZ = tuple(
+    np.arange(
+        np.ceil(PAPER_VALID_FREQUENCY_HZ[0] / _paper_frequency_resolution_hz),
+        np.floor(PAPER_VALID_FREQUENCY_HZ[1] / _paper_frequency_resolution_hz) + 1,
+    )
+    * _paper_frequency_resolution_hz
+)
 
 FloatArray = NDArray[np.float64]
 
@@ -214,7 +226,7 @@ def compute_attenuation(
     traces: ValidationTraces,
     *,
     time_step_s: float = PAPER_TIME_STEP_S,
-    n_fft: int = 32_768,
+    n_fft: int = PAPER_DFT_SIZE,
     truncations: Mapping[str, int] | None = None,
 ) -> AttenuationCurves:
     """Compute attenuation using receiver-specific rectangular DFT windows.
@@ -300,10 +312,55 @@ def find_dft_truncations(traces: ValidationTraces) -> dict[str, int]:
 
 
 def bannister_figure_8_guide(frequency_hz: FloatArray) -> FloatArray:
-    """Return a log-log fit digitized from the prior-results line in Fig. 8."""
+    """Evaluate the daytime attenuation model used for Figure 8.
+
+    This implements Bannister (1984), equations (5), (7), and (8), with
+    ``H = 70 km`` and ``xi_0 = xi_1 = 1 / 0.3 km`` as specified below those
+    equations. Simpson and Taflove cite that curve as the previous results in
+    their Figure 8.
+    """
 
     frequency = np.asarray(frequency_hz, dtype=np.float64)
-    return 0.0265 * np.power(np.maximum(frequency, 0.0), 0.938)
+    safe_frequency = np.where(frequency > 0.0, frequency, 1.0)
+    h0_km = BANNISTER_REFERENCE_HEIGHT_KM - BANNISTER_SCALE_HEIGHT_KM * np.log(
+        2.5e5 / (2.0 * np.pi * safe_frequency)
+    )
+    h1_km = h0_km + 2.0 * BANNISTER_SCALE_HEIGHT_KM * np.log(
+        2.39e4 / (safe_frequency * BANNISTER_SCALE_HEIGHT_KM)
+    )
+    attenuation = (
+        0.143
+        * safe_frequency
+        * np.sqrt(h1_km / h0_km)
+        * BANNISTER_SCALE_HEIGHT_KM
+        * (1.0 / h0_km + 1.0 / h1_km)
+    )
+    return np.where(frequency > 0.0, attenuation, 0.0)
+
+
+def paper_evaluation_frequencies() -> FloatArray:
+    """Return the 45 DFT frequencies implied by the Figure 8 markers."""
+
+    return np.asarray(PAPER_EVALUATION_FREQUENCIES_HZ, dtype=np.float64)
+
+
+def sample_paper_comparison(
+    curves: AttenuationCurves,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Sample attenuation curves at the fixed Figure 8 comparison bins."""
+
+    frequency = paper_evaluation_frequencies()
+    if (
+        frequency[0] < curves.frequency_hz[0]
+        or frequency[-1] > curves.frequency_hz[-1]
+    ):
+        raise ValueError("attenuation curves do not cover the paper frequencies")
+    return (
+        frequency,
+        np.interp(frequency, curves.frequency_hz, curves.path_ab_db_per_mm),
+        np.interp(frequency, curves.frequency_hz, curves.path_apbp_db_per_mm),
+        bannister_figure_8_guide(frequency),
+    )
 
 
 def render_figure_7(
@@ -351,7 +408,7 @@ def render_figure_7(
 def render_figure_8(
     curves: AttenuationCurves, output: str | Path
 ) -> Path:
-    """Render attenuation curves and the digitized prior-results guide."""
+    """Render attenuation curves and the Bannister daytime model."""
 
     import matplotlib.pyplot as plt
 
@@ -359,9 +416,7 @@ def render_figure_8(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     frequency = curves.frequency_hz
     display = (frequency >= 5.0) & (frequency <= 2_000.0)
-    valid = (frequency >= curves.valid_frequency_hz[0]) & (
-        frequency <= curves.valid_frequency_hz[1]
-    )
+    comparison_frequency, path_ab, path_apbp, _ = sample_paper_comparison(curves)
     figure, ax = plt.subplots(figsize=(9.0, 6.2), constrained_layout=True)
     ax.axvspan(
         *curves.valid_frequency_hz,
@@ -372,18 +427,18 @@ def render_figure_8(
         frequency[display],
         curves.benchmark_db_per_mm[display],
         color="black",
-        label="previous-results guide",
+        label="Bannister daytime model",
     )
     ax.plot(
-        frequency[valid],
-        curves.path_ab_db_per_mm[valid],
+        comparison_frequency,
+        path_ab,
         "*",
         markersize=6,
         label="Path A–B",
     )
     ax.plot(
-        frequency[valid],
-        curves.path_apbp_db_per_mm[valid],
+        comparison_frequency,
+        path_apbp,
         ".",
         markersize=5,
         label="Path A′–B′",
@@ -403,20 +458,13 @@ def render_figure_8(
 
 
 def validation_metrics(curves: AttenuationCurves) -> dict[str, float]:
-    """Return mean and maximum differences from the digitized Fig. 8 guide."""
+    """Return errors from the Bannister model at the paper's DFT bins."""
 
-    valid = (curves.frequency_hz >= curves.valid_frequency_hz[0]) & (
-        curves.frequency_hz <= curves.valid_frequency_hz[1]
-    )
-    finite_ab = valid & np.isfinite(curves.path_ab_db_per_mm)
-    finite_apbp = valid & np.isfinite(curves.path_apbp_db_per_mm)
-    ab_residual = curves.path_ab_db_per_mm[finite_ab] - curves.benchmark_db_per_mm[
-        finite_ab
-    ]
-    apbp_residual = (
-        curves.path_apbp_db_per_mm[finite_apbp]
-        - curves.benchmark_db_per_mm[finite_apbp]
-    )
+    frequency, path_ab, path_apbp, benchmark = sample_paper_comparison(curves)
+    ab_residual = path_ab - benchmark
+    apbp_residual = path_apbp - benchmark
+    ab_maximum_index = int(np.argmax(np.abs(ab_residual)))
+    apbp_maximum_index = int(np.argmax(np.abs(apbp_residual)))
     return {
         "path_ab_mean_absolute_error_db_per_mm": float(
             np.mean(np.abs(ab_residual))
@@ -429,6 +477,18 @@ def validation_metrics(curves: AttenuationCurves) -> dict[str, float]:
         ),
         "path_apbp_maximum_absolute_error_db_per_mm": float(
             np.max(np.abs(apbp_residual))
+        ),
+        "path_ab_maximum_error_frequency_hz": float(
+            frequency[ab_maximum_index]
+        ),
+        "path_apbp_maximum_error_frequency_hz": float(
+            frequency[apbp_maximum_index]
+        ),
+        "path_ab_maximum_residual_db_per_mm": float(
+            ab_residual[ab_maximum_index]
+        ),
+        "path_apbp_maximum_residual_db_per_mm": float(
+            apbp_residual[apbp_maximum_index]
         ),
     }
 

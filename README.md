@@ -345,13 +345,15 @@ baseline.
 
 This workflow is deliberately a verification test, not a claim of complete
 agreement.  Correcting the ionosphere profile and DFT criterion reduced the
-level-7 `float64` mean absolute errors from 6.15/5.99 dB/Mm to 0.24/0.25 dB/Mm
-for A–B/A′–B′.  A CUDA `float64` subdivision-8 run reduced both mean errors
-to 0.156 dB/Mm and the 32,768-point DFT-bin maxima to 0.906/0.913 dB/Mm.  This
-passes the A′–B′ ±1.0 dB/Mm range but not the tighter A–B ±0.5 dB/Mm range.
-The residual is now confined mainly to a narrow 450–500 Hz ripple; its sampled
-maximum depends on DFT zero-padding, so it must not be presented as complete
-quantitative reproduction without the original Bannister comparison data.
+large baseline errors substantially.  Source-based reanalysis now evaluates
+Bannister's 1984 equations at the 45 frequencies implied by the Figure 8
+32,768-point DFT.  On this fixed grid, the corrected level-7 `float64` MAEs are
+0.387/0.399 dB/Mm for A–B/A′–B′.  A CUDA subdivision-8 run reduces them to
+0.274/0.275 dB/Mm, with maxima of 1.218/1.225 dB/Mm.  Both strict pointwise
+ranges therefore remain unmet.  The result is invariant to DFT zero-padding,
+and the residual is now isolated mainly to a 400–500 Hz spatial-dispersion
+ripple.
+
 The command prints pulse timings, selected DFT cutoffs, and east/west RMS
 differences so remaining material and discretization improvements can be
 measured.
@@ -364,6 +366,9 @@ The subdivision-8 compiled CUDA run used about 10.1 GB of peak allocated GPU
 memory in a one-step preflight and completed 25,023 steps in 3,477.9 seconds on
 an RTX 3060.  Its figures, traces, and generated report are preserved in
 [`artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected`](artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected).
+That run report preserves the earlier fitted guide; the authoritative
+source-based metrics, fixed comparison points, and convergence plot are in the
+[`fixed-frequency-reanalysis`](artifacts/simpson-taflove-2004/fixed-frequency-reanalysis/verification-report.md).
 
 Apple MPS does not support PyTorch `float64`.  Run the double-precision
 validation on a CUDA Linux host instead:
@@ -406,9 +411,10 @@ The laptop defaults demonstrate the complete 3-D algorithm.  The 2004
 validation workflow supplies the paper-scale grid, observation records, and DFT
 windowing, but substitutes a Natural Earth land mask and bounded Figure 6 layer
 values for the unavailable NOAA topography/bathymetry and full Hermance model.
-Quantitative reproduction still requires those original data, the exact
-Bannister profile, and a discretization study reconciling the paper's merged
-latitude–longitude cells with this project's geodesic dual grid.
+Quantitative reproduction still requires those original material data and a
+discretization study reconciling the paper's merged latitude–longitude cells
+with this project's geodesic dual grid.  The Bannister daytime comparison is
+implemented directly from the cited 1984 equations rather than a plot fit.
 
 ## References
 

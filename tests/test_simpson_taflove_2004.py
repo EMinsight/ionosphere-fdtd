@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 
 from ionosphere_fdtd.simpson_taflove_2004 import (
+    PAPER_DFT_SIZE,
+    PAPER_EVALUATION_FREQUENCIES_HZ,
     PAPER_RECEIVERS,
     PAPER_SOURCE_CENTER_STEPS,
     PAPER_SOURCE_FULL_WIDTH_STEPS,
@@ -11,11 +13,13 @@ from ionosphere_fdtd.simpson_taflove_2004 import (
     REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M,
     REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     ValidationTraces,
+    bannister_figure_8_guide,
     compute_attenuation,
     create_validation_simulation,
     find_dft_truncations,
     record_validation_traces,
     trace_metrics,
+    validation_metrics,
 )
 from ionosphere_fdtd.simpson_taflove_2004_report import (
     ValidationRunSummary,
@@ -107,6 +111,43 @@ def test_attenuation_recovers_known_spectral_ratio() -> None:
     assert metrics["quarter_east_west_relative_rms"] == pytest.approx(0.0)
 
 
+def test_bannister_guide_matches_published_daytime_examples() -> None:
+    attenuation = bannister_figure_8_guide(np.asarray([0.0, 75.0, 1_000.0]))
+
+    assert attenuation[0] == 0.0
+    assert attenuation[1] == pytest.approx(1.5, rel=0.01)
+    assert attenuation[2] == pytest.approx(16.6, rel=0.01)
+
+
+def test_validation_uses_fixed_paper_dft_frequencies() -> None:
+    frequencies = np.asarray(PAPER_EVALUATION_FREQUENCIES_HZ)
+
+    assert len(frequencies) == 45
+    assert frequencies[0] == pytest.approx(50.86263020833333)
+    assert frequencies[-1] == pytest.approx(498.45377604166663)
+
+    count = 25_024
+    time_steps = np.arange(count, dtype=np.int64)
+    wave = np.zeros(count)
+    wave[7_000:9_000] = -np.sin(np.linspace(0.0, np.pi, 2_000))
+    wave[9_000:10_000] = 0.2 * np.sin(np.linspace(0.0, np.pi, 1_000))
+    wave[10_000:] = -0.01 * (
+        1.0 - np.exp(-np.arange(count - 10_000) / 500.0)
+    )
+    traces = ValidationTraces(
+        time_steps=time_steps,
+        time_s=time_steps * PAPER_TIME_STEP_S,
+        er_v_m=np.column_stack((wave, wave, 0.5 * wave, 0.25 * wave)),
+        labels=("A", "A′", "B", "B′"),
+    )
+
+    base = validation_metrics(compute_attenuation(traces, n_fft=PAPER_DFT_SIZE))
+    padded = validation_metrics(
+        compute_attenuation(traces, n_fft=2 * PAPER_DFT_SIZE)
+    )
+    assert padded == pytest.approx(base, rel=1.0e-12, abs=1.0e-12)
+
+
 def test_adaptive_dft_window_rejects_trace_without_positive_overshoot() -> None:
     time_steps = np.arange(4_000, dtype=np.int64)
     wave = -np.exp(-((time_steps - 2_000) / 300.0) ** 2)
@@ -162,6 +203,8 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "6.146 dB/Mm" in text
     assert "9.000 dB/Mm" in text
     assert "`adaptive`" in text
+    assert "45개 bin" in text
+    assert "Bannister (1984)" in text
     assert "![Figure 7 verification](fig-7.png)" in text
     assert "[Receiver traces (NPZ)](traces.npz)" in text
     assert "uv run ionosphere-verify-2004" in text
