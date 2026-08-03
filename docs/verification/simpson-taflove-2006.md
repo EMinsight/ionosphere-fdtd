@@ -284,6 +284,37 @@ suppressed in every case. Even the 3.00-km scale height raises B only from
 standard 70-km/3.33-km Bannister profile is therefore retained. Parameter
 tuning cannot repair a path-selective missing-water-layer error.
 
+#### Fractional radial-interface experiment
+
+An opt-in material experiment replaced tangential-field midpoint sampling by
+an arithmetic air/water/rock thickness average in every radial cell. This
+preserves static sheet conductance, but it does not preserve the
+frequency-dependent surface impedance of a thin, highly conductive seawater
+layer. Corrected-location CUDA `float64` runs demonstrate the limitation:
+
+| Surface subdivision | Near-surface radial spacing | Interface | B / B′ peak | B / B′ tail at 0.12 s |
+|---:|---:|---|---:|---:|
+| 5 | 5 km | Point | 0.11120 / 0.39237 | 0.02238 / 0.06673 |
+| 5 | 5 km | Fractional | 0.11266 / 0.39157 | 0.02323 / 0.07028 |
+| 4 | 5 km | Point | 0.29043 / 0.48461 | 0.06812 / 0.09994 |
+| 4 | 5 km | Fractional | 0.12253 / 0.47570 | 0.01508 / 0.09288 |
+| 4 | 250 m | Point | 0.30031 / 0.47117 | 0.06764 / 0.09794 |
+| 4 | 250 m | Fractional | 0.26909 / 0.47164 | 0.04666 / 0.09775 |
+
+At 250-m radial spacing the point and fractional four-record waveforms differ
+by 6.15% RMS and give similar B′ peaks; B differs by about 10%. At 5-km
+spacing, however, arithmetic fractional averaging can suppress B more than
+the original point material. It is therefore rejected as a production model
+and is not promoted to subdivision 7. The feature remains available only as
+an explicit diagnostic; point sampling remains the default.
+
+The comparison also shows that changing the surface subdivision from 4 to 5
+moves the point-sampled B peak from 0.29043 to 0.11120, much more than radial
+refinement changes it at subdivision 4. This reinforces horizontal
+bathymetry/material aliasing as the next correction target. A valid subcell
+model must average the complete lossy update or surface impedance over each
+horizontal support, rather than only the bulk conductivity over radial depth.
+
 ## Figure 6: daytime attenuation
 
 ![Published and reproduced Figure 6](images/simpson-taflove-2006-fig-6-comparison.png)
@@ -509,10 +540,12 @@ sensitivity were tested. The geographic locator defect was corrected and all
 paper-scale production traces affected by it were recomputed.
 
 For Figure 5, the strongest identified cause is actionable: binary material
-sampling on a 5-km radial grid omits shallow water layers. A future fractional
-or subcell water/rock interface treatment can address that error without
-replacing the required geodesic grid. Figure 6 additionally retains the known
-high-frequency spatial-dispersion residual. Figure 7 remains limited by inputs
+sampling aliases shallow water layers and changes strongly with surface
+subdivision. Simple arithmetic radial fractions do not solve it; the next
+physically defensible options are horizontal support integration of the lossy
+update or a frequency-dependent thin-layer surface impedance. Both retain the
+required geodesic grid. Figure 6 additionally retains the known high-frequency
+spatial-dispersion residual. Figure 7 remains limited by inputs
 that cannot be reconstructed from the paper: optimized cell positions, exact
 three-dimensional lithosphere conductivity, Canadian Shield mask, horizontal
 subcell treatment of the 4,800 km² body, source phase/deposition, and a
