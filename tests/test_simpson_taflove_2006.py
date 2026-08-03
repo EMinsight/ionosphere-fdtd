@@ -11,11 +11,38 @@ from ionosphere_fdtd.simpson_taflove_2006 import (
     RadarTraces,
     compute_radar_perturbation,
     create_radar_simulation,
+    normalized_figure_5_traces,
     paper_anomalies,
     radar_field_metrics,
     radar_radial_altitudes_m,
     record_radar_traces,
 )
+from ionosphere_fdtd.simpson_taflove_2004 import ValidationTraces
+
+
+def test_figure_5_normalization_preserves_four_individual_records() -> None:
+    time = np.arange(3, dtype=np.float64)
+    values = np.asarray(
+        (
+            (0.0, 0.0, 0.0, 0.0),
+            (-2.0, -1.0, -0.5, -0.25),
+            (1.0, 0.5, 0.25, 0.125),
+        )
+    )
+    traces = ValidationTraces(
+        time_steps=np.arange(3, dtype=np.int64),
+        time_s=time,
+        er_v_m=values,
+        labels=("A", "A′", "B", "B′"),
+    )
+
+    normalized = normalized_figure_5_traces(traces)
+
+    assert tuple(normalized) == ("A", "A′", "B", "B′")
+    np.testing.assert_allclose(normalized["A"], -values[:, 0] / 2.0)
+    np.testing.assert_allclose(normalized["A′"], -values[:, 1] / 2.0)
+    np.testing.assert_allclose(normalized["B"], -values[:, 2] / 2.0)
+    np.testing.assert_allclose(normalized["B′"], -values[:, 3] / 2.0)
 
 
 def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:

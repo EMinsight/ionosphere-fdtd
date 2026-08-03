@@ -412,28 +412,41 @@ def radar_field_metrics(
     return metrics
 
 
+def normalized_figure_5_traces(
+    traces: ValidationTraces,
+) -> dict[str, FloatArray]:
+    """Return all four Figure 5 records with one common normalization."""
+
+    values = {label: -traces.trace(label) for label in ("A", "A′", "B", "B′")}
+    scale = float(max(np.max(np.abs(trace)) for trace in values.values()))
+    if scale == 0.0:
+        raise ValueError("Figure 5 traces are identically zero")
+    return {label: trace / scale for label, trace in values.items()}
+
+
 def render_figure_5(traces: ValidationTraces, path: str | Path) -> Path:
-    """Render the normalized geodesic-grid temporal response of Figure 5."""
+    """Render the four normalized geodesic-grid records of Figure 5."""
 
     import matplotlib.pyplot as plt
 
-    near = -0.5 * (traces.trace("A") + traces.trace("A′"))
-    far = -0.5 * (traces.trace("B") + traces.trace("B′"))
-    scale = float(max(np.max(np.abs(near)), np.max(np.abs(far))))
+    values = normalized_figure_5_traces(traces)
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     figure, axis = plt.subplots(figsize=(7.0, 4.5), constrained_layout=True)
-    axis.plot(traces.time_s, near / scale, color="black", label="Points A and A′")
-    axis.plot(
-        traces.time_s,
-        far / scale,
-        color="0.35",
-        linestyle=":",
-        linewidth=2.0,
-        label="Points B and B′",
+    styles = {
+        "A": {"color": "black", "linestyle": "-"},
+        "A′": {"color": "0.45", "linestyle": "-"},
+        "B": {"color": "black", "linestyle": ":", "linewidth": 2.0},
+        "B′": {"color": "0.45", "linestyle": ":", "linewidth": 2.0},
+    }
+    for label, trace in values.items():
+        axis.plot(traces.time_s, trace, label=f"Point {label}", **styles[label])
+    axis.set(
+        xlim=(0.0, 0.12),
+        xlabel="Time (seconds)",
+        ylabel="Normalized radial electric field",
     )
-    axis.set(xlim=(0.0, 0.12), xlabel="Time (seconds)", ylabel="Normalized radial electric field")
-    axis.legend(frameon=False)
+    axis.legend(frameon=False, ncol=2)
     figure.savefig(output, dpi=180)
     plt.close(figure)
     return output
