@@ -452,8 +452,8 @@ class GeodesicFDTD:
             raise ValueError("face indices and weights must have matching 2-D shapes")
         if edges.ndim != 2 or tangential_weights.shape != edges.shape:
             raise ValueError("edge indices and weights must have matching 2-D shapes")
-        if face_layers.shape != (faces.shape[0],):
-            raise ValueError("face radial layers must match the observations")
+        if face_layers.shape != faces.shape:
+            raise ValueError("face radial layers must match the face indices")
         if edge_layers.shape != edges.shape:
             raise ValueError("edge radial layers must match the edge indices")
         if np.any(faces < 0) or np.any(faces >= self.mesh.n_faces):
@@ -475,7 +475,7 @@ class GeodesicFDTD:
         tangential_traces = self.backend.zeros((steps + 1, edges.shape[0]))
 
         def sample(row: int) -> None:
-            selected_hr = self.hr[backend_faces, backend_face_layers[:, None]]
+            selected_hr = self.hr[backend_faces, backend_face_layers]
             radial_traces[row] = (
                 selected_hr * backend_radial_weights
             ).sum(axis=1)

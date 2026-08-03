@@ -165,7 +165,7 @@ def test_backend_native_h_recording_includes_initial_state() -> None:
     )
     hr, ht = simulation.record_h_observations(
         np.asarray(((0,),), dtype=np.int64),
-        np.asarray((2,), dtype=np.int64),
+        np.asarray(((2,),), dtype=np.int64),
         np.asarray(((1.0,),)),
         np.asarray(((0, 1, 2),), dtype=np.int64),
         np.asarray(((2, 2, 2),), dtype=np.int64),

@@ -36,6 +36,7 @@ ionosphere = "ionosphere_fdtd.cli:main"
 ionosphere-figure-3-11 = "ionosphere_fdtd.taflove_fig_3_11_cli:main"
 ionosphere-measure-dispersion = "ionosphere_fdtd.directional_dispersion_cli:main"
 ionosphere-verify-2004 = "ionosphere_fdtd.simpson_taflove_2004_cli:main"
+ionosphere-verify-2006 = "ionosphere_fdtd.simpson_taflove_2006_cli:main"
 ionosphere-visualize = "ionosphere_fdtd.viz_cli:main"
 
 [tool.setuptools.packages.find]
