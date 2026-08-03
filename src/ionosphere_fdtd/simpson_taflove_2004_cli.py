@@ -58,6 +58,12 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="NOAA-NGDC big-endian ETOPO5.DAT (required by --material etopo5)",
     )
+    parser.add_argument(
+        "--tangential-interface",
+        choices=("point", "fractional"),
+        default="point",
+        help="sample Et materials at cell centers or average radial interfaces",
+    )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--dtype", choices=("auto", "float32", "float64"), default="float32")
@@ -113,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
             etopo5_path=args.etopo5_path,
+            tangential_interface_mode=args.tangential_interface,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -120,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         f"grid={simulation.mesh.n_vertices:,}x{simulation.config.radial_cells} "
         f"backend={simulation.backend.name} device={simulation.backend.device} "
         f"dtype={simulation.backend.dtype_name} material={args.material} "
+        f"interface={args.tangential_interface} "
         f"dt={simulation.time_step_s:.3e}s",
         flush=True,
     )

@@ -155,3 +155,83 @@ def test_relief_material_resolves_mountains_ocean_and_seafloor() -> None:
     assert sigma[1, 1] == 1.0 / material.sea_water_resistivity_ohm_m
     assert sigma[1, 2] == 1.0 / material.upper_crust_resistivity_ohm_m
     assert np.all(sigma[:, 3] == 1.0 / material.lower_mantle_resistivity_ohm_m)
+
+
+def test_fractional_tangential_interface_preserves_shallow_water_fraction() -> None:
+    depths_m = np.asarray((-207.0, -4_538.0))
+    material = SimpsonTaflove2004Material(
+        surface_elevation_sampler=lambda directions: depths_m,
+        tangential_interface_mode="fractional",
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0)))
+
+    sigma, epsilon_r = material.sample_tangential_cells(
+        directions,
+        np.asarray((-5_000.0,)),
+        np.asarray((0.0,)),
+        6_371_000.0,
+    )
+
+    water_fraction = -depths_m / 5_000.0
+    rock_fraction = 1.0 - water_fraction
+    expected_sigma = (
+        rock_fraction / material.upper_crust_resistivity_ohm_m
+        + water_fraction / material.sea_water_resistivity_ohm_m
+    )
+    expected_epsilon = (
+        rock_fraction * material.lithosphere_relative_permittivity
+        + water_fraction * material.sea_water_relative_permittivity
+    )
+    np.testing.assert_allclose(sigma[:, 0], expected_sigma)
+    np.testing.assert_allclose(epsilon_r[:, 0], expected_epsilon)
+    assert sigma[0, 0] > 1.0 / material.upper_crust_resistivity_ohm_m
+
+
+def test_point_tangential_interface_retains_midpoint_sampling() -> None:
+    material = SimpsonTaflove2004Material(
+        surface_elevation_sampler=lambda directions: np.asarray(
+            (-207.0, -4_538.0)
+        ),
+        tangential_interface_mode="point",
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0)))
+
+    sigma, _ = material.sample_tangential_cells(
+        directions,
+        np.asarray((-5_000.0,)),
+        np.asarray((0.0,)),
+        6_371_000.0,
+    )
+
+    assert sigma[0, 0] == pytest.approx(
+        1.0 / material.upper_crust_resistivity_ohm_m
+    )
+    assert sigma[1, 0] == pytest.approx(
+        1.0 / material.sea_water_resistivity_ohm_m
+    )
+
+
+def test_fractional_tangential_interface_rejects_invalid_bounds() -> None:
+    material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),
+        tangential_interface_mode="fractional",
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0),))
+
+    with pytest.raises(ValueError, match="upper bounds"):
+        material.sample_tangential_cells(
+            directions,
+            np.asarray((0.0,)),
+            np.asarray((0.0,)),
+            6_371_000.0,
+        )
+
+
+def test_simpson_material_rejects_unknown_interface_mode() -> None:
+    with pytest.raises(ValueError, match="tangential_interface_mode"):
+        SimpsonTaflove2004Material(
+            land_classifier=lambda directions: np.ones(
+                len(directions), dtype=np.bool_
+            ),
+            tangential_interface_mode="unknown",
+        )

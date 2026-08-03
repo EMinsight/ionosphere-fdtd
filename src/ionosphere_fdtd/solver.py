@@ -209,11 +209,22 @@ class GeodesicFDTD:
         sigma_er, epsilon_r_er = self.material.sample(
             self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
         )
-        sigma_et, epsilon_r_et = self.material.sample(
-            self.mesh.edge_midpoints(),
-            self.radial_midpoint_altitudes_m,
-            self.config.earth_radius_m,
+        sample_tangential_cells = getattr(
+            self.material, "sample_tangential_cells", None
         )
+        if sample_tangential_cells is None:
+            sigma_et, epsilon_r_et = self.material.sample(
+                self.mesh.edge_midpoints(),
+                self.radial_midpoint_altitudes_m,
+                self.config.earth_radius_m,
+            )
+        else:
+            sigma_et, epsilon_r_et = sample_tangential_cells(
+                self.mesh.edge_midpoints(),
+                self.altitudes_m[:-1],
+                self.altitudes_m[1:],
+                self.config.earth_radius_m,
+            )
         epsilon_er = EPSILON_0 * epsilon_r_er
         epsilon_et = EPSILON_0 * epsilon_r_et
         loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)

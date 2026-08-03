@@ -157,6 +157,7 @@ def create_validation_simulation(
     ),
     ionosphere_scale_height_m: float = REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     etopo5_path: str | Path | None = None,
+    tangential_interface_mode: str = "point",
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
@@ -165,6 +166,7 @@ def create_validation_simulation(
             land_classifier=natural_earth_land_classifier(),
             ionosphere_reference_height_m=ionosphere_reference_height_m,
             ionosphere_scale_height_m=ionosphere_scale_height_m,
+            tangential_interface_mode=tangential_interface_mode,
         )
     elif material_model == "etopo5":
         if etopo5_path is None:
@@ -173,6 +175,7 @@ def create_validation_simulation(
             surface_elevation_sampler=ETOPO5Relief.from_file(etopo5_path),
             ionosphere_reference_height_m=ionosphere_reference_height_m,
             ionosphere_scale_height_m=ionosphere_scale_height_m,
+            tangential_interface_mode=tangential_interface_mode,
         )
     elif material_model == "uniform":
         material = EarthIonosphereMaterial(

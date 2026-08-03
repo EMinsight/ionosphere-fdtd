@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from ionosphere_fdtd.materials import EarthIonosphereMaterial
+from ionosphere_fdtd.materials import (
+    EarthIonosphereMaterial,
+    SimpsonTaflove2004Material,
+)
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import (
     GaussianCurrent,
@@ -238,6 +241,33 @@ def test_nonuniform_radial_grid_advances() -> None:
     simulation.step(5)
     assert np.allclose(simulation.altitudes_m, altitudes)
     assert np.isfinite(simulation.er).all()
+
+
+def test_solver_uses_fractional_tangential_material_cells() -> None:
+    material = SimpsonTaflove2004Material(
+        surface_elevation_sampler=lambda directions: np.full(
+            len(directions), -207.0
+        ),
+        tangential_interface_mode="fractional",
+    )
+    simulation = GeodesicFDTD(
+        config=small_config(
+            radial_altitudes_m=(-5_000.0, 0.0, 5_000.0),
+            radial_cells=2,
+            minimum_altitude_m=-5_000.0,
+            maximum_altitude_m=5_000.0,
+        ),
+        material=material,
+    )
+    water_fraction = 207.0 / 5_000.0
+    expected = (
+        (1.0 - water_fraction) / material.upper_crust_resistivity_ohm_m
+        + water_fraction / material.sea_water_resistivity_ohm_m
+    )
+
+    np.testing.assert_allclose(
+        simulation.to_numpy(simulation.sigma_et)[:, 0], expected
+    )
 
 
 def test_modulated_source_uses_frequency_scaled_default_envelope() -> None:

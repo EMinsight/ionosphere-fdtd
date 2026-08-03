@@ -270,6 +270,7 @@ class SimpsonTaflove2004Material:
     ionosphere_scale_height_m: float = 3_330.0
     ionosphere_prefactor_hz: float = 2.5e5
     anomalies: tuple[SphericalAnomaly, ...] = field(default_factory=tuple)
+    tangential_interface_mode: str = "point"
 
     def __post_init__(self) -> None:
         if (self.land_classifier is None) == (
@@ -298,6 +299,54 @@ class SimpsonTaflove2004Material:
             self.atmosphere_relative_permittivity,
         ) < 1.0:
             raise ValueError("relative permittivity must be >= 1")
+        if self.tangential_interface_mode not in {"point", "fractional"}:
+            raise ValueError(
+                "tangential_interface_mode must be 'point' or 'fractional'"
+            )
+
+    def _surface_geometry(
+        self, directions: FloatArray
+    ) -> tuple[FloatArray, BoolArray, FloatArray]:
+        """Normalize directions and return land flags and surface elevations."""
+
+        normalized = np.array(directions, dtype=np.float64, copy=True)
+        normalized /= np.linalg.norm(normalized, axis=1, keepdims=True)
+        if self.surface_elevation_sampler is None:
+            assert self.land_classifier is not None
+            is_land = np.asarray(self.land_classifier(normalized), dtype=np.bool_)
+            surface_elevation_m = np.where(is_land, 0.0, -self.ocean_depth_m)
+        else:
+            surface_elevation_m = np.asarray(
+                self.surface_elevation_sampler(normalized), dtype=np.float64
+            )
+            is_land = surface_elevation_m >= 0.0
+        if is_land.shape != (len(normalized),):
+            raise ValueError("surface data must return one value per direction")
+        if not np.all(np.isfinite(surface_elevation_m)):
+            raise ValueError("surface elevations must be finite")
+        return normalized, is_land, surface_elevation_m
+
+    def _rock_resistivity(
+        self, is_land: BoolArray, altitudes_m: FloatArray
+    ) -> FloatArray:
+        """Return representative rock resistivity at requested altitudes."""
+
+        depth = np.maximum(-altitudes_m, 0.0)
+        ocean = np.where(
+            depth >= self.asthenosphere_bottom_depth_m,
+            self.lower_mantle_resistivity_ohm_m,
+            np.where(
+                depth >= self.asthenosphere_top_depth_m,
+                self.asthenosphere_resistivity_ohm_m,
+                self.upper_crust_resistivity_ohm_m,
+            ),
+        )
+        continent = np.where(
+            depth >= self.asthenosphere_bottom_depth_m,
+            self.lower_mantle_resistivity_ohm_m,
+            self.upper_crust_resistivity_ohm_m,
+        )
+        return np.where(is_land[:, None], continent[None, :], ocean[None, :])
 
     def sample(
         self,
@@ -307,22 +356,10 @@ class SimpsonTaflove2004Material:
     ) -> tuple[FloatArray, FloatArray]:
         """Return conductivity and permittivity on the requested tensor grid."""
 
-        directions = np.array(directions, dtype=np.float64, copy=True)
-        directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+        directions, is_land, surface_elevation_m = self._surface_geometry(
+            directions
+        )
         altitudes = np.asarray(altitudes_m, dtype=np.float64)
-        if self.surface_elevation_sampler is None:
-            assert self.land_classifier is not None
-            is_land = np.asarray(self.land_classifier(directions), dtype=np.bool_)
-            surface_elevation_m = np.where(is_land, 0.0, -self.ocean_depth_m)
-        else:
-            surface_elevation_m = np.asarray(
-                self.surface_elevation_sampler(directions), dtype=np.float64
-            )
-            is_land = surface_elevation_m >= 0.0
-        if is_land.shape != (len(directions),):
-            raise ValueError("surface data must return one value per direction")
-        if not np.all(np.isfinite(surface_elevation_m)):
-            raise ValueError("surface elevations must be finite")
 
         sigma_air = (
             self.ionosphere_prefactor_hz
@@ -341,26 +378,7 @@ class SimpsonTaflove2004Material:
         ).copy()
         epsilon_r = np.full_like(sigma, self.atmosphere_relative_permittivity)
 
-        depth = np.maximum(-altitudes, 0.0)
-        ocean_rock_resistivity = np.where(
-            depth >= self.asthenosphere_bottom_depth_m,
-            self.lower_mantle_resistivity_ohm_m,
-            np.where(
-                depth >= self.asthenosphere_top_depth_m,
-                self.asthenosphere_resistivity_ohm_m,
-                self.upper_crust_resistivity_ohm_m,
-            ),
-        )
-        continent_rock_resistivity = np.where(
-            depth >= self.asthenosphere_bottom_depth_m,
-            self.lower_mantle_resistivity_ohm_m,
-            self.upper_crust_resistivity_ohm_m,
-        )
-        rock_resistivity = np.where(
-            is_land[:, None],
-            continent_rock_resistivity[None, :],
-            ocean_rock_resistivity[None, :],
-        )
+        rock_resistivity = self._rock_resistivity(is_land, altitudes)
         below_surface = altitudes[None, :] < surface_elevation_m[:, None]
         sigma[below_surface] = 1.0 / rock_resistivity[below_surface]
         epsilon_r[below_surface] = self.lithosphere_relative_permittivity
@@ -377,6 +395,96 @@ class SimpsonTaflove2004Material:
             epsilon_r,
             directions,
             altitudes,
+            earth_radius_m,
+            self.anomalies,
+        )
+        return sigma, epsilon_r
+
+    def sample_tangential_cells(
+        self,
+        directions: FloatArray,
+        lower_altitudes_m: FloatArray,
+        upper_altitudes_m: FloatArray,
+        earth_radius_m: float,
+    ) -> tuple[FloatArray, FloatArray]:
+        """Return cell-averaged properties parallel to radial interfaces."""
+
+        lower = np.asarray(lower_altitudes_m, dtype=np.float64)
+        upper = np.asarray(upper_altitudes_m, dtype=np.float64)
+        if lower.ndim != 1 or upper.shape != lower.shape:
+            raise ValueError("radial cell bounds must be matching 1-D arrays")
+        if np.any(upper <= lower):
+            raise ValueError("radial cell upper bounds must exceed lower bounds")
+        midpoints = 0.5 * (lower + upper)
+        if self.tangential_interface_mode == "point":
+            return self.sample(directions, midpoints, earth_radius_m)
+
+        directions, is_land, surface = self._surface_geometry(directions)
+        width = upper - lower
+        lower_2d = lower[None, :]
+        upper_2d = upper[None, :]
+        width_2d = width[None, :]
+        surface_2d = surface[:, None]
+
+        rock_thickness = np.clip(
+            np.minimum(upper_2d, surface_2d) - lower_2d,
+            0.0,
+            width_2d,
+        )
+        water_thickness = np.where(
+            (~is_land)[:, None],
+            np.clip(
+                np.minimum(upper_2d, 0.0)
+                - np.maximum(lower_2d, surface_2d),
+                0.0,
+                width_2d,
+            ),
+            0.0,
+        )
+        air_floor = np.where(is_land, surface, 0.0)[:, None]
+        air_thickness = np.clip(
+            upper_2d - np.maximum(lower_2d, air_floor),
+            0.0,
+            width_2d,
+        )
+        fractions = np.stack(
+            (
+                rock_thickness / width_2d,
+                water_thickness / width_2d,
+                air_thickness / width_2d,
+            )
+        )
+        if not np.allclose(fractions.sum(axis=0), 1.0, atol=1.0e-12):
+            raise RuntimeError("radial material fractions do not close")
+
+        sigma_air = (
+            self.ionosphere_prefactor_hz
+            * EPSILON_0
+            * np.exp(
+                np.clip(
+                    (midpoints - self.ionosphere_reference_height_m)
+                    / self.ionosphere_scale_height_m,
+                    -80.0,
+                    80.0,
+                )
+            )
+        )
+        sigma_rock = 1.0 / self._rock_resistivity(is_land, midpoints)
+        sigma = (
+            fractions[0] * sigma_rock
+            + fractions[1] / self.sea_water_resistivity_ohm_m
+            + fractions[2] * sigma_air[None, :]
+        )
+        epsilon_r = (
+            fractions[0] * self.lithosphere_relative_permittivity
+            + fractions[1] * self.sea_water_relative_permittivity
+            + fractions[2] * self.atmosphere_relative_permittivity
+        )
+        _apply_spherical_anomalies(
+            sigma,
+            epsilon_r,
+            directions,
+            midpoints,
             earth_radius_m,
             self.anomalies,
         )

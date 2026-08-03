@@ -125,11 +125,15 @@ def create_radar_simulation(
     source_center_s: float = PAPER_SOURCE_CENTER_S,
     courant_factor: float = 0.4,
     source_edge_assignment: str = "projected",
+    tangential_interface_mode: str = "point",
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
     anomalies = paper_anomalies(include_oil=include_oil)
-    material_arguments: dict[str, Any] = {"anomalies": anomalies}
+    material_arguments: dict[str, Any] = {
+        "anomalies": anomalies,
+        "tangential_interface_mode": tangential_interface_mode,
+    }
     if material_model == "etopo5":
         if etopo5_path is None:
             raise ValueError("etopo5_path is required for the ETOPO5 material")

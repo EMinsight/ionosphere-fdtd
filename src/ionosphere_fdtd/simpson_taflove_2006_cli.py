@@ -41,6 +41,11 @@ def _parser() -> argparse.ArgumentParser:
         "--material", choices=("etopo5", "natural-earth"), default="etopo5"
     )
     radar.add_argument("--etopo5-path", type=Path)
+    radar.add_argument(
+        "--tangential-interface",
+        choices=("point", "fractional"),
+        default="point",
+    )
     radar.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     radar.add_argument("--device", default="auto")
     radar.add_argument("--dtype", choices=("float32", "float64"), default="float64")
@@ -103,6 +108,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         source_center_s=args.source_center,
         courant_factor=args.courant,
         source_edge_assignment=args.source_edge_assignment,
+        tangential_interface_mode=args.tangential_interface,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -111,6 +117,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"case={args.case} grid={simulation.mesh.n_vertices:,}x"
         f"{len(simulation.radial_steps_m)} backend={simulation.backend.name} "
         f"device={simulation.backend.device} dtype={simulation.backend.dtype_name} "
+        f"interface={args.tangential_interface} "
         f"dt={simulation.time_step_s:.9e}s steps={steps:,}",
         flush=True,
     )
