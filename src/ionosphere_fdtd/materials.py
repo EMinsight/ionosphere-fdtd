@@ -112,6 +112,7 @@ class SphericalAnomaly:
     altitude_max_m: float
     conductivity_factor: float
     relative_permittivity: float | None = None
+    maximum_background_conductivity_s_m: float | None = None
 
     def __post_init__(self) -> None:
         if self.radius_m <= 0.0:
@@ -120,6 +121,11 @@ class SphericalAnomaly:
             raise ValueError("anomaly altitude bounds are reversed")
         if self.conductivity_factor <= 0.0:
             raise ValueError("conductivity_factor must be positive")
+        if (
+            self.maximum_background_conductivity_s_m is not None
+            and self.maximum_background_conductivity_s_m <= 0.0
+        ):
+            raise ValueError("maximum background conductivity must be positive")
 
     @property
     def center(self) -> FloatArray:
@@ -154,6 +160,8 @@ def _apply_spherical_anomalies(
             altitudes_m <= anomaly.altitude_max_m
         )
         inside = inside_horizontal[:, None] & inside_vertical[None, :]
+        if anomaly.maximum_background_conductivity_s_m is not None:
+            inside &= sigma <= anomaly.maximum_background_conductivity_s_m
         sigma[inside] *= anomaly.conductivity_factor
         if anomaly.relative_permittivity is not None:
             epsilon_r[inside] = anomaly.relative_permittivity

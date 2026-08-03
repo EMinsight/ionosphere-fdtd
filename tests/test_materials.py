@@ -79,6 +79,37 @@ def test_simpson_taflove_material_applies_buried_anomaly() -> None:
     assert sigma[1, 0] == pytest.approx(1.0 / 500.0)
 
 
+def test_anomaly_background_limit_preserves_water() -> None:
+    anomaly = SphericalAnomaly(
+        latitude_deg=0.0,
+        longitude_deg=0.0,
+        radius_m=50_000.0,
+        altitude_min_m=-2_000.0,
+        altitude_max_m=-500.0,
+        conductivity_factor=0.1,
+        maximum_background_conductivity_s_m=0.01,
+    )
+    material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: directions[:, 2] > 0.0,
+        anomalies=(anomaly,),
+    )
+    offset = np.deg2rad(0.1)
+    directions = np.asarray(
+        (
+            (np.cos(offset), 0.0, np.sin(offset)),
+            (np.cos(offset), 0.0, -np.sin(offset)),
+        )
+    )
+    sigma, _ = material.sample(
+        directions,
+        np.asarray((-1_250.0,)),
+        6_371_000.0,
+    )
+
+    assert sigma[0, 0] == pytest.approx(0.1 / 500.0)
+    assert sigma[1, 0] == pytest.approx(1.0 / material.sea_water_resistivity_ohm_m)
+
+
 def test_etopo5_relief_reads_big_endian_grid_and_wraps_longitude(tmp_path) -> None:
     path = tmp_path / "ETOPO5.DAT"
     with path.open("wb") as stream:

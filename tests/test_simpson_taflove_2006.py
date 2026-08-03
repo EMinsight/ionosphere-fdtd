@@ -30,6 +30,7 @@ def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:
         PAPER_OIL_MEDIAN_DEPTH_M
     )
     assert oil.conductivity_factor == PAPER_OIL_CONDUCTIVITY_FACTOR
+    assert oil.maximum_background_conductivity_s_m == 0.01
 
 
 def test_radar_grid_refines_lithosphere_to_1_25_km() -> None:

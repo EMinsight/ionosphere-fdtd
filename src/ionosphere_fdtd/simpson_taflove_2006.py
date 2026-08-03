@@ -95,6 +95,7 @@ def paper_anomalies(*, include_oil: bool) -> tuple[SphericalAnomaly, ...]:
         altitude_min_m=-20_000.0,
         altitude_max_m=-1.0,
         conductivity_factor=2.4e-4 / (1.0 / 500.0),
+        maximum_background_conductivity_s_m=0.01,
     )
     if not include_oil:
         return (shield,)
@@ -106,6 +107,7 @@ def paper_anomalies(*, include_oil: bool) -> tuple[SphericalAnomaly, ...]:
         altitude_min_m=-(PAPER_OIL_MEDIAN_DEPTH_M + half_thickness),
         altitude_max_m=-(PAPER_OIL_MEDIAN_DEPTH_M - half_thickness),
         conductivity_factor=PAPER_OIL_CONDUCTIVITY_FACTOR,
+        maximum_background_conductivity_s_m=0.01,
     )
     return shield, oil
 
