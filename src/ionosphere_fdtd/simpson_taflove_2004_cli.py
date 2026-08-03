@@ -85,6 +85,12 @@ def _parser() -> argparse.ArgumentParser:
         help="truncate at each simulated zero crossing or use the paper's samples",
     )
     parser.add_argument(
+        "--spectral-window",
+        choices=("rectangular", "cosine-tail"),
+        default="rectangular",
+        help="apply no taper or a 10%% terminal cosine taper before the DFT",
+    )
+    parser.add_argument(
         "--ionosphere-reference-height-km",
         type=float,
         default=REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M / 1_000.0,
@@ -163,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             truncations=(
                 PAPER_DFT_TRUNCATIONS if args.dft_window == "paper" else None
             ),
+            spectral_window=args.spectral_window,
         )
     except ValueError as error:
         raise SystemExit(f"invalid DFT window: {error}") from error
@@ -181,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
                 truncations=(
                     PAPER_DFT_TRUNCATIONS if args.dft_window == "paper" else None
                 ),
+                spectral_window=args.spectral_window,
             )
         )
     )

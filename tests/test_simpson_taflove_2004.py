@@ -137,6 +137,50 @@ def test_attenuation_recovers_known_spectral_ratio() -> None:
     assert metrics["quarter_east_west_relative_rms"] == pytest.approx(0.0)
 
 
+def test_cosine_tail_window_preserves_scaled_attenuation_ratio() -> None:
+    count = 4_000
+    time_steps = np.arange(count, dtype=np.int64)
+    wave = np.sin(np.linspace(0.0, 8.0 * np.pi, count))
+    traces = ValidationTraces(
+        time_steps=time_steps,
+        time_s=time_steps * PAPER_TIME_STEP_S,
+        er_v_m=np.column_stack((wave, wave, 0.5 * wave, 0.25 * wave)),
+        labels=("A", "A′", "B", "B′"),
+    )
+    truncations = dict.fromkeys(traces.labels, count)
+
+    rectangular = compute_attenuation(traces, truncations=truncations)
+    tapered = compute_attenuation(
+        traces,
+        truncations=truncations,
+        spectral_window="cosine-tail",
+    )
+
+    np.testing.assert_allclose(
+        tapered.path_ab_db_per_mm, rectangular.path_ab_db_per_mm
+    )
+    np.testing.assert_allclose(
+        tapered.path_apbp_db_per_mm, rectangular.path_apbp_db_per_mm
+    )
+
+
+def test_attenuation_rejects_unknown_spectral_window() -> None:
+    time_steps = np.arange(8, dtype=np.int64)
+    traces = ValidationTraces(
+        time_steps=time_steps,
+        time_s=time_steps * PAPER_TIME_STEP_S,
+        er_v_m=np.ones((8, 4)),
+        labels=("A", "A′", "B", "B′"),
+    )
+
+    with pytest.raises(ValueError, match="spectral_window"):
+        compute_attenuation(
+            traces,
+            truncations=dict.fromkeys(traces.labels, 8),
+            spectral_window="unknown",
+        )
+
+
 def test_bannister_guide_matches_published_daytime_examples() -> None:
     attenuation = bannister_figure_8_guide(np.asarray([0.0, 75.0, 1_000.0]))
 

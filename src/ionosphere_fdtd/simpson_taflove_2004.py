@@ -260,7 +260,15 @@ def _receiver_spectra(
     *,
     n_fft: int = PAPER_DFT_SIZE,
     truncations: Mapping[str, int] | None = None,
+    spectral_window: str = "rectangular",
+    taper_fraction: float = 0.1,
 ) -> tuple[dict[str, int], dict[str, NDArray[np.complex128]]]:
+    if spectral_window not in {"rectangular", "cosine-tail"}:
+        raise ValueError(
+            "spectral_window must be 'rectangular' or 'cosine-tail'"
+        )
+    if not 0.0 < taper_fraction <= 1.0:
+        raise ValueError("taper_fraction must be in (0, 1]")
     selected_truncations = dict(
         find_dft_truncations(traces) if truncations is None else truncations
     )
@@ -278,7 +286,14 @@ def _receiver_spectra(
                 f"DFT truncation for {label} must be between 2 and "
                 f"{len(traces.time_steps)}"
             )
-        signal = traces.trace(label)[:cutoff]
+        signal = traces.trace(label)[:cutoff].copy()
+        if spectral_window == "cosine-tail":
+            taper_count = min(
+                cutoff,
+                max(2, int(np.ceil(taper_fraction * cutoff))),
+            )
+            phase = np.linspace(0.0, np.pi, taper_count)
+            signal[-taper_count:] *= 0.5 * (1.0 + np.cos(phase))
         spectra[label] = np.fft.rfft(signal, n=n_fft)
     return selected_truncations, spectra
 
@@ -289,17 +304,24 @@ def compute_attenuation(
     time_step_s: float = PAPER_TIME_STEP_S,
     n_fft: int = PAPER_DFT_SIZE,
     truncations: Mapping[str, int] | None = None,
+    spectral_window: str = "rectangular",
+    taper_fraction: float = 0.1,
 ) -> AttenuationCurves:
-    """Compute attenuation using receiver-specific rectangular DFT windows.
+    """Compute attenuation using receiver-specific truncated DFT windows.
 
     By default, each record is truncated at its own positive-to-negative zero
     crossing following the primary pulse and overshoot.  This implements the
     physical windowing criterion described by Simpson and Taflove instead of
     assuming that their reported sample numbers apply to a different waveform.
+    A terminal cosine taper is available only as a leakage diagnostic.
     """
 
     selected_truncations, complex_spectra = _receiver_spectra(
-        traces, n_fft=n_fft, truncations=truncations
+        traces,
+        n_fft=n_fft,
+        truncations=truncations,
+        spectral_window=spectral_window,
+        taper_fraction=taper_fraction,
     )
     spectra = {label: np.abs(values) for label, values in complex_spectra.items()}
     tiny = np.finfo(np.float64).tiny
@@ -327,11 +349,17 @@ def compute_phase_velocity(
     time_step_s: float = PAPER_TIME_STEP_S,
     n_fft: int = PAPER_DFT_SIZE,
     truncations: Mapping[str, int] | None = None,
+    spectral_window: str = "rectangular",
+    taper_fraction: float = 0.1,
 ) -> PhaseVelocityCurves:
     """Compute phase velocity over the extra 45-degree receiver path."""
 
     selected_truncations, spectra = _receiver_spectra(
-        traces, n_fft=n_fft, truncations=truncations
+        traces,
+        n_fft=n_fft,
+        truncations=truncations,
+        spectral_window=spectral_window,
+        taper_fraction=taper_fraction,
     )
     dft_frequency = np.fft.rfftfreq(n_fft, d=time_step_s)
     frequency = paper_evaluation_frequencies()
