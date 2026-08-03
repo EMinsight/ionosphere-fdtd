@@ -141,9 +141,22 @@ RMS difference is 8.22%, reflecting the ETOPO5 land/ocean asymmetry. The two
 half-path traces coincide to floating-point precision because they meet at the
 same antipodal observation point in this grid representation.
 
+| Figure 5 criterion | Published behavior | Reproduction | Result |
+|---|---|---|---:|
+| Arrival ordering | Quarter-antipode response precedes half-antipode response | Near/far peaks at 22.710/43.482 ms | **PASS** |
+| Main-pulse timing | Peaks occur at the corresponding locations in the published panel | Both peaks visually align with the published traces | **PASS** |
+| Waveform morphology | Negative main pulse, opposite-sign overshoot, and slow tail | All three features are present | **PASS** |
+| East/west asymmetry | East and west quarter-path traces are similar but not identical | Quarter-path relative RMS difference is 8.22% | **PASS** |
+| Far/near peak ratio | Approximately 0.39 by visual reading | 0.34385, approximately 12% lower | **FAIL** |
+| Far slow-tail magnitude at 0.12 s | Approximately 0.10 by visual reading | Approximately 0.045 in the archived reproduction plot | **FAIL** |
+| Overall qualitative reproduction | Ordering and characteristic waveform shape | Required qualitative features are reproduced | **PASS** |
+| Exact plot reproduction | Relative peak and tail magnitudes also agree | Peak ratio and far-tail magnitude remain too small | **FAIL** |
+
 Figure 5 is therefore a **qualitative pass**. It is not assigned an absolute
 amplitude error because the paper labels the vertical scale as arbitrary and
-does not state the current amplitude for this validation pulse.
+does not state the current amplitude for this validation pulse. The exact-plot
+failure is based only on normalized relative quantities, not absolute field
+strength.
 
 ### Follow-up diagnosis of the Figure 5 mismatch
 
