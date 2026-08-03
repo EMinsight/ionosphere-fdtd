@@ -233,6 +233,9 @@ pyrightconfig.json
 pyvenv.cfg
 pip-selfcheck.json
 
+# Downloaded NOAA-NGDC input data (see README validation instructions)
+/data/ETOPO5.DAT
+
 ### Video ###
 *.3g2
 *.3gp

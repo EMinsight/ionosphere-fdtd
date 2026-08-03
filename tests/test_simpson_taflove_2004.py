@@ -230,6 +230,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         time_step_s=3.0e-6,
         steps=35_000,
         material_model="natural-earth",
+        relief_data=None,
         ionosphere_reference_height_m=70_000.0,
         ionosphere_scale_height_m=3_330.0,
         dft_window="adaptive",
@@ -261,6 +262,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "45개 bin" in text
     assert "Bannister (1984)" in text
     assert "daytime phase velocity" in text
+    assert "Natural Earth 110-m" in text
     assert "![Figure 7 verification](fig-7.png)" in text
     assert "[Receiver traces (NPZ)](traces.npz)" in text
     assert "uv run ionosphere-verify-2004" in text

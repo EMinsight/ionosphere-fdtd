@@ -215,7 +215,8 @@ cutoff가 원인은 아니다. 고정 45개 평가점을 사용하면 zero-paddi
 32,768에서 65,536으로 늘려도 모든 지표가 약 `1e-12` 상대 오차 내에서
 일치한다. 남은 불일치는 400–500 Hz의 진동성 잔차에 집중된다.
 
-가능성이 큰 차이 원인은 다음과 같다.
+이 단계에서 가능성이 큰 차이 원인은 다음과 같았다. 아래의 후속
+ETOPO5 검증에서 첫 두 항목을 직접 다룬다.
 
 1. NOAA-NGDC 지형·수심 원본 대신 해안선 기반 육지 마스크를 사용했다.
 2. 전체 Hermance 지각 모델 대신 Fig. 6의 저항률 경계값으로 층을 근사했다.
@@ -247,11 +248,48 @@ A′–B′에서 0.99, 0.90으로 거의 1차다. 1/4 지점 동서 RMS 차이�
 공간 분산이 실제로 포함되어 있으며, 자연 지구 모델의 동서 비대칭과는
 분리해서 해석할 수 있다.
 
+## NOAA ETOPO5·Hermance 재료 검증
+
+원 논문의 NOAA-NGDC `Global Relief CD-ROM`이 보존한 big-endian
+`ETOPO5.DAT`를 확보했다. 이 자료는 5′ 간격의 2,160×4,320 cell-center
+고도·수심이며, 공식 파일 크기 18,662,400 bytes와 SHA-256
+`471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3`를
+로더에서 검증한다. 각 geodesic 재료 표본점에는 bilinear interpolation을
+적용하고, 실제 지표고도를 기준으로 공기·해수·암석 셀을 구분한다.
+
+Hermance (1995)는 내려받을 수 있는 전 지구 3-D 전도도 자료가 아니라
+Fig. 6에 재사용된 경계형 개념도의 출처임을 원문에서 확인했다. 따라서
+그림에 명시된 해수 0.3 Ω·m와 해양/대륙별 500/200/50 Ω·m 대표 깊이
+프로파일을 구현했다. 그림에 보이는 ≤5/≤10 Ω·m 국지 전도체는 위치와
+형상이 수치로 제공되지 않아 포함하지 않는다.
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 7 --steps 25023 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.33 --synchronize-every 1024 \
+  --output-dir artifacts/simpson-taflove-2004/etopo5-level-7-float64-cuda
+```
+
+[ETOPO5 level-7 전체 보고서](../../artifacts/simpson-taflove-2004/etopo5-level-7-float64-cuda/verification-report.md)
+
+| level-7 재료 | 1/4 지점 동서 RMS | A/A′ 피크 스텝 | A–B/A′–B′ 감쇠 MAE | 최대 오차 |
+|---|---:|---:|---:|---:|
+| 균질 | 0.00389 | 7,514 / 7,510 | 0.412 / 0.427 dB/Mm | 1.838 / 1.890 dB/Mm |
+| ETOPO5 + Fig. 6 | 0.08220 | 7,546 / 7,589 | 0.387 / 0.590 dB/Mm | 1.747 / 2.020 dB/Mm |
+
+level-7 표면 표본의 relief 범위는 −9.69~+6.30 km이고 육지 비율은
+28.9%다. 실제 수심과 대륙 프로파일을 적용하자 A/A′ 피크가 43스텝
+갈라지고, 동서 RMS가 균질 모델보다 약 21배 커져 재료에 의한 동서
+파형 비대칭을 재현했다. 반대편 B/B′는 부동소수점 반올림 수준에서
+일치한다. 다만 두 경로의 최대 감쇠 오차가 여전히 논문 범위를 넘으므로
+전체 정량 판정은 실패다.
+
 ## 다음 검증 순서
 
-1. NOAA relief와 Hermance 전도도 자료를 동일한 해상도로 준비해
-   동서 파형 비대칭을 재현한다.
-2. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
+1. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
 
 ## 참고문헌
 

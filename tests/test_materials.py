@@ -1,6 +1,10 @@
 import numpy as np
+import pytest
 
 from ionosphere_fdtd.materials import (
+    ETOPO5_SHAPE,
+    ETOPO5_SIZE_BYTES,
+    ETOPO5Relief,
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
     SphericalAnomaly,
@@ -43,9 +47,56 @@ def test_simpson_taflove_material_distinguishes_land_water_and_rock() -> None:
 
     assert sigma[0, 0] == 1.0 / material.upper_crust_resistivity_ohm_m
     assert sigma[1, 0] == 1.0 / material.sea_water_resistivity_ohm_m
-    assert sigma[0, 1] == 1.0 / material.asthenosphere_resistivity_ohm_m
-    assert sigma[1, 1] == sigma[0, 1]
+    assert sigma[0, 1] == 1.0 / material.upper_crust_resistivity_ohm_m
+    assert sigma[1, 1] == 1.0 / material.asthenosphere_resistivity_ohm_m
     assert epsilon_r[1, 0] == material.sea_water_relative_permittivity
     assert sigma[0, 2] == sigma[1, 2]
     assert material.ionosphere_reference_height_m == 70_000.0
     assert material.ionosphere_scale_height_m == 3_330.0
+
+
+def test_etopo5_relief_reads_big_endian_grid_and_wraps_longitude(tmp_path) -> None:
+    path = tmp_path / "ETOPO5.DAT"
+    with path.open("wb") as stream:
+        stream.truncate(ETOPO5_SIZE_BYTES)
+    grid = np.memmap(path, dtype=">i2", mode="r+", shape=ETOPO5_SHAPE)
+    grid[1_080, 0] = 1_200
+    grid[1_080, -1] = -600
+    grid.flush()
+    del grid
+
+    relief = ETOPO5Relief.from_file(path, verify_sha256=False)
+    directions = np.asarray(
+        (
+            (1.0, 0.0, 0.0),
+            (
+                np.cos(np.deg2rad(-1.0 / 24.0)),
+                -np.sin(np.deg2rad(1.0 / 24.0)),
+                0.0,
+            ),
+        )
+    )
+
+    assert relief(directions)[0] == pytest.approx(1_200.0)
+    assert relief(directions)[1] == pytest.approx(300.0)
+
+
+def test_relief_material_resolves_mountains_ocean_and_seafloor() -> None:
+    material = SimpsonTaflove2004Material(
+        surface_elevation_sampler=lambda directions: np.asarray(
+            (1_500.0, -2_500.0)
+        )
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0)))
+    sigma, epsilon_r = material.sample(
+        directions,
+        np.asarray((1_000.0, -1_000.0, -3_000.0, -70_000.0)),
+        6_371_000.0,
+    )
+
+    assert sigma[0, 0] == 1.0 / material.upper_crust_resistivity_ohm_m
+    assert epsilon_r[0, 0] == material.lithosphere_relative_permittivity
+    assert epsilon_r[1, 0] == material.atmosphere_relative_permittivity
+    assert sigma[1, 1] == 1.0 / material.sea_water_resistivity_ohm_m
+    assert sigma[1, 2] == 1.0 / material.upper_crust_resistivity_ohm_m
+    assert np.all(sigma[:, 3] == 1.0 / material.lower_mantle_resistivity_ohm_m)

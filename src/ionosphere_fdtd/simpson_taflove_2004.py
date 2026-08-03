@@ -12,7 +12,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .constants import C_0, EARTH_RADIUS_M
-from .materials import EarthIonosphereMaterial, SimpsonTaflove2004Material
+from .materials import (
+    ETOPO5Relief,
+    EarthIonosphereMaterial,
+    SimpsonTaflove2004Material,
+)
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, geographic_distribution
 
@@ -151,6 +155,7 @@ def create_validation_simulation(
         REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M
     ),
     ionosphere_scale_height_m: float = REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
+    etopo5_path: str | Path | None = None,
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
@@ -160,13 +165,23 @@ def create_validation_simulation(
             ionosphere_reference_height_m=ionosphere_reference_height_m,
             ionosphere_scale_height_m=ionosphere_scale_height_m,
         )
+    elif material_model == "etopo5":
+        if etopo5_path is None:
+            raise ValueError("etopo5_path is required for the ETOPO5 material")
+        material = SimpsonTaflove2004Material(
+            surface_elevation_sampler=ETOPO5Relief.from_file(etopo5_path),
+            ionosphere_reference_height_m=ionosphere_reference_height_m,
+            ionosphere_scale_height_m=ionosphere_scale_height_m,
+        )
     elif material_model == "uniform":
         material = EarthIonosphereMaterial(
             ionosphere_reference_height_m=ionosphere_reference_height_m,
             ionosphere_scale_height_m=ionosphere_scale_height_m,
         )
     else:
-        raise ValueError("material_model must be 'natural-earth' or 'uniform'")
+        raise ValueError(
+            "material_model must be 'natural-earth', 'etopo5', or 'uniform'"
+        )
     source = GaussianCurrent(
         latitude_deg=PAPER_SOURCE_LATITUDE_DEG,
         longitude_deg=PAPER_SOURCE_LONGITUDE_DEG,

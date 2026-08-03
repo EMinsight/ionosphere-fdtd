@@ -45,7 +45,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--subdivision", type=int, choices=range(0, 9), default=7)
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
-        "--material", choices=("natural-earth", "uniform"), default="natural-earth"
+        "--material",
+        choices=("natural-earth", "etopo5", "uniform"),
+        default="natural-earth",
+    )
+    parser.add_argument(
+        "--etopo5-path",
+        type=Path,
+        help="NOAA-NGDC big-endian ETOPO5.DAT (required by --material etopo5)",
     )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
@@ -100,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
                 1_000.0 * args.ionosphere_reference_height_km
             ),
             ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
+            etopo5_path=args.etopo5_path,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -172,6 +180,7 @@ def main(argv: list[str] | None = None) -> int:
             time_step_s=simulation.time_step_s,
             steps=args.steps,
             material_model=args.material,
+            relief_data=args.etopo5_path,
             ionosphere_reference_height_m=(
                 1_000.0 * args.ionosphere_reference_height_km
             ),
@@ -221,6 +230,8 @@ def _reproduction_command(args: argparse.Namespace) -> str:
     ]
     if args.torch_threads is not None:
         parts.append(f"--torch-threads {args.torch_threads}")
+    if args.etopo5_path is not None:
+        parts.append(f"--etopo5-path {quote(str(args.etopo5_path))}")
     if args.report is not None:
         parts.append(f"--report {quote(str(args.report))}")
     separator = f" {chr(92)}\n  "

@@ -324,8 +324,9 @@ Each DFT record ends at the simulated waveform's post-overshoot zero crossing,
 as described by the paper; `--dft-window paper` preserves the published sample
 numbers for sensitivity checks.  The representative daytime exponential
 ionosphere defaults to a 70 km reference height and 3.33 km scale height, both
-of which are exposed as CLI options.  Natural Earth's land polygons provide a
-reproducible approximation to the unavailable NOAA relief data.  The paper
+of which are exposed as CLI options. Natural Earth's land polygons provide a
+data-free fallback, while `--material etopo5` reads the archived NOAA-NGDC
+relief used by the paper. The paper
 does not state the pulse amplitude, so Figure 7 uses a 1 A normalization; the
 Figure 8 spectral ratios are independent of that choice:
 
@@ -342,6 +343,30 @@ runtime configuration, all metrics, and artifact links.  A level-5 run is
 useful as a short pipeline check.  The first Natural Earth run may download its
 public 110-m land dataset.  Use `--material uniform` for a data-free symmetry
 baseline.
+
+For the paper's NOAA-NGDC relief input, download the archived big-endian
+ETOPO5 file and verify it before selecting `--material etopo5`:
+
+```bash
+mkdir -p data
+curl -L https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO5/TOPO/ETOPO5/ETOPO5.DAT \
+  -o data/ETOPO5.DAT
+echo "471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3  data/ETOPO5.DAT" \
+  | sha256sum --check
+
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 7 --steps 25023 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --backend torch --device cuda --dtype float64 --torch-compile
+```
+
+The 18.7 MB input remains outside version control. The loader validates its
+exact byte count and checksum, then bilinearly samples the native 5-arc-minute
+cell-center grid at every geodesic material point. Relief determines the actual
+air, seawater, and rock boundaries. Hermance (1995) supplies the bounded
+oceanic/continental resistivity regions in Figure 6, not a downloadable 3-D
+conductivity grid; the implementation therefore uses explicit representative
+500/200/50 Ω·m depth profiles and records this limitation in each report.
 
 This workflow is deliberately a verification test, not a claim of complete
 agreement.  Correcting the ionosphere profile and DFT criterion reduced the
@@ -416,14 +441,15 @@ IONOSPHERE_TEST_PYVISTA_RENDER=1 \
 
 ## Scientific scope and validation
 
-The laptop defaults demonstrate the complete 3-D algorithm.  The 2004
-validation workflow supplies the paper-scale grid, observation records, and DFT
-windowing, but substitutes a Natural Earth land mask and bounded Figure 6 layer
-values for the unavailable NOAA topography/bathymetry and full Hermance model.
-Quantitative reproduction still requires those original material data and a
-discretization study reconciling the paper's merged latitude–longitude cells
-with this project's geodesic dual grid.  The Bannister daytime comparison is
-implemented directly from the cited 1984 equations rather than a plot fit.
+The laptop defaults demonstrate the complete 3-D algorithm. The 2004
+validation workflow supplies the paper-scale grid, observation records, DFT
+windowing, and optional original NOAA-NGDC ETOPO5 relief. Hermance Figure 6 is
+a bounded conceptual section rather than a complete numeric 3-D conductivity
+model, so its oceanic and continental depth profiles remain representative.
+Quantitative reproduction still requires a discretization study reconciling
+the paper's merged latitude–longitude cells with this project's geodesic dual
+grid. The Bannister daytime comparison is implemented directly from the cited
+1984 equations rather than a plot fit.
 
 ## References
 
