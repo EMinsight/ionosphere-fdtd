@@ -56,20 +56,32 @@ def test_source_distribution_preserves_exact_direction() -> None:
     assert represented @ source.direction() == pytest.approx(1.0)
 
 
-@pytest.mark.parametrize("longitude_deg", (-137.0, -92.0, -47.0, -2.0, 43.0))
+@pytest.mark.parametrize(
+    ("latitude_deg", "longitude_deg"),
+    (
+        (0.0, -137.0),
+        (0.0, -92.0),
+        (0.0, -47.0),
+        (0.0, -2.0),
+        (0.0, 43.0),
+        (46.5, -90.9),
+        (69.0, -156.0),
+    ),
+)
 def test_geographic_distribution_rejects_antipodal_face(
+    latitude_deg: float,
     longitude_deg: float,
 ) -> None:
     simulation = GeodesicFDTD(config=small_config(subdivision=3))
     vertices, _, weights = geographic_distribution(
-        simulation, 0.0, longitude_deg, 0.0
+        simulation, latitude_deg, longitude_deg, 0.0
     )
     represented = weights @ simulation.mesh.vertices[vertices]
     represented /= np.linalg.norm(represented)
 
     np.testing.assert_allclose(
         represented,
-        geographic_direction(0.0, longitude_deg),
+        geographic_direction(latitude_deg, longitude_deg),
         atol=1.0e-12,
     )
 
