@@ -3,7 +3,13 @@ import pytest
 
 from ionosphere_fdtd.materials import EarthIonosphereMaterial
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
-from ionosphere_fdtd.sources import GaussianCurrent, TangentialGaussianCurrent
+from ionosphere_fdtd.sources import (
+    GaussianCurrent,
+    TangentialGaussianCurrent,
+    geographic_direction,
+    geographic_distribution,
+    geographic_face_index,
+)
 
 
 def small_config(**changes: object) -> SimulationConfig:
@@ -48,6 +54,32 @@ def test_source_distribution_preserves_exact_direction() -> None:
     assert weights.sum() == pytest.approx(1.0)
     assert np.all(weights >= 0.0)
     assert represented @ source.direction() == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("longitude_deg", (-137.0, -92.0, -47.0, -2.0, 43.0))
+def test_geographic_distribution_rejects_antipodal_face(
+    longitude_deg: float,
+) -> None:
+    simulation = GeodesicFDTD(config=small_config(subdivision=3))
+    vertices, _, weights = geographic_distribution(
+        simulation, 0.0, longitude_deg, 0.0
+    )
+    represented = weights @ simulation.mesh.vertices[vertices]
+    represented /= np.linalg.norm(represented)
+
+    np.testing.assert_allclose(
+        represented,
+        geographic_direction(0.0, longitude_deg),
+        atol=1.0e-12,
+    )
+
+
+def test_antipodal_observations_use_distinct_faces() -> None:
+    simulation = GeodesicFDTD(config=small_config(subdivision=3))
+
+    assert geographic_face_index(simulation, 0.0, 43.0) != geographic_face_index(
+        simulation, 0.0, -137.0
+    )
 
 
 def test_source_distribution_preserves_exact_staggered_altitude() -> None:

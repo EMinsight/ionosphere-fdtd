@@ -75,7 +75,11 @@ def geographic_face_index(
     )
     candidates = np.flatnonzero(inside)
     return (
-        int(candidates[0])
+        int(
+            candidates[
+                np.argmax(simulation.mesh.face_centers[candidates] @ direction)
+            ]
+        )
         if len(candidates)
         else int(np.argmax(simulation.mesh.face_centers @ direction))
     )
