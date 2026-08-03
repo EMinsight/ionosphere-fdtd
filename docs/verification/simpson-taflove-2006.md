@@ -160,6 +160,47 @@ strength.
 
 ### Follow-up diagnosis of the Figure 5 mismatch
 
+#### Geographic locator correction and material isolation
+
+The original production run contained a geographic face-selection defect. A
+direction and its antipode both satisfied the unsigned spherical-triangle
+test, and the first candidate was selected. The requested source and receiver
+longitudes were therefore represented as follows:
+
+| Location | Requested longitude | Previously represented longitude |
+|---|---:|---:|
+| Source | −47° | +133° |
+| A | −2° | +178° |
+| A′ | −92° | +88° |
+| B | +43° | −137° |
+| B′ | −137° | −137° |
+
+The common 180° shift preserved the source-to-A/A′/B distances and concealed
+the error in arrival times, while B and B′ collapsed onto one observation.
+The face candidate is now selected by its positive alignment with the requested
+direction. Regression tests cover the paper source and all four receivers and
+require the antipodal B/B′ observations to use distinct faces. Consequently,
+all Figure 5–6 production metrics recorded before this correction require a
+new level-7 calculation.
+
+Before repeating that expensive run, three corrected-location subdivision-5
+cases isolated the material contribution. Each used 40,000 steps, CUDA
+`float64`, and one common normalization over the four individual records.
+
+| Material | B / B′ peak | B / B′ tail at 0.12 s | Quarter / half east-west RMS |
+|---|---:|---:|---:|
+| Uniform lithosphere | 0.37691 / 0.37855 | 0.07200 / 0.07194 | 5.2% / 1.9% |
+| Fixed-depth Natural Earth land/ocean | 0.38240 / 0.38539 | 0.07481 / 0.07466 | 5.2% / 1.9% |
+| ETOPO5 relief and representative rock profiles | 0.11120 / 0.39237 | 0.02238 / 0.06673 | 30.8% / 235.9% |
+
+The uniform and fixed-depth land/ocean models recover the published far-peak
+scale of approximately 0.39 and keep east/west paths similar. Adding ETOPO5
+and the representative 500/200/50 Ω·m profiles strongly suppresses the eastern
+B path while leaving B′ near the published peak. This identifies the current
+relief/lithosphere discretization, rather than the core FDTD update, as the
+dominant source of the corrected-location path asymmetry. The exact
+Hermance-derived cellwise conductivity used by the paper remains unavailable.
+
 #### Radial coupling is the paper's intentional thin-shell approximation
 
 A review of Taflove and Hagness, Chapter 3, Section 3.6.8, and the supplied
