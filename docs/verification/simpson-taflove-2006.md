@@ -11,16 +11,17 @@ implementation can reproduce Figures 5, 6, and 7 of Simpson, Heikes, and
 Taflove (2006). The production calculations use PyTorch on NVIDIA CUDA GPUs
 with `float64` fields.
 
-Figure 5 is reproduced qualitatively: the quarter-antipode and half-antipode
-responses have the published arrival ordering, relative peak amplitude,
-overshoot, and slow-tail morphology. Follow-up CUDA `float64` experiments rule
-out the paper's plain radial Yee coupling and pentagon orientation as primary
-causes; ionosphere scale height changes the residual but does not remove it
-without worsening other metrics. Figure 6 follows the published daytime
-attenuation trend in mean, but it fails the paper's pointwise ±0.5 dB/Mm
-statement near the upper end of the 50–500 Hz comparison window. The east and
-west mean absolute errors are 0.387 and 0.589 dB/Mm, while their maximum
-absolute errors are 1.746 and 2.016 dB/Mm.
+Figure 5 reproduces the published arrival ordering, timing, overshoot, and
+slow-tail morphology, but not all four relative amplitudes. A corrected
+geographic locator separates the previously collapsed B/B′ observations. The
+level-7 ETOPO5 run then gives normalized far peaks of 0.16425/0.35813 instead
+of approximately 0.39/0.39. CUDA `float64` isolation runs identify binary
+5-km radial sampling of shallow bathymetry as the dominant cause: a fixed-depth
+ocean restores both far peaks and east/west symmetry, while ionosphere changes
+do not restore the suppressed B path. Figure 6 consequently has east/west mean
+absolute errors of 2.064/0.277 dB/Mm and maximum absolute errors of
+5.026/1.650 dB/Mm. Both paths fail the paper's pointwise ±0.5 dB/Mm statement
+over 50–500 Hz.
 
 Figure 7 reproduces only the direction of the claimed sensitivity. Its
 `ΔHtan` median is −35.75 dB and 99.70% of nonsingular samples are below
@@ -85,7 +86,8 @@ while the rendered curve retains the approach to the zero-crossing spikes.
 | Surface data | NOAA-NGDC ETOPO5, bilinear sampling |
 | Ionosphere | 70 km reference height, 3.33 km scale height |
 | Backend | compiled PyTorch, CUDA, float64 |
-| Wall time | 937.6 s |
+| Production revision | `2ffebdf` |
+| Wall time | 1,132.0 s |
 
 The source is barycentrically distributed in the horizontal plane and linearly
 staggered between the 0 and 5 km `Er` planes, preserving its exact 2.5 km
@@ -131,32 +133,30 @@ the reference/anomaly difference but remains a reproducibility limitation.
 
 ![Published and reproduced Figure 5](images/simpson-taflove-2006-fig-5-comparison.png)
 
-The reproduced averaged A/A′ pulse peaks at 22.710 ms and the averaged B/B′
-pulse at 43.482 ms. The far/near normalized peak ratio is 0.34385, compared
-with approximately 0.39 by visual reading of the published panel. The computed
-waveforms also show the negative overshoot and subsequent slow tail.
-
-The exact east and west quarter-path traces do not coincide: their relative
-RMS difference is 8.22%, reflecting the ETOPO5 land/ocean asymmetry. The two
-half-path traces coincide to floating-point precision because they meet at the
-same antipodal observation point in this grid representation.
+All four receiver records are plotted individually with one common
+normalization. The corrected ETOPO5 run gives A/A′ peak times of
+22.539/23.217 ms and B/B′ peak times of 44.505/44.025 ms. The calculated
+waveforms preserve the published arrival ordering, negative main pulse,
+opposite-sign overshoot, and subsequent slow tail. Their amplitudes, however,
+are path dependent: the normalized B/B′ peaks are 0.16425/0.35813, versus
+approximately 0.39 for both published far records by visual reading.
 
 | Figure 5 criterion | Published behavior | Reproduction | Result |
 |---|---|---|---:|
-| Arrival ordering | Quarter-antipode response precedes half-antipode response | Near/far peaks at 22.710/43.482 ms | **PASS** |
-| Main-pulse timing | Peaks occur at the corresponding locations in the published panel | Both peaks visually align with the published traces | **PASS** |
+| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.539/23.217 ms; B/B′ at 44.505/44.025 ms | **PASS** |
+| Main-pulse timing | Peaks occur at the corresponding locations in the published panel | All four peaks visually align with the published traces | **PASS** |
 | Waveform morphology | Negative main pulse, opposite-sign overshoot, and slow tail | All three features are present | **PASS** |
-| East/west asymmetry | East and west quarter-path traces are similar but not identical | Quarter-path relative RMS difference is 8.22% | **PASS** |
-| Far/near peak ratio | Approximately 0.39 by visual reading | 0.34385, approximately 12% lower | **FAIL** |
-| Far slow-tail magnitude at 0.12 s | Approximately 0.10 by visual reading | Approximately 0.045 in the archived reproduction plot | **FAIL** |
-| Overall qualitative reproduction | Ordering and characteristic waveform shape | Required qualitative features are reproduced | **PASS** |
-| Exact plot reproduction | Relative peak and tail magnitudes also agree | Peak ratio and far-tail magnitude remain too small | **FAIL** |
+| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.3% | **FAIL** |
+| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 105.0% | **FAIL** |
+| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.16425/0.35813 | **FAIL** |
+| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.03252/0.05968 | **FAIL** |
+| Overall qualitative morphology | Ordering and characteristic waveform shape | Required qualitative features are present | **PASS** |
+| Exact plot reproduction | Timing, relative amplitude, and path similarity agree | Timing agrees; amplitude and symmetry do not | **FAIL** |
 
-Figure 5 is therefore a **qualitative pass**. It is not assigned an absolute
-amplitude error because the paper labels the vertical scale as arbitrary and
-does not state the current amplitude for this validation pulse. The exact-plot
-failure is based only on normalized relative quantities, not absolute field
-strength.
+Figure 5 is therefore a **morphological pass but quantitative fail**. No
+absolute-amplitude criterion is used because the paper labels the vertical
+scale as arbitrary and does not state the current amplitude. Every failed
+criterion above uses only relative quantities after one common normalization.
 
 ### Follow-up diagnosis of the Figure 5 mismatch
 
@@ -179,9 +179,8 @@ The common 180° shift preserved the source-to-A/A′/B distances and concealed
 the error in arrival times, while B and B′ collapsed onto one observation.
 The face candidate is now selected by its positive alignment with the requested
 direction. Regression tests cover the paper source and all four receivers and
-require the antipodal B/B′ observations to use distinct faces. Consequently,
-all Figure 5–6 production metrics recorded before this correction require a
-new level-7 calculation.
+require the antipodal B/B′ observations to use distinct faces. The production
+metrics in this report are from the corrected level-7 calculation.
 
 Before repeating that expensive run, three corrected-location subdivision-5
 cases isolated the material contribution. Each used 40,000 steps, CUDA
@@ -200,6 +199,22 @@ B path while leaving B′ near the published peak. This identifies the current
 relief/lithosphere discretization, rather than the core FDTD update, as the
 dominant source of the corrected-location path asymmetry. The exact
 Hermance-derived cellwise conductivity used by the paper remains unavailable.
+
+The production-resolution comparison confirms the same result:
+
+| Level-7 material | A / A′ peak | B / B′ peak | A/A′ / B/B′ relative RMS |
+|---|---:|---:|---:|
+| Fixed-depth Natural Earth | 1.00000 / 0.99476 | 0.33907 / 0.33993 | 0.6% / 0.5% |
+| ETOPO5 relief | 0.97920 / 1.00000 | 0.16425 / 0.35813 | 37.3% / 105.0% |
+
+ETOPO5 elevations at the requested source, A, A′, B, and B′ locations are
+−24, −5,014, −3,041, −207, and −4,538 m, respectively. At the
+5-km radial spacing, the first tangential material sample below sea level is
+at −2.5 km. It is therefore rock beneath the shallow 207-m B ocean but
+water beneath the deep B′ ocean. Replacing only the depth field by a uniform
+5-km ocean restores B/B′ to 0.38240/0.38540 at subdivision 5. The dominant
+error is thus binary radial point sampling of bathymetry, especially shallow
+water, rather than the coastline classifier or propagation update.
 
 #### Radial coupling is the paper's intentional thin-shell approximation
 
@@ -233,87 +248,64 @@ the continuum spherical form is preferred for another application.
 
 The paper places one pentagonal cell at each geographic pole, whereas the
 native mesh orientation does not. A selectable `polar` orientation was added
-which rigidly rotates the existing icosahedron before subdivision. It changes
-neither topology nor metric terms: sorted primal-edge lengths and dual-cell
-areas agree with the native orientation to floating-point precision.
+which rigidly rotates the existing icosahedron before subdivision without
+changing its topology or metric terms. A level-7 A/B run was completed before
+the antipodal face-selection defect was discovered. Because that run sampled
+ETOPO5 at the displaced longitudes listed above, its numerical values are
+superseded and are not used in the final verdict.
 
-One paper-scale polar run used the same 163,842 cells, ETOPO5 model, 3.33-km
-ionosphere scale height, CUDA `float64`, and 40,000 steps as the production
-case. It required 922.4 seconds.
-
-| Level-7 result | Native orientation | Polar orientation |
-|---|---:|---:|
-| Near peak time | 22.710 ms | 22.713 ms |
-| Far peak time | 43.482 ms | 43.479 ms |
-| Far/near peak ratio | 0.34385 | 0.34599 |
-| Quarter-path east/west relative RMS | 8.215% | 8.054% |
-| East/west attenuation MAE | 0.387 / 0.589 dB/Mm | 0.399 / 0.572 dB/Mm |
-| East/west attenuation maximum error | 1.746 / 2.016 dB/Mm | 1.954 / 1.930 dB/Mm |
-
-The polar run has normalized near/far tails of 0.02823/0.05150 at 0.12 s.
-The far/near ratio changes by only 0.6%, and neither waveform timing nor
-attenuation improves consistently. Incorrect placement of the pentagons is
-therefore rejected as the primary cause. The unavailable mesh optimization
-and exact axial orientation can still change individual sampled material
-values, but a rigid paper-like orientation does not resolve Figure 5.
+The corrected fixed-depth and ETOPO5 comparisons isolate a much larger effect:
+changing only binary bathymetry sampling moves the B peak from 0.38240 to
+0.11120 at subdivision 5. A rigid rotation cannot restore a water layer that
+does not intersect any 5-km radial sample. Polar placement is therefore not
+used as a material-fit parameter; the required native grid implementation is
+retained.
 
 #### Conductivity-profile sensitivity
 
-Subdivision-5 screening varied one parameter at a time around the production
-ETOPO5 model. All cases used CUDA `float64` and 40,000 steps. Rock-conductive
-and rock-resistive multiply all three 500/200/50 Ω·m rock resistivities by 0.5
-and 2.0, respectively.
+Corrected-location subdivision-5 screening varied the ionosphere around the
+ETOPO5 material. Every case used CUDA `float64`, 40,000 steps, and one common
+normalization over all four records.
 
-| Variant | Near / far peak time | Far/near peak ratio | Near / far tail at 0.12 s |
-|---|---:|---:|---:|
-| 70 km, 3.33 km baseline | 23.535 / 44.421 ms | 0.38687 | 0.03267 / 0.05962 |
-| Reference height 68 km | 23.673 / 44.724 ms | 0.38300 | 0.03240 / 0.05684 |
-| Reference height 72 km | 23.409 / 44.142 ms | 0.39102 | 0.03301 / 0.06269 |
-| Scale height 3.00 km | 23.178 / 43.593 ms | 0.40291 | 0.03315 / 0.06965 |
-| Scale height 3.67 km | 23.931 / 45.354 ms | 0.37231 | 0.03305 / 0.05459 |
-| Rock-conductive | 23.535 / 44.418 ms | 0.38659 | 0.03273 / 0.05982 |
-| Rock-resistive | 23.538 / 44.421 ms | 0.38743 | 0.03259 / 0.05928 |
+| Variant | A / A′ peak | B / B′ peak | A / A′ tail at 0.12 s | B / B′ tail at 0.12 s |
+|---|---:|---:|---:|---:|
+| 70 km, 3.33 km baseline | 0.94981 / 1.00000 | 0.11120 / 0.39237 | 0.03388 / 0.03418 | 0.02238 / 0.06673 |
+| Reference height 68 km | 0.95060 / 1.00000 | 0.10974 / 0.38851 | 0.03374 / 0.03438 | 0.02120 / 0.06231 |
+| Reference height 72 km | 0.94915 / 1.00000 | 0.11276 / 0.39654 | 0.03411 / 0.03409 | 0.02363 / 0.07146 |
+| Scale height 3.00 km | 0.94433 / 1.00000 | 0.11603 / 0.40923 | 0.03407 / 0.03343 | 0.02646 / 0.08270 |
+| Scale height 3.67 km | 0.95584 / 1.00000 | 0.10687 / 0.37727 | 0.03455 / 0.03569 | 0.01977 / 0.05715 |
 
-The factor-of-four rock-resistivity span changes the far/near ratio by less
-than 0.001, so the representative lithosphere values are not the dominant
-control at this resolution. Ionosphere scale height is much more influential.
-The most promising 3.00-km case was therefore repeated at level 7. It moved the
-far/near ratio from 0.34385 to 0.35361 and produced a 0.05959 far tail at
-0.12 s, but it also advanced the near/far peaks to 22.362/42.606 ms. It still
-does not reach the published visual estimates of approximately 0.39 for the
-peak ratio and 0.10 for the far tail.
-
-Moreover, the level-7 3.00-km case increased the east/west maximum attenuation
-errors to 2.346/2.838 dB/Mm, versus 1.746/2.016 dB/Mm at 3.33 km. Its west-path
-mean error improved, but the pointwise benchmark became worse. The standard
-3.33-km Bannister value is therefore retained rather than tuning the
-ionosphere to one panel. The remaining Figure 5 difference is most consistent
-with the paper's unavailable optimized mesh coordinates, exact conductivity
-discretization, and material samples, rather than an error in the FDTD radial
-coupling.
+The ionosphere changes B′ in the expected direction but leaves B strongly
+suppressed in every case. Even the 3.00-km scale height raises B only from
+0.11120 to 0.11603 while moving B′ above the published visual estimate. The
+standard 70-km/3.33-km Bannister profile is therefore retained. Parameter
+tuning cannot repair a path-selective missing-water-layer error.
 
 ## Figure 6: daytime attenuation
 
 ![Published and reproduced Figure 6](images/simpson-taflove-2006-fig-6-comparison.png)
 
 Each receiver record is truncated at its post-overshoot zero crossing, as
-specified by the paper. The adaptive cutoffs are 22,922 samples for A, 23,287
-for A′, and 24,081 for both B and B′. A 32,768-point DFT provides 45 fixed bins
-from 50.862630 to 498.453776 Hz. The reference line evaluates Bannister's
+specified by the paper. The corrected adaptive cutoffs are 23,454 samples for
+A, 22,643 for A′, 24,492 for B, and 24,532 for B′. A 32,768-point DFT provides
+45 fixed bins from 50.862630 to 498.453776 Hz. The reference line evaluates Bannister's
 daytime attenuation equations with the same 70 km height and 3.33 km scale
 height rather than fitting pixels from the plot.
 
 | Path | Mean absolute error | Maximum absolute error | Worst frequency | ±0.5 dB/Mm result |
 |---|---:|---:|---:|---:|
-| A–B, east | 0.387 dB/Mm | 1.746 dB/Mm | 498.454 Hz | **FAIL** |
-| A′–B′, west | 0.589 dB/Mm | 2.016 dB/Mm | 447.591 Hz | **FAIL** |
+| A–B, east | 2.064 dB/Mm | 5.026 dB/Mm | 437.419 Hz | **FAIL** |
+| A′–B′, west | 0.277 dB/Mm | 1.650 dB/Mm | 467.936 Hz | **FAIL** |
 
-The reproduced curves follow the published trend over most of the valid band,
-but the pointwise criterion fails. At 396.729 Hz the east result differs from
-the reference by only +0.013 dB/Mm; at 498.454 Hz it is −1.746 dB/Mm. The west
-curve reaches its +2.016 dB/Mm maximum residual at 447.591 Hz. This oscillatory
-upper-band error is consistent with the high-frequency spatial-dispersion
-residual documented in the separate 2004 verification.
+The west curve follows the published trend in mean, but still violates the
+pointwise tolerance at the upper end of the band. The east curve is
+systematically too attenuating because the ETOPO5 point-sampled material
+suppresses B. With fixed-depth Natural Earth material, east/west mean errors
+become 0.423/0.425 dB/Mm and the two paths nearly coincide, but maximum errors
+remain 2.933/4.370 dB/Mm. Thus bathymetry discretization explains the large
+east/west split, while the remaining upper-band oscillation is consistent
+with the high-frequency spatial-dispersion residual documented in the 2004
+verification.
 
 ## Figure 7: oil-field radar response
 
