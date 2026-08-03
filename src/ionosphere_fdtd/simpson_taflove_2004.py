@@ -151,6 +151,7 @@ def create_validation_simulation(
     dtype: str = "float32",
     compile_step: bool = True,
     torch_threads: int | None = None,
+    mesh_orientation: str = "native",
     ionosphere_reference_height_m: float = (
         REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M
     ),
@@ -200,6 +201,7 @@ def create_validation_simulation(
             maximum_altitude_m=100_000.0,
             courant_factor=0.4,
             time_step_s=PAPER_TIME_STEP_S,
+            mesh_orientation=mesh_orientation,
         ),
         material=material,
         source=source,

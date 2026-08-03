@@ -129,6 +129,11 @@ def test_requested_unstable_time_step_is_rejected() -> None:
         )
 
 
+def test_simulation_config_rejects_unknown_mesh_orientation() -> None:
+    with pytest.raises(ValueError, match="mesh_orientation"):
+        small_config(mesh_orientation="sideways")
+
+
 def test_nonuniform_radial_grid_advances() -> None:
     altitudes = (
         -100_000.0,

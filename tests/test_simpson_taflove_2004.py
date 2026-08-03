@@ -66,6 +66,21 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     assert source_metrics["source_distribution_weight_sum"] == pytest.approx(1.0)
 
 
+def test_validation_setup_can_align_pentagons_with_poles() -> None:
+    simulation = create_validation_simulation(
+        subdivision=1,
+        material_model="uniform",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        mesh_orientation="polar",
+    )
+
+    pentagons = simulation.mesh.vertices[simulation.mesh.vertex_degree == 5]
+    assert np.max(pentagons[:, 2]) == pytest.approx(1.0)
+    assert np.min(pentagons[:, 2]) == pytest.approx(-1.0)
+
+
 def test_receiver_longitudes_follow_east_and_west_quarter_arcs() -> None:
     assert [(receiver.label, receiver.longitude_deg) for receiver in PAPER_RECEIVERS] == [
         ("A", -2.0),

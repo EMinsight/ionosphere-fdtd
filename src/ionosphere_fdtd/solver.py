@@ -27,6 +27,7 @@ class SimulationConfig:
     courant_factor: float = 0.35
     time_step_s: float | None = None
     mesh_relaxations: int = 0
+    mesh_orientation: str = "native"
     radial_altitudes_m: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
@@ -34,6 +35,8 @@ class SimulationConfig:
             raise ValueError("subdivision must be non-negative")
         if self.radial_cells < 2:
             raise ValueError("radial_cells must be at least 2")
+        if self.mesh_orientation not in {"native", "polar"}:
+            raise ValueError("mesh_orientation must be 'native' or 'polar'")
         if self.minimum_altitude_m >= self.maximum_altitude_m:
             raise ValueError("altitude bounds are reversed")
         if self.earth_radius_m + self.minimum_altitude_m <= 0.0:
@@ -79,7 +82,9 @@ class GeodesicFDTD:
     ) -> None:
         self.config = config or SimulationConfig()
         self.mesh = mesh or build_geodesic_mesh(
-            self.config.subdivision, self.config.mesh_relaxations
+            self.config.subdivision,
+            self.config.mesh_relaxations,
+            self.config.mesh_orientation,
         )
         if self.mesh.subdivision != self.config.subdivision:
             raise ValueError("provided mesh subdivision does not match config")

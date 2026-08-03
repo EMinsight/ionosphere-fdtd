@@ -85,7 +85,11 @@ class GeodesicMesh:
         return face_values[self.edge_left_faces] - face_values[self.edge_right_faces]
 
 
-def build_geodesic_mesh(subdivision: int = 2, relaxations: int = 0) -> GeodesicMesh:
+def build_geodesic_mesh(
+    subdivision: int = 2,
+    relaxations: int = 0,
+    orientation: str = "native",
+) -> GeodesicMesh:
     """Build a recursively bisected icosahedral mesh on the unit sphere.
 
     ``subdivision=0`` gives 12 dual cells; each increment quarters every
@@ -98,8 +102,12 @@ def build_geodesic_mesh(subdivision: int = 2, relaxations: int = 0) -> GeodesicM
         raise ValueError("subdivision must be non-negative")
     if relaxations < 0:
         raise ValueError("relaxations must be non-negative")
+    if orientation not in {"native", "polar"}:
+        raise ValueError("orientation must be 'native' or 'polar'")
 
     vertices, faces = _icosahedron()
+    if orientation == "polar":
+        vertices = _polar_orientation(vertices)
     for _ in range(subdivision):
         vertices, faces = _subdivide(vertices, faces)
     for _ in range(relaxations):
@@ -196,6 +204,42 @@ def _icosahedron() -> tuple[FloatArray, IntArray]:
         dtype=np.int64,
     )
     return _normalize(vertices), _orient_faces(_normalize(vertices), faces)
+
+
+def _polar_orientation(vertices: FloatArray) -> FloatArray:
+    """Rotate one antipodal icosahedron pair onto the geographic poles.
+
+    Vertex 5 becomes the North Pole, its antipode becomes the South Pole, and
+    adjacent vertex 9 fixes the otherwise arbitrary axial rotation at 0°
+    longitude.  Rotation preserves the mesh topology and every metric term.
+    """
+
+    source = vertices[5]
+    target = np.asarray((0.0, 0.0, 1.0))
+    axis = np.cross(source, target)
+    sine = np.linalg.norm(axis)
+    cosine = float(source @ target)
+    skew = np.asarray(
+        (
+            (0.0, -axis[2], axis[1]),
+            (axis[2], 0.0, -axis[0]),
+            (-axis[1], axis[0], 0.0),
+        )
+    )
+    rotation = np.eye(3) + skew + skew @ skew * ((1.0 - cosine) / sine**2)
+    rotated = vertices @ rotation.T
+
+    reference_longitude = np.arctan2(rotated[9, 1], rotated[9, 0])
+    twist_cosine = np.cos(-reference_longitude)
+    twist_sine = np.sin(-reference_longitude)
+    twist = np.asarray(
+        (
+            (twist_cosine, -twist_sine, 0.0),
+            (twist_sine, twist_cosine, 0.0),
+            (0.0, 0.0, 1.0),
+        )
+    )
+    return rotated @ twist.T
 
 
 def _orient_faces(vertices: FloatArray, faces: IntArray) -> IntArray:

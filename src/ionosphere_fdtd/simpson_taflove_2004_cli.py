@@ -44,6 +44,9 @@ def _parser() -> argparse.ArgumentParser:
         default=Path("artifacts/simpson-taflove-2004"),
     )
     parser.add_argument("--subdivision", type=int, choices=range(0, 9), default=7)
+    parser.add_argument(
+        "--mesh-orientation", choices=("native", "polar"), default="native"
+    )
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
         "--material",
@@ -104,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             dtype=args.dtype,
             compile_step=args.torch_compile,
             torch_threads=args.torch_threads,
+            mesh_orientation=args.mesh_orientation,
             ionosphere_reference_height_m=(
                 1_000.0 * args.ionosphere_reference_height_km
             ),
@@ -217,6 +221,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
     parts = [
         "uv run --extra pytorch --extra visualization ionosphere-verify-2004",
         f"--subdivision {args.subdivision}",
+        f"--mesh-orientation {quote(args.mesh_orientation)}",
         f"--steps {args.steps}",
         f"--material {quote(args.material)}",
         f"--backend {quote(args.backend)}",
