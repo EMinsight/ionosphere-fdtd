@@ -18,8 +18,11 @@ from .simpson_taflove_2004 import (
     PAPER_TRACE_STEPS,
     REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M,
     REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
+    arrival_metrics,
     compute_attenuation,
+    compute_phase_velocity,
     create_validation_simulation,
+    phase_velocity_metrics,
     record_validation_traces,
     render_figure_7,
     render_figure_8,
@@ -140,6 +143,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     metrics = validation_metrics(curves)
     metrics.update(trace_metrics(traces))
+    metrics.update(arrival_metrics(traces))
+    metrics.update(
+        phase_velocity_metrics(
+            compute_phase_velocity(
+                traces,
+                truncations=(
+                    PAPER_DFT_TRUNCATIONS if args.dft_window == "paper" else None
+                ),
+            )
+        )
+    )
     metrics.update(
         {
             f"{label}_dft_cutoff_step": cutoff

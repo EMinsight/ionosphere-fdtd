@@ -358,6 +358,15 @@ The command prints pulse timings, selected DFT cutoffs, and east/west RMS
 differences so remaining material and discretization improvements can be
 measured.
 
+A uniform-material CUDA `float64` convergence run now also measures complex-DFT
+phase velocity and negative-peak travel time at subdivisions 6–8.  The maximum
+phase-velocity error against Bannister equation (4) falls from 0.094/0.103 c to
+0.028/0.028 c for A–B/A′–B′, with an observed order close to one.  The quarter-
+arc east/west RMS difference converges at approximately second order, from
+1.50e-2 to 1.01e-3.  Commands, per-frequency values, and the residual plot are
+preserved in the
+[`uniform-phase-convergence` report](artifacts/simpson-taflove-2004/uniform-phase-convergence/verification-report.md).
+
 The baseline level-7 result, interpretation, and recommended next checks are
 documented in
 [the Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).

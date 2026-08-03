@@ -13,8 +13,11 @@ from ionosphere_fdtd.simpson_taflove_2004 import (
     REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M,
     REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     ValidationTraces,
+    arrival_metrics,
     bannister_figure_8_guide,
+    bannister_phase_velocity_fraction_c,
     compute_attenuation,
+    compute_phase_velocity,
     create_validation_simulation,
     find_dft_truncations,
     record_validation_traces,
@@ -119,6 +122,58 @@ def test_bannister_guide_matches_published_daytime_examples() -> None:
     assert attenuation[2] == pytest.approx(16.6, rel=0.01)
 
 
+def test_bannister_phase_velocity_matches_published_daytime_examples() -> None:
+    velocity = bannister_phase_velocity_fraction_c(np.asarray([75.0, 1_000.0]))
+
+    assert velocity[0] == pytest.approx(1.0 / 1.26, rel=0.01)
+    assert velocity[1] == pytest.approx(1.0 / 1.10, rel=0.01)
+
+
+def test_phase_velocity_recovers_known_receiver_delay() -> None:
+    count = 25_024
+    time_steps = np.arange(count, dtype=np.int64)
+    near = -np.exp(-((time_steps - 3_000) / 300.0) ** 2)
+    far = -np.exp(-((time_steps - 9_000) / 300.0) ** 2)
+    traces = ValidationTraces(
+        time_steps=time_steps,
+        time_s=time_steps * PAPER_TIME_STEP_S,
+        er_v_m=np.column_stack((near, near, far, far)),
+        labels=("A", "A′", "B", "B′"),
+    )
+    truncations = dict.fromkeys(traces.labels, count)
+
+    curves = compute_phase_velocity(traces, truncations=truncations)
+    padded = compute_phase_velocity(
+        traces,
+        n_fft=2 * PAPER_DFT_SIZE,
+        truncations=truncations,
+    )
+    metrics = arrival_metrics(traces)
+    expected = (
+        0.25
+        * np.pi
+        * 6_371_000.0
+        / (6_000 * PAPER_TIME_STEP_S)
+        / 299_792_458.0
+    )
+
+    np.testing.assert_allclose(curves.path_ab_fraction_c, expected, rtol=1.0e-13)
+    np.testing.assert_allclose(curves.path_apbp_fraction_c, expected, rtol=1.0e-13)
+    np.testing.assert_allclose(
+        padded.path_ab_fraction_c,
+        curves.path_ab_fraction_c,
+        rtol=1.0e-13,
+    )
+    np.testing.assert_allclose(
+        padded.path_apbp_fraction_c,
+        curves.path_apbp_fraction_c,
+        rtol=1.0e-13,
+    )
+    assert metrics["path_ab_apparent_peak_velocity_fraction_c"] == pytest.approx(
+        expected, rel=1.0e-12
+    )
+
+
 def test_validation_uses_fixed_paper_dft_frequencies() -> None:
     frequencies = np.asarray(PAPER_EVALUATION_FREQUENCIES_HZ)
 
@@ -205,6 +260,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "`adaptive`" in text
     assert "45개 bin" in text
     assert "Bannister (1984)" in text
+    assert "daytime phase velocity" in text
     assert "![Figure 7 verification](fig-7.png)" in text
     assert "[Receiver traces (NPZ)](traces.npz)" in text
     assert "uv run ionosphere-verify-2004" in text

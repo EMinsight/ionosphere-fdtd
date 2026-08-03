@@ -122,6 +122,9 @@ def write_validation_report(
   `paper`는 A 22,849, B 24,165, A′ 22,737, B′ 25,023 samples
 - 고정 비교 주파수: Fig. 8 marker 간격과 일치하는 32,768-point
   DFT의 50–500 Hz 구간 45개 bin (50.863–498.454 Hz)
+- 위상속도: 복소 DFT의 `A·conj(B)`와 `A′·conj(B′)` 위상을 DC부터
+  unwrap하고, 두 수신점 사이의 추가 45° 전파 거리로 환산한다. 비교선은
+  Bannister (1984) 식 (4)의 daytime phase velocity다.
 
 ## 판정
 

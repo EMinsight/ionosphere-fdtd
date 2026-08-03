@@ -11,7 +11,7 @@ from typing import Any, Mapping
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import EARTH_RADIUS_M
+from .constants import C_0, EARTH_RADIUS_M
 from .materials import EarthIonosphereMaterial, SimpsonTaflove2004Material
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, geographic_distribution
@@ -90,6 +90,17 @@ class AttenuationCurves:
     benchmark_db_per_mm: FloatArray
     dft_truncations: Mapping[str, int]
     valid_frequency_hz: tuple[float, float] = PAPER_VALID_FREQUENCY_HZ
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseVelocityCurves:
+    """Phase velocity over the extra 45-degree receiver path."""
+
+    frequency_hz: FloatArray
+    path_ab_fraction_c: FloatArray
+    path_apbp_fraction_c: FloatArray
+    benchmark_fraction_c: FloatArray
+    dft_truncations: Mapping[str, int]
 
 
 def natural_earth_land_classifier() -> Callable[[FloatArray], NDArray[np.bool_]]:
@@ -222,6 +233,34 @@ def record_validation_traces(
     )
 
 
+def _receiver_spectra(
+    traces: ValidationTraces,
+    *,
+    n_fft: int = PAPER_DFT_SIZE,
+    truncations: Mapping[str, int] | None = None,
+) -> tuple[dict[str, int], dict[str, NDArray[np.complex128]]]:
+    selected_truncations = dict(
+        find_dft_truncations(traces) if truncations is None else truncations
+    )
+    missing = set(traces.labels) - set(selected_truncations)
+    if missing:
+        raise ValueError(f"missing DFT truncations for: {', '.join(sorted(missing))}")
+    required = max(selected_truncations.values())
+    if n_fft < required:
+        raise ValueError(f"n_fft must be at least {required}")
+    spectra: dict[str, NDArray[np.complex128]] = {}
+    for label in traces.labels:
+        cutoff = selected_truncations[label]
+        if not 2 <= cutoff <= len(traces.time_steps):
+            raise ValueError(
+                f"DFT truncation for {label} must be between 2 and "
+                f"{len(traces.time_steps)}"
+            )
+        signal = traces.trace(label)[:cutoff]
+        spectra[label] = np.fft.rfft(signal, n=n_fft)
+    return selected_truncations, spectra
+
+
 def compute_attenuation(
     traces: ValidationTraces,
     *,
@@ -237,25 +276,10 @@ def compute_attenuation(
     assuming that their reported sample numbers apply to a different waveform.
     """
 
-    selected_truncations = dict(
-        find_dft_truncations(traces) if truncations is None else truncations
+    selected_truncations, complex_spectra = _receiver_spectra(
+        traces, n_fft=n_fft, truncations=truncations
     )
-    missing = set(traces.labels) - set(selected_truncations)
-    if missing:
-        raise ValueError(f"missing DFT truncations for: {', '.join(sorted(missing))}")
-    required = max(selected_truncations.values())
-    if n_fft < required:
-        raise ValueError(f"n_fft must be at least {required}")
-    spectra: dict[str, FloatArray] = {}
-    for label in traces.labels:
-        cutoff = selected_truncations[label]
-        if not 2 <= cutoff <= len(traces.time_steps):
-            raise ValueError(
-                f"DFT truncation for {label} must be between 2 and "
-                f"{len(traces.time_steps)}"
-            )
-        signal = traces.trace(label)[:cutoff]
-        spectra[label] = np.abs(np.fft.rfft(signal, n=n_fft))
+    spectra = {label: np.abs(values) for label, values in complex_spectra.items()}
     tiny = np.finfo(np.float64).tiny
     path_distance_mm = (0.25 * np.pi * EARTH_RADIUS_M) / 1.0e6
     path_ab = 20.0 * np.log10(
@@ -272,6 +296,43 @@ def compute_attenuation(
         path_apbp,
         benchmark,
         selected_truncations,
+    )
+
+
+def compute_phase_velocity(
+    traces: ValidationTraces,
+    *,
+    time_step_s: float = PAPER_TIME_STEP_S,
+    n_fft: int = PAPER_DFT_SIZE,
+    truncations: Mapping[str, int] | None = None,
+) -> PhaseVelocityCurves:
+    """Compute phase velocity over the extra 45-degree receiver path."""
+
+    selected_truncations, spectra = _receiver_spectra(
+        traces, n_fft=n_fft, truncations=truncations
+    )
+    dft_frequency = np.fft.rfftfreq(n_fft, d=time_step_s)
+    frequency = paper_evaluation_frequencies()
+    stop = int(np.searchsorted(dft_frequency, frequency[-1], side="right")) + 1
+    path_distance_m = 0.25 * np.pi * EARTH_RADIUS_M
+
+    def path_velocity(near: str, far: str) -> FloatArray:
+        phase = np.unwrap(
+            np.angle(spectra[near][:stop] * np.conj(spectra[far][:stop]))
+        )
+        sampled_phase = np.interp(frequency, dft_frequency[:stop], phase)
+        if np.any(sampled_phase <= 0.0):
+            raise ValueError("receiver phase delay must be positive")
+        return (
+            2.0 * np.pi * frequency * path_distance_m / sampled_phase / C_0
+        )
+
+    return PhaseVelocityCurves(
+        frequency_hz=frequency,
+        path_ab_fraction_c=path_velocity("A", "B"),
+        path_apbp_fraction_c=path_velocity("A′", "B′"),
+        benchmark_fraction_c=bannister_phase_velocity_fraction_c(frequency),
+        dft_truncations=selected_truncations,
     )
 
 
@@ -311,6 +372,20 @@ def find_dft_truncations(traces: ValidationTraces) -> dict[str, int]:
     return truncations
 
 
+def _bannister_reflection_heights(
+    frequency_hz: FloatArray,
+) -> tuple[FloatArray, FloatArray]:
+    frequency = np.asarray(frequency_hz, dtype=np.float64)
+    safe_frequency = np.where(frequency > 0.0, frequency, 1.0)
+    h0_km = BANNISTER_REFERENCE_HEIGHT_KM - BANNISTER_SCALE_HEIGHT_KM * np.log(
+        2.5e5 / (2.0 * np.pi * safe_frequency)
+    )
+    h1_km = h0_km + 2.0 * BANNISTER_SCALE_HEIGHT_KM * np.log(
+        2.39e4 / (safe_frequency * BANNISTER_SCALE_HEIGHT_KM)
+    )
+    return h0_km, h1_km
+
+
 def bannister_figure_8_guide(frequency_hz: FloatArray) -> FloatArray:
     """Evaluate the daytime attenuation model used for Figure 8.
 
@@ -322,12 +397,7 @@ def bannister_figure_8_guide(frequency_hz: FloatArray) -> FloatArray:
 
     frequency = np.asarray(frequency_hz, dtype=np.float64)
     safe_frequency = np.where(frequency > 0.0, frequency, 1.0)
-    h0_km = BANNISTER_REFERENCE_HEIGHT_KM - BANNISTER_SCALE_HEIGHT_KM * np.log(
-        2.5e5 / (2.0 * np.pi * safe_frequency)
-    )
-    h1_km = h0_km + 2.0 * BANNISTER_SCALE_HEIGHT_KM * np.log(
-        2.39e4 / (safe_frequency * BANNISTER_SCALE_HEIGHT_KM)
-    )
+    h0_km, h1_km = _bannister_reflection_heights(frequency)
     attenuation = (
         0.143
         * safe_frequency
@@ -336,6 +406,15 @@ def bannister_figure_8_guide(frequency_hz: FloatArray) -> FloatArray:
         * (1.0 / h0_km + 1.0 / h1_km)
     )
     return np.where(frequency > 0.0, attenuation, 0.0)
+
+
+def bannister_phase_velocity_fraction_c(frequency_hz: FloatArray) -> FloatArray:
+    """Evaluate Bannister (1984), equation (4), as a fraction of light speed."""
+
+    frequency = np.asarray(frequency_hz, dtype=np.float64)
+    h0_km, h1_km = _bannister_reflection_heights(frequency)
+    velocity = 1.0 / (0.985 * np.sqrt(h1_km / h0_km))
+    return np.where(frequency > 0.0, velocity, 0.0)
 
 
 def paper_evaluation_frequencies() -> FloatArray:
@@ -491,6 +570,55 @@ def validation_metrics(curves: AttenuationCurves) -> dict[str, float]:
             apbp_residual[apbp_maximum_index]
         ),
     }
+
+
+def phase_velocity_metrics(curves: PhaseVelocityCurves) -> dict[str, float]:
+    """Return phase-velocity errors relative to Bannister equation (4)."""
+
+    ab_residual = curves.path_ab_fraction_c - curves.benchmark_fraction_c
+    apbp_residual = curves.path_apbp_fraction_c - curves.benchmark_fraction_c
+    return {
+        "path_ab_phase_velocity_mean_absolute_error_fraction_c": float(
+            np.mean(np.abs(ab_residual))
+        ),
+        "path_apbp_phase_velocity_mean_absolute_error_fraction_c": float(
+            np.mean(np.abs(apbp_residual))
+        ),
+        "path_ab_phase_velocity_maximum_absolute_error_fraction_c": float(
+            np.max(np.abs(ab_residual))
+        ),
+        "path_apbp_phase_velocity_maximum_absolute_error_fraction_c": float(
+            np.max(np.abs(apbp_residual))
+        ),
+    }
+
+
+def arrival_metrics(traces: ValidationTraces) -> dict[str, float | int]:
+    """Return negative-peak travel times and apparent pulse velocities."""
+
+    result: dict[str, float | int] = {}
+    peaks = {label: int(np.argmin(traces.trace(label))) for label in traces.labels}
+    source_center_s = PAPER_SOURCE_CENTER_STEPS * PAPER_TIME_STEP_S
+    receivers = {receiver.label: receiver for receiver in PAPER_RECEIVERS}
+    for label, peak_index in peaks.items():
+        travel_time_s = float(traces.time_s[peak_index] - source_center_s)
+        if travel_time_s <= 0.0:
+            raise ValueError(f"{label} peak must follow the source center")
+        distance_m = receivers[label].fraction_to_antipode * np.pi * EARTH_RADIUS_M
+        result[f"{label}_negative_peak_travel_time_s"] = travel_time_s
+        result[f"{label}_apparent_peak_velocity_fraction_c"] = float(
+            distance_m / travel_time_s / C_0
+        )
+    for near, far, name in (("A", "B", "path_ab"), ("A′", "B′", "path_apbp")):
+        travel_time_s = float(traces.time_s[peaks[far]] - traces.time_s[peaks[near]])
+        if travel_time_s <= 0.0:
+            raise ValueError(f"{far} peak must follow the {near} peak")
+        distance_m = 0.25 * np.pi * EARTH_RADIUS_M
+        result[f"{name}_negative_peak_travel_time_s"] = travel_time_s
+        result[f"{name}_apparent_peak_velocity_fraction_c"] = float(
+            distance_m / travel_time_s / C_0
+        )
+    return result
 
 
 def trace_metrics(traces: ValidationTraces) -> dict[str, float | int]:
