@@ -403,6 +403,15 @@ arc east/west RMS difference converges at approximately second order, from
 preserved in the
 [`uniform-phase-convergence` report](artifacts/simpson-taflove-2004/uniform-phase-convergence/verification-report.md).
 
+Directional dispersion of the existing geodesic dual grid is measured without
+introducing the paper's merged latitude–longitude grid. Twelve equally spaced
+azimuths use matched receivers at 45° and 90° in a laterally uniform model. The
+mean azimuthal phase-velocity spread falls from 4.24% at subdivision 5 to 0.097%
+at subdivision 7; the maximum falls from 12.08% to 0.295%. The level 6→7
+observed order is about two, and a common-window sensitivity check gives the
+same result. Commands, bandwise metrics, traces, and plots are preserved in the
+[`directional-dispersion` report](artifacts/directional-dispersion/grid-convergence/verification-report.md).
+
 The baseline level-7 result, interpretation, and recommended next checks are
 documented in
 [the Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).
@@ -457,10 +466,13 @@ validation workflow supplies the paper-scale grid, observation records, DFT
 windowing, and optional original NOAA-NGDC ETOPO5 relief. Hermance Figure 6 is
 a bounded conceptual section rather than a complete numeric 3-D conductivity
 model, so its oceanic and continental depth profiles remain representative.
-Quantitative reproduction still requires a discretization study reconciling
-the paper's merged latitude–longitude cells with this project's geodesic dual
-grid. The Bannister daytime comparison is implemented directly from the cited
-1984 equations rather than a plot fit.
+The paper's merged latitude–longitude cells and this project's geodesic dual
+grid do not share an identical dispersion relation. Their directional
+component is now isolated by the uniform-model azimuth sweep and shown to
+converge at about second order from subdivision 6 to 7. The remaining absolute
+high-frequency residual also contains isotropic spatial dispersion and finite
+radial-model differences. The Bannister daytime comparison is implemented
+directly from the cited 1984 equations rather than a plot fit.
 
 ## References
 
