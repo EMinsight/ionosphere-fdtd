@@ -12,7 +12,7 @@ from .backends import ArrayBackend, create_backend
 from .constants import C_0, EARTH_RADIUS_M, EPSILON_0, MU_0
 from .materials import EarthIonosphereMaterial
 from .mesh import GeodesicMesh, build_geodesic_mesh
-from .sources import GaussianCurrent
+from .sources import GaussianCurrent, TangentialGaussianCurrent
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +69,7 @@ class GeodesicFDTD:
         self,
         config: SimulationConfig | None = None,
         material: EarthIonosphereMaterial | None = None,
-        source: GaussianCurrent | None = None,
+        source: GaussianCurrent | TangentialGaussianCurrent | None = None,
         mesh: GeodesicMesh | None = None,
         backend: str = "numpy",
         device: str = "auto",
@@ -133,9 +133,16 @@ class GeodesicFDTD:
 
         self._prepare_geometry()
         self._prepare_material_coefficients()
-        if self.source is None:
-            self._source_distribution = None
-        else:
+        self._source_distribution = None
+        self._tangential_source_distribution = None
+        if isinstance(self.source, TangentialGaussianCurrent):
+            edges, layers, weights = self.source.edge_distribution(self)
+            self._tangential_source_distribution = (
+                self.backend.index_array(edges),
+                self.backend.index_array(layers),
+                self.backend.asarray(weights),
+            )
+        elif self.source is not None:
             vertices, layers, weights = self.source.staggered_distribution(self)
             self._source_distribution = (
                 self.backend.index_array(vertices),
@@ -186,6 +193,9 @@ class GeodesicFDTD:
         self._dual_lengths_te = self.backend.asarray(dual_lengths_te)
         self._face_areas_te = self.backend.asarray(face_areas_te)
         self._radial_steps = self.backend.asarray(self.radial_steps_m)
+        self._dual_face_areas_te = (
+            self._dual_lengths_te * self._radial_steps[None, :]
+        )
         self._radial_center_distances = self.backend.asarray(
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
@@ -319,6 +329,12 @@ class GeodesicFDTD:
         self.et *= self._ca_et
         surface_gradient_hr *= self._cb_et
         self.et += surface_gradient_hr
+        if self._tangential_source_distribution is not None:
+            edges, layers, weights = self._tangential_source_distribution
+            current_density = (
+                weights * current_a / self._dual_face_areas_te[edges, layers]
+            )
+            self.et[edges, layers] -= self._cb_et[edges, layers] * current_density
 
     def diagnostics(self) -> dict[str, float | int | str]:
         """Return inexpensive scalar diagnostics without saving field data."""
@@ -407,6 +423,78 @@ class GeodesicFDTD:
                 self.backend.synchronize()
         self.backend.synchronize()
         return self.to_numpy(traces)
+
+    def record_h_observations(
+        self,
+        face_indices: NDArray[np.int64],
+        face_radial_layers: NDArray[np.int64],
+        face_weights: NDArray[np.float64],
+        edge_indices: NDArray[np.int64],
+        edge_radial_layers: NDArray[np.int64],
+        edge_weights: NDArray[np.float64],
+        steps: int,
+        *,
+        synchronize_every: int = 128,
+    ) -> tuple[NDArray[np.generic], NDArray[np.generic]]:
+        """Advance while recording weighted radial and tangential H samples."""
+
+        faces = np.asarray(face_indices, dtype=np.int64)
+        face_layers = np.asarray(face_radial_layers, dtype=np.int64)
+        radial_weights = np.asarray(face_weights, dtype=np.float64)
+        edges = np.asarray(edge_indices, dtype=np.int64)
+        edge_layers = np.asarray(edge_radial_layers, dtype=np.int64)
+        tangential_weights = np.asarray(edge_weights, dtype=np.float64)
+        if steps < 0:
+            raise ValueError("step count must be non-negative")
+        if synchronize_every < 1:
+            raise ValueError("synchronize_every must be positive")
+        if faces.ndim != 2 or radial_weights.shape != faces.shape:
+            raise ValueError("face indices and weights must have matching 2-D shapes")
+        if edges.ndim != 2 or tangential_weights.shape != edges.shape:
+            raise ValueError("edge indices and weights must have matching 2-D shapes")
+        if face_layers.shape != (faces.shape[0],):
+            raise ValueError("face radial layers must match the observations")
+        if edge_layers.shape != edges.shape:
+            raise ValueError("edge radial layers must match the edge indices")
+        if np.any(faces < 0) or np.any(faces >= self.mesh.n_faces):
+            raise ValueError("observation face index is out of range")
+        if np.any(edges < 0) or np.any(edges >= self.mesh.n_edges):
+            raise ValueError("observation edge index is out of range")
+        if np.any(face_layers < 0) or np.any(face_layers >= self.hr.shape[1]):
+            raise ValueError("radial H observation layer is out of range")
+        if np.any(edge_layers < 0) or np.any(edge_layers >= self.ht.shape[1]):
+            raise ValueError("tangential H observation layer is out of range")
+
+        backend_faces = self.backend.index_array(faces)
+        backend_face_layers = self.backend.index_array(face_layers)
+        backend_radial_weights = self.backend.asarray(radial_weights)
+        backend_edges = self.backend.index_array(edges)
+        backend_edge_layers = self.backend.index_array(edge_layers)
+        backend_tangential_weights = self.backend.asarray(tangential_weights)
+        radial_traces = self.backend.zeros((steps + 1, faces.shape[0]))
+        tangential_traces = self.backend.zeros((steps + 1, edges.shape[0]))
+
+        def sample(row: int) -> None:
+            selected_hr = self.hr[backend_faces, backend_face_layers[:, None]]
+            radial_traces[row] = (
+                selected_hr * backend_radial_weights
+            ).sum(axis=1)
+            selected_ht = self.ht[backend_edges, backend_edge_layers]
+            tangential_traces[row] = (
+                selected_ht * backend_tangential_weights
+            ).sum(axis=1)
+
+        sample(0)
+        currents = self._source_currents(steps)
+        for offset in range(steps):
+            self._field_step(currents[offset])
+            self.steps += 1
+            self.time_s = self.steps * self.time_step_s
+            sample(offset + 1)
+            if (offset + 1) % synchronize_every == 0:
+                self.backend.synchronize()
+        self.backend.synchronize()
+        return self.to_numpy(radial_traces), self.to_numpy(tangential_traces)
 
     @property
     def memory_bytes(self) -> int:

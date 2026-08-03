@@ -3,7 +3,7 @@ import pytest
 
 from ionosphere_fdtd.materials import EarthIonosphereMaterial
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
-from ionosphere_fdtd.sources import GaussianCurrent
+from ionosphere_fdtd.sources import GaussianCurrent, TangentialGaussianCurrent
 
 
 def small_config(**changes: object) -> SimulationConfig:
@@ -81,6 +81,25 @@ def test_staggered_source_update_preserves_total_current() -> None:
     assert represented_currents.sum() == pytest.approx(1.0)
 
 
+def test_tangential_source_update_uses_dual_face_current_density() -> None:
+    source = TangentialGaussianCurrent(
+        altitude_m=0.0,
+        peak_current_a=1.0,
+        azimuths_deg=(0.0, 90.0),
+    )
+    simulation = GeodesicFDTD(config=small_config(), source=source)
+    edges, layers, expected_weights = source.edge_distribution(simulation)
+
+    simulation._update_electric_fields(1.0)
+    represented_currents = (
+        -simulation.et[edges, layers]
+        * simulation._dual_face_areas_te[edges, layers]
+        / simulation._cb_et[edges, layers]
+    )
+
+    np.testing.assert_allclose(represented_currents, expected_weights)
+
+
 def test_requested_unstable_time_step_is_rejected() -> None:
     baseline = GeodesicFDTD(config=small_config())
     with pytest.raises(ValueError, match="exceeds conservative limit"):
@@ -138,3 +157,27 @@ def test_backend_native_observation_recording_includes_initial_state() -> None:
     assert traces[0, 0] == 0.0
     assert simulation.steps == 5
     assert np.isfinite(traces).all()
+
+
+def test_backend_native_h_recording_includes_initial_state() -> None:
+    simulation = GeodesicFDTD(
+        config=small_config(), source=GaussianCurrent(peak_current_a=1.0e6)
+    )
+    hr, ht = simulation.record_h_observations(
+        np.asarray(((0,),), dtype=np.int64),
+        np.asarray((2,), dtype=np.int64),
+        np.asarray(((1.0,),)),
+        np.asarray(((0, 1, 2),), dtype=np.int64),
+        np.asarray(((2, 2, 2),), dtype=np.int64),
+        np.asarray(((0.2, -0.3, 0.5),)),
+        5,
+        synchronize_every=2,
+    )
+
+    assert hr.shape == (6, 1)
+    assert ht.shape == (6, 1)
+    assert hr[0, 0] == 0.0
+    assert ht[0, 0] == 0.0
+    assert simulation.steps == 5
+    assert np.isfinite(hr).all()
+    assert np.isfinite(ht).all()

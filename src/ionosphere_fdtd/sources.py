@@ -1,4 +1,4 @@
-"""Current sources for the radial electric-field update."""
+"""Localized current sources for radial and tangential electric fields."""
 
 from __future__ import annotations
 
@@ -32,13 +32,30 @@ def geographic_direction(
     )
 
 
-def geographic_distribution(
+def geographic_tangent_basis(
+    latitude_deg: float, longitude_deg: float
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Return local unit vectors pointing east and north."""
+
+    latitude = np.deg2rad(latitude_deg)
+    longitude = np.deg2rad(longitude_deg)
+    east = np.asarray((-np.sin(longitude), np.cos(longitude), 0.0))
+    north = np.asarray(
+        (
+            -np.sin(latitude) * np.cos(longitude),
+            -np.sin(latitude) * np.sin(longitude),
+            np.cos(latitude),
+        )
+    )
+    return east, north
+
+
+def geographic_face_index(
     simulation: GeodesicFDTD,
     latitude_deg: float,
     longitude_deg: float,
-    altitude_m: float,
-) -> tuple[NDArray[np.int64], int, NDArray[np.float64]]:
-    """Return triangle vertices, radial layer, and barycentric weights."""
+) -> int:
+    """Return the primal face containing a geographic direction."""
 
     direction = geographic_direction(latitude_deg, longitude_deg)
     faces = simulation.mesh.faces
@@ -57,10 +74,25 @@ def geographic_distribution(
         signs <= 1.0e-12, axis=1
     )
     candidates = np.flatnonzero(inside)
-    face_index = (
+    return (
         int(candidates[0])
         if len(candidates)
         else int(np.argmax(simulation.mesh.face_centers @ direction))
+    )
+
+
+def geographic_distribution(
+    simulation: GeodesicFDTD,
+    latitude_deg: float,
+    longitude_deg: float,
+    altitude_m: float,
+) -> tuple[NDArray[np.int64], int, NDArray[np.float64]]:
+    """Return triangle vertices, radial layer, and barycentric weights."""
+
+    direction = geographic_direction(latitude_deg, longitude_deg)
+    faces = simulation.mesh.faces
+    face_index = geographic_face_index(
+        simulation, latitude_deg, longitude_deg
     )
     vertices = faces[face_index]
     point_a, point_b, point_c = simulation.mesh.vertices[vertices]
@@ -190,3 +222,49 @@ class GaussianCurrent:
         if self.carrier_frequency_hz:
             envelope *= np.cos(2.0 * np.pi * self.carrier_frequency_hz * (time_s - center))
         return float(self.peak_current_a * envelope)
+
+
+@dataclass(frozen=True, slots=True)
+class TangentialGaussianCurrent(GaussianCurrent):
+    """Gaussian current impressed along one or more horizontal ground lines.
+
+    Azimuths are degrees clockwise from geographic north.  Each requested
+    direction is projected onto the three oriented primal edges of the face
+    containing the source.  This provides the tangential-current degrees of
+    freedom used by the TE-r update without snapping the polarization to a
+    single geodesic edge.
+    """
+
+    altitude_m: float = 0.0
+    azimuths_deg: tuple[float, ...] = (0.0,)
+
+    def __post_init__(self) -> None:
+        if not self.azimuths_deg:
+            raise ValueError("azimuths_deg must contain at least one direction")
+        if not all(np.isfinite(value) for value in self.azimuths_deg):
+            raise ValueError("source azimuths must be finite")
+
+    def edge_distribution(
+        self, simulation: GeodesicFDTD
+    ) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
+        """Project the ground-line currents onto local primal-edge samples."""
+
+        face = geographic_face_index(
+            simulation, self.latitude_deg, self.longitude_deg
+        )
+        edges = simulation.mesh.face_edges[face].copy()
+        endpoints = simulation.mesh.vertices[simulation.mesh.edges[edges]]
+        edge_directions = endpoints[:, 1] - endpoints[:, 0]
+        edge_directions /= np.linalg.norm(edge_directions, axis=1, keepdims=True)
+        east, north = geographic_tangent_basis(
+            self.latitude_deg, self.longitude_deg
+        )
+        requested = np.zeros(3, dtype=np.float64)
+        for azimuth_deg in self.azimuths_deg:
+            azimuth = np.deg2rad(azimuth_deg)
+            requested += np.cos(azimuth) * north + np.sin(azimuth) * east
+        weights = edge_directions @ requested
+        midpoints = simulation.radial_midpoint_altitudes_m
+        layer = int(np.argmin(np.abs(midpoints - self.altitude_m)))
+        layers = np.full(len(edges), layer, dtype=np.int64)
+        return edges, layers, weights

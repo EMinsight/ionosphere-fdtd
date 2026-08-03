@@ -10,7 +10,7 @@ from .backends import (
 from .materials import EarthIonosphereMaterial, SphericalAnomaly
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .solver import GeodesicFDTD, SimulationConfig
-from .sources import GaussianCurrent
+from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .visualization import (
     RadialSection,
     Receiver,
@@ -30,6 +30,7 @@ __all__ = [
     "BackendUnavailableError",
     "EarthIonosphereMaterial",
     "GaussianCurrent",
+    "TangentialGaussianCurrent",
     "GeodesicFDTD",
     "GeodesicMesh",
     "NumPyBackend",
