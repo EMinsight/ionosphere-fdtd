@@ -223,19 +223,46 @@ phase velocity was measured between matched 45° and 90° receivers along 12
 azimuths separated by 30°. The continuum solution is azimuth-independent, so
 deviation from the azimuthal mean isolates grid directionality.
 
-| Subdivision | Mean azimuthal spread | Maximum spread | 375–500 Hz mean / maximum spread |
-|---:|---:|---:|---:|
-| 5 | 4.2417% | 12.0832% | 11.107 / 12.083% |
-| 6 | 0.4492% | 1.2344% | 0.992 / 1.234% |
-| 7 | 0.0970% | 0.2947% | 0.214 / 0.295% |
+All three runs used 25,023 steps, the same 45 fixed DFT frequencies, compiled
+PyTorch on CUDA, and `float64`. The azimuthal spread is the peak-to-peak phase-
+velocity difference divided by the azimuthal mean. The Bannister columns
+compare the azimuthal mean with equation (4), so they contain both horizontal
+spatial dispersion and finite radial-model error.
 
-The level 6→7 observed orders are 2.21 for mean spread and 2.07 for maximum
-spread. At level 7, the mean and maximum spread below 375 Hz are 0.0494% and
-0.133%. Reanalysis with one common DFT cutoff for all directions leaves the
-level-7 mean spread at 0.0967–0.0973%, ruling out adaptive-window selection as
-the source of the convergence. The detailed directional study and retained
-artifacts are available in the
-[directional-dispersion report](../../artifacts/directional-dispersion/grid-convergence/verification-report.md).
+| Subdivision | Surface cells | Runtime | DFT cutoff range | Mean spread | Maximum spread (frequency) | Relative RMS | Bannister MAE / maximum (maximum frequency) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 5 | 10,242 | 53.0 s | 21,463–21,617 | 4.2417% | 12.0832% (406.901 Hz) | 2.4705% | 0.08136 / 0.19170 c (366.211 Hz) |
+| 6 | 40,962 | 190.4 s | 21,486–21,584 | 0.4492% | 1.2344% (498.454 Hz) | 0.1708% | 0.03642 / 0.09781 c (498.454 Hz) |
+| 7 | 163,842 | 797.6 s | 21,506–21,572 | 0.0970% | 0.2947% (498.454 Hz) | 0.0366% | 0.01895 / 0.05096 c (498.454 Hz) |
+
+Assuming that each subdivision halves the characteristic horizontal spacing,
+the observed orders for mean spread are 3.24 and 2.21 for level 5→6 and 6→7.
+The corresponding maximum-spread orders are 3.29 and 2.07, and the relative-
+RMS orders are 3.85 and 2.22. Level 5 is outside the asymptotic regime at high
+frequency; the level 6→7 results are consistent with approximately second-
+order directional convergence.
+
+Bandwise mean and maximum spreads make the under-resolution threshold
+explicit:
+
+| Subdivision | 50–200 Hz mean / maximum | 200–375 Hz mean / maximum | 375–500 Hz mean / maximum |
+|---:|---:|---:|---:|
+| 5 | 0.323 / 0.745% | 2.449 / 4.849% | 11.107 / 12.083% |
+| 6 | 0.0649 / 0.140% | 0.373 / 0.685% | 0.992 / 1.234% |
+| 7 | 0.0150 / 0.0321% | 0.0798 / 0.133% | 0.214 / 0.295% |
+
+Across 50–375 Hz, the level-7 mean and maximum spreads are 0.0494% and
+0.133%. Above 375 Hz they rise to 0.214% and 0.295%. The sharp level-5 branch
+above approximately 400 Hz is therefore an under-resolution effect, while the
+same directional error is strongly suppressed on the paper-scale level-7
+grid.
+
+Reanalysis with one common minimum, median, or maximum cutoff for every
+azimuth gives level-6 mean spreads of 0.4409–0.4488% and maxima of
+1.189–1.233%. At level 7 it gives mean spreads of 0.0967–0.0973% and maxima of
+0.2931–0.3122%, compared with adaptive values of 0.0970% and 0.2947%. The
+observed convergence is therefore not an artifact of direction-dependent DFT
+window selection.
 
 The geodesic and merged latitude–longitude grids cannot have identical
 dispersion relations without replacing the horizontal discretization.
@@ -285,9 +312,26 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
   --output-dir artifacts/simpson-taflove-2004/etopo5-level-7-reproduction
 ```
 
+Regenerate the directional-dispersion sweep without changing the geodesic
+grid:
+
+```bash
+for subdivision in 5 6 7; do
+  uv run --extra pytorch --extra visualization \
+    ionosphere-measure-dispersion \
+    --subdivision "${subdivision}" --steps 25023 \
+    --azimuth-step-deg 30 \
+    --backend torch --device cuda:0 --dtype float64 --torch-compile \
+    --synchronize-every 1024 \
+    --output-dir \
+      "artifacts/directional-dispersion/uniform-level-${subdivision}-float64-cuda"
+done
+```
+
 These commands regenerate per-run figures, compressed traces, metrics, and a
 Markdown report. The consolidated scalar results above remain the archival
-record; generated Simpson–Taflove artifacts are not retained in the repository.
+record; generated Simpson–Taflove and directional-dispersion artifacts are not
+retained in the repository.
 
 ## Final assessment
 

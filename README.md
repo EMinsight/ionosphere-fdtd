@@ -408,8 +408,9 @@ azimuths use matched receivers at 45° and 90° in a laterally uniform model. Th
 mean azimuthal phase-velocity spread falls from 4.24% at subdivision 5 to 0.097%
 at subdivision 7; the maximum falls from 12.08% to 0.295%. The level 6→7
 observed order is about two, and a common-window sensitivity check gives the
-same result. Commands, bandwise metrics, traces, and plots are preserved in the
-[`directional-dispersion` report](artifacts/directional-dispersion/grid-convergence/verification-report.md).
+same result. Commands, bandwise metrics, and the interpretation are
+consolidated in the
+[final verification report](docs/verification/simpson-taflove-2004.md).
 
 The complete investigation history, final metrics, limitations, and verdict
 are documented in the
