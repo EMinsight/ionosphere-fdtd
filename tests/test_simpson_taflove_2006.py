@@ -62,6 +62,17 @@ def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:
     assert oil.maximum_background_conductivity_s_m == 0.01
 
 
+def test_paper_anomalies_can_omit_or_resize_shield() -> None:
+    without_shield = paper_anomalies(include_oil=False, include_shield=False)
+    resized = paper_anomalies(
+        include_oil=False, include_shield=True, shield_radius_m=1_500_000.0
+    )
+
+    assert without_shield == ()
+    assert len(resized) == 1
+    assert resized[0].radius_m == 1_500_000.0
+
+
 def test_radar_grid_refines_lithosphere_to_1_25_km() -> None:
     altitudes = np.asarray(radar_radial_altitudes_m())
 

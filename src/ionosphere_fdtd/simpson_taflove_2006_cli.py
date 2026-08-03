@@ -79,6 +79,10 @@ def _parser() -> argparse.ArgumentParser:
         choices=("face", "local-linear"),
         default="local-linear",
     )
+    radar.add_argument(
+        "--shield", action=argparse.BooleanOptionalAction, default=True
+    )
+    radar.add_argument("--shield-radius-km", type=float, default=2_500.0)
 
     analyze = commands.add_parser("analyze-radar")
     analyze.add_argument("--reference", type=Path, required=True)
@@ -134,6 +138,8 @@ def _run_radar(args: argparse.Namespace) -> int:
         tangential_material_support=args.tangential_support,
         source_altitude_m=args.source_altitude_m,
         source_azimuths_deg=source_azimuths,
+        include_shield=args.shield,
+        shield_radius_m=1_000.0 * args.shield_radius_km,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -146,6 +152,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"support={args.tangential_support} "
         f"source={args.source_basis}@{args.source_altitude_m:g}m "
         f"receiver={args.receiver_support} "
+        f"shield={args.shield_radius_km:g}km/{args.shield} "
         f"dt={simulation.time_step_s:.9e}s steps={steps:,}",
         flush=True,
     )

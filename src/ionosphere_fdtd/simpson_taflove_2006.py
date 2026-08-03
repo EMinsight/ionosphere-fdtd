@@ -83,22 +83,33 @@ def radar_radial_altitudes_m() -> tuple[float, ...]:
     return tuple(np.unique(np.concatenate((coarse, refined_lithosphere))))
 
 
-def paper_anomalies(*, include_oil: bool) -> tuple[SphericalAnomaly, ...]:
+def paper_anomalies(
+    *,
+    include_oil: bool,
+    include_shield: bool = True,
+    shield_radius_m: float = 2_500_000.0,
+) -> tuple[SphericalAnomaly, ...]:
     """Return the approximate Laurentian Shield and optional oil anomaly."""
 
     # The paper gives the Shield conductivity but no downloadable boundary.
     # A broad cap centered over Canada includes Clam Lake and most of Canada.
-    shield = SphericalAnomaly(
-        latitude_deg=58.0,
-        longitude_deg=-95.0,
-        radius_m=2_500_000.0,
-        altitude_min_m=-20_000.0,
-        altitude_max_m=-1.0,
-        conductivity_factor=2.4e-4 / (1.0 / 500.0),
-        maximum_background_conductivity_s_m=0.01,
-    )
+    anomalies: list[SphericalAnomaly] = []
+    if include_shield:
+        if shield_radius_m <= 0.0:
+            raise ValueError("shield_radius_m must be positive")
+        anomalies.append(
+            SphericalAnomaly(
+                latitude_deg=58.0,
+                longitude_deg=-95.0,
+                radius_m=shield_radius_m,
+                altitude_min_m=-20_000.0,
+                altitude_max_m=-1.0,
+                conductivity_factor=2.4e-4 / (1.0 / 500.0),
+                maximum_background_conductivity_s_m=0.01,
+            )
+        )
     if not include_oil:
-        return (shield,)
+        return tuple(anomalies)
     half_thickness = 0.5 * PAPER_OIL_THICKNESS_M
     oil = SphericalAnomaly(
         latitude_deg=PAPER_OIL_LATITUDE_DEG,
@@ -109,7 +120,8 @@ def paper_anomalies(*, include_oil: bool) -> tuple[SphericalAnomaly, ...]:
         conductivity_factor=PAPER_OIL_CONDUCTIVITY_FACTOR,
         maximum_background_conductivity_s_m=0.01,
     )
-    return shield, oil
+    anomalies.append(oil)
+    return tuple(anomalies)
 
 
 def create_radar_simulation(
@@ -129,10 +141,16 @@ def create_radar_simulation(
     tangential_material_support: str = "point",
     source_altitude_m: float = 0.0,
     source_azimuths_deg: tuple[float, ...] = (0.0, 90.0),
+    include_shield: bool = True,
+    shield_radius_m: float = 2_500_000.0,
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
-    anomalies = paper_anomalies(include_oil=include_oil)
+    anomalies = paper_anomalies(
+        include_oil=include_oil,
+        include_shield=include_shield,
+        shield_radius_m=shield_radius_m,
+    )
     material_arguments: dict[str, Any] = {
         "anomalies": anomalies,
         "tangential_interface_mode": tangential_interface_mode,
