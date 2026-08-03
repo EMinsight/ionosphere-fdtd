@@ -315,6 +315,29 @@ bathymetry/material aliasing as the next correction target. A valid subcell
 model must average the complete lossy update or surface impedance over each
 horizontal support, rather than only the bulk conductivity over radial depth.
 
+#### Geodesic edge-support material quadrature
+
+A second opt-in diagnostic divided each tangential electric degree of
+freedom's edge-dual diamond into four triangular supports and averaged the
+point-sampled ETOPO5 material over their centroids. This retains the exact
+surface topology and metric while removing reliance on one edge midpoint.
+
+| Subdivision | Support | B / B′ peak | B / B′ tail at 0.12 s |
+|---:|---|---:|---:|
+| 4 | Edge midpoint | 0.29043 / 0.48461 | 0.06812 / 0.09994 |
+| 4 | Edge diamond | 0.29193 / 0.48430 | 0.06838 / 0.10050 |
+| 5 | Edge midpoint | 0.11120 / 0.39237 | 0.02238 / 0.06673 |
+| 5 | Edge diamond | 0.11150 / 0.39270 | 0.02244 / 0.06695 |
+
+The B peak changes by only 0.5% at subdivision 4 and 0.3% at subdivision 5.
+Local quadrature over one edge support therefore does not remove the large
+subdivision-dependent path difference and is not promoted to level 7. The
+remaining alias is global: different surface refinements route the wave over
+different sequences of binary 5-km water and rock columns. Reproducing the
+paper by changing those columns would require its unavailable optimized cell
+coordinates or an explicitly disclosed ocean-column approximation, not a
+local metric correction.
+
 ## Figure 6: daytime attenuation
 
 ![Published and reproduced Figure 6](images/simpson-taflove-2006-fig-6-comparison.png)
@@ -542,10 +565,11 @@ paper-scale production traces affected by it were recomputed.
 For Figure 5, the strongest identified cause is actionable: binary material
 sampling aliases shallow water layers and changes strongly with surface
 subdivision. Simple arithmetic radial fractions do not solve it; the next
-physically defensible options are horizontal support integration of the lossy
-update or a frequency-dependent thin-layer surface impedance. Both retain the
-required geodesic grid. Figure 6 additionally retains the known high-frequency
-spatial-dispersion residual. Figure 7 remains limited by inputs
+local edge-support quadrature is also ineffective. A frequency-dependent
+thin-layer surface impedance could improve physical convergence while
+retaining the required geodesic grid, but it would no longer be the paper's
+published bulk-cell algorithm. Figure 6 additionally retains the known
+high-frequency spatial-dispersion residual. Figure 7 remains limited by inputs
 that cannot be reconstructed from the paper: optimized cell positions, exact
 three-dimensional lithosphere conductivity, Canadian Shield mask, horizontal
 subcell treatment of the 4,800 km² body, source phase/deposition, and a
