@@ -135,6 +135,30 @@ class SphericalAnomaly:
         )
 
 
+def _apply_spherical_anomalies(
+    sigma: FloatArray,
+    epsilon_r: FloatArray,
+    directions: FloatArray,
+    altitudes_m: FloatArray,
+    earth_radius_m: float,
+    anomalies: tuple[SphericalAnomaly, ...],
+) -> None:
+    """Apply configured spherical-volume overrides in place."""
+
+    for anomaly in anomalies:
+        angular_radius = anomaly.radius_m / earth_radius_m
+        inside_horizontal = np.arccos(
+            np.clip(directions @ anomaly.center, -1.0, 1.0)
+        ) <= angular_radius
+        inside_vertical = (altitudes_m >= anomaly.altitude_min_m) & (
+            altitudes_m <= anomaly.altitude_max_m
+        )
+        inside = inside_horizontal[:, None] & inside_vertical[None, :]
+        sigma[inside] *= anomaly.conductivity_factor
+        if anomaly.relative_permittivity is not None:
+            epsilon_r[inside] = anomaly.relative_permittivity
+
+
 @dataclass(frozen=True, slots=True)
 class EarthIonosphereMaterial:
     """Small, data-free approximation to the paper's daytime material model.
@@ -199,18 +223,14 @@ class EarthIonosphereMaterial:
             epsilon_profile, (len(directions), len(altitudes))
         ).copy()
 
-        for anomaly in self.anomalies:
-            angular_radius = anomaly.radius_m / earth_radius_m
-            inside_horizontal = np.arccos(
-                np.clip(directions @ anomaly.center, -1.0, 1.0)
-            ) <= angular_radius
-            inside_vertical = (altitudes >= anomaly.altitude_min_m) & (
-                altitudes <= anomaly.altitude_max_m
-            )
-            inside = inside_horizontal[:, None] & inside_vertical[None, :]
-            sigma[inside] *= anomaly.conductivity_factor
-            if anomaly.relative_permittivity is not None:
-                epsilon_r[inside] = anomaly.relative_permittivity
+        _apply_spherical_anomalies(
+            sigma,
+            epsilon_r,
+            directions,
+            altitudes,
+            earth_radius_m,
+            self.anomalies,
+        )
         return sigma, epsilon_r
 
 
@@ -241,6 +261,7 @@ class SimpsonTaflove2004Material:
     ionosphere_reference_height_m: float = 70_000.0
     ionosphere_scale_height_m: float = 3_330.0
     ionosphere_prefactor_hz: float = 2.5e5
+    anomalies: tuple[SphericalAnomaly, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if (self.land_classifier is None) == (
@@ -278,7 +299,6 @@ class SimpsonTaflove2004Material:
     ) -> tuple[FloatArray, FloatArray]:
         """Return conductivity and permittivity on the requested tensor grid."""
 
-        del earth_radius_m
         directions = np.array(directions, dtype=np.float64, copy=True)
         directions /= np.linalg.norm(directions, axis=1, keepdims=True)
         altitudes = np.asarray(altitudes_m, dtype=np.float64)
@@ -344,4 +364,12 @@ class SimpsonTaflove2004Material:
         )
         sigma[water_layers] = 1.0 / self.sea_water_resistivity_ohm_m
         epsilon_r[water_layers] = self.sea_water_relative_permittivity
+        _apply_spherical_anomalies(
+            sigma,
+            epsilon_r,
+            directions,
+            altitudes,
+            earth_radius_m,
+            self.anomalies,
+        )
         return sigma, epsilon_r

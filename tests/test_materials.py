@@ -55,6 +55,30 @@ def test_simpson_taflove_material_distinguishes_land_water_and_rock() -> None:
     assert material.ionosphere_scale_height_m == 3_330.0
 
 
+def test_simpson_taflove_material_applies_buried_anomaly() -> None:
+    anomaly = SphericalAnomaly(
+        latitude_deg=69.0,
+        longitude_deg=-156.0,
+        radius_m=50_000.0,
+        altitude_min_m=-2_000.0,
+        altitude_max_m=-500.0,
+        conductivity_factor=0.1,
+    )
+    material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),
+        anomalies=(anomaly,),
+    )
+    directions = np.stack((anomaly.center, np.asarray((1.0, 0.0, 0.0))))
+    sigma, _ = material.sample(
+        directions,
+        np.asarray((-1_250.0, 0.0)),
+        6_371_000.0,
+    )
+
+    assert sigma[0, 0] == pytest.approx(0.1 / 500.0)
+    assert sigma[1, 0] == pytest.approx(1.0 / 500.0)
+
+
 def test_etopo5_relief_reads_big_endian_grid_and_wraps_longitude(tmp_path) -> None:
     path = tmp_path / "ETOPO5.DAT"
     with path.open("wb") as stream:
