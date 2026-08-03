@@ -280,7 +280,7 @@ uv run --extra pytorch --extra visualization ionosphere-figure-3-11 \
   --backend torch --device mps --torch-compile
 ```
 
-![Taflove Figure 3.11 reproduction with an ELF source in Gwangju](artifacts/figure-3-11/taflove-fig-3-11-gwangju-social.gif)
+![Taflove Figure 3.11 reproduction with an ELF source in Gwangju](artifacts/taflove/fig-3-11-gwangju.gif)
 
 The default level-7 grid has the paper's 163,842 surface cells and 40 radial
 cells, so it is a several-minute calculation on Apple Silicon.  For a quick

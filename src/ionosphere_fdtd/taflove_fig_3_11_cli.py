@@ -17,7 +17,7 @@ from .taflove_fig_3_11 import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=Path("artifacts/figure-3-11"))
+    parser.add_argument("--output-dir", type=Path, default=Path("artifacts/taflove"))
     parser.add_argument("--subdivision", type=int, choices=range(0, 8), default=7)
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         progress=_print_progress,
     )
     video = args.output_dir / "taflove-fig-3-11-gwangju-youtube.mp4"
-    social = args.output_dir / "taflove-fig-3-11-gwangju-social.gif"
+    social = args.output_dir / "fig-3-11-gwangju.gif"
     render_figure_3_11_media(
         simulation,
         frames,
