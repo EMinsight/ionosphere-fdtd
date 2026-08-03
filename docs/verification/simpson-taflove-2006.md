@@ -2,7 +2,7 @@
 
 > Final reproduction status: **FAIL**
 
-Verification performed on 2026-08-03 (Asia/Seoul).
+Verification performed on 2026-08-03–04 (Asia/Seoul).
 
 ## Executive summary
 
@@ -25,11 +25,12 @@ over 50–500 Hz.
 
 Figure 7 also retains only the direction of the claimed sensitivity after its
 transmitter is corrected from the opposite hemisphere to Clam Lake. Its
-`ΔHtan` median is −36.75 dB and 97.49% of nonsingular samples are below
-−25 dB, but `ΔHr` has a +95.69 dB median rather than a curve near +20 dB.
-The computed 137.45 dB median radial-over-tangential advantage is not the
-paper's approximate 45 dB. The failure still comes from a nearly zero
-reference `Hr`, not an unusually large radial scattered field. Consequently
+`ΔHtan` median is −36.83 dB and 97.52% of nonsingular samples are below
+−25 dB, but `ΔHr` has a +97.94 dB median rather than a curve near +20 dB.
+The computed 136.94 dB median radial-over-tangential advantage is not the
+paper's approximate 45 dB. Exact radial source staggering and geographic
+`Hr` interpolation correct the observation operators but do not repair this
+failure, which still comes from a nearly zero reference `Hr`. Consequently
 the three figures are not reproduced as a complete quantitative set.
 
 ## Target paper and source record
@@ -112,18 +113,21 @@ centroid and total current.
 | Oil-field depth | 1.25 km thick at median depth 1.2 km |
 | Conductivity contrast | 0.1 times surrounding strata |
 | Backend | compiled PyTorch, two CUDA GPUs, float64 |
-| Production revision | `2ffebdf` |
-| Wall time | 1,825.0 s reference / 2,218.9 s anomaly |
-| Reference trace SHA-256 | `04ea415a566034affbffd88b89c547cafe0516dbe71dd2351da2f2b513e01f67` |
-| Anomaly trace SHA-256 | `6c4b541285f1830b206049d443d93df304f31b3bbba8ed04cad5bc11f9b23b8d` |
+| Production revision | `e3987f4` |
+| Wall time | 2,201.428 s reference / 1,819.934 s anomaly |
+| Reference trace SHA-256 | `d5eeff7d45f307021d42b6a4cea150942dddc2d391b8859dc4888e6827c79eed` |
+| Anomaly trace SHA-256 | `56e5c481ae5eb46e3a01af34f35c69f331415ab5ffe1936b9484c58a7f8769b0` |
 
 The ground-line source is projected onto all three oriented primal edges of
 the containing face. Each contribution is scaled by `L/Δl`, which preserves
 the specified `I·L` current moment on a line shorter than one surface edge.
 Those three edges are 55.59, 64.78, and 55.59 km long, so the 22.5 km source
 is genuinely subcell rather than silently expanded to an entire edge.
-The surface `Hr` sample is linearly interpolated between its two staggered
-radial planes. East and north `Htan` are reconstructed by a local least-squares
+The source is also adjoint-linearly staggered between the tangential-field
+planes at −625 m and +2,500 m with weights 0.8/0.2. The surface `Hr` sample is
+linearly interpolated between its two staggered radial planes and reconstructed
+at the exact oil-field coordinate from the containing face and its three
+neighbors. East and north `Htan` are reconstructed by a local least-squares
 inverse of the surrounding oriented dual-edge samples; a fixed principal
 reference polarization is then used for the signed tangential waveform.
 
@@ -393,41 +397,41 @@ Alaska location. Those results are superseded. The panel and metrics below use
 a complete corrected-location reference/anomaly pair.
 
 The corrected tangential curve is approximately flat near −37 dB away from
-reference zero crossings. Its median is −36.746 dB, and 97.487% of
+reference zero crossings. Its median is −36.829 dB, and 97.522% of
 nonsingular samples are below −25 dB. This satisfies the paper's stated
 tangential suppression criterion.
 
 The radial curve still does not reproduce the published scale or morphology.
 It is above the plot's +30 dB limit for almost the entire window, with a
-+95.691 dB median and +107.434 dB 95th percentile. The median
-radial-over-tangential advantage is 137.450 dB, not approximately 45 dB.
++97.941 dB median and +128.004 dB 95th percentile. The median
+radial-over-tangential advantage is 136.940 dB, not approximately 45 dB.
 
 | Metric | Paper behavior | Reproduction | Result |
 |---|---:|---:|---:|
-| Median pointwise `ΔHtan` | mostly below −25 dB | −36.746 dB | **PASS** |
-| Fraction of `ΔHtan < −25 dB` | almost every time | 97.487% | **PASS** |
-| Pointwise `ΔHr` scale | reaches about +20 dB | +95.691 dB median | **FAIL** |
-| Median `ΔHr−ΔHtan` | about 45 dB | 137.450 dB | **FAIL** |
+| Median pointwise `ΔHtan` | mostly below −25 dB | −36.829 dB | **PASS** |
+| Fraction of `ΔHtan < −25 dB` | almost every time | 97.522% | **PASS** |
+| Pointwise `ΔHr` scale | reaches about +20 dB | +97.941 dB median | **FAIL** |
+| Median `ΔHr−ΔHtan` | about 45 dB | 136.940 dB | **FAIL** |
 
 The absolute fields identify the mechanism:
 
 | Quantity | Peak magnitude |
 |---|---:|
-| Reference `Htan` | `1.3305e-8 A/m` |
-| Oil-model `Htan` | `1.3101e-8 A/m` |
-| Absolute `Htan` difference | `2.0521e-10 A/m` |
-| Reference `Hr` | `4.7439e-17 A/m` |
-| Oil-model `Hr` | `7.5107e-12 A/m` |
-| Absolute `Hr` difference | `7.5108e-12 A/m` |
+| Reference `Htan` | `1.4417e-8 A/m` |
+| Oil-model `Htan` | `1.4196e-8 A/m` |
+| Absolute `Htan` difference | `2.2230e-10 A/m` |
+| Reference `Hr` | `7.2689e-17 A/m` |
+| Oil-model `Hr` | `2.9956e-11 A/m` |
+| Absolute `Hr` difference | `2.9956e-11 A/m` |
 
 The corrected short propagation path raises the reference tangential field by
 more than three orders of magnitude compared with the superseded antipodal
-run. Nevertheless, the tangential scattered field is still 28.73 dB stronger
+run. Nevertheless, the tangential scattered field is still 17.41 dB stronger
 than the radial scattered field. The apparent radial advantage is caused by
 the reference `Hr` being more than five orders of magnitude smaller than the
 radial scattered field. Applying the body text's peak normalization instead
-of the caption's pointwise normalization gives −36.236 dB for `ΔHtan` and
-+103.991 dB for `ΔHr`; it therefore fails the published +20 dB scale under
+of the caption's pointwise normalization gives −36.239 dB for `ΔHtan` and
++112.300 dB for `ΔHr`; it therefore fails the published +20 dB scale under
 either reading.
 
 Figure 7 is a **quantitative fail**, although it qualitatively confirms that a
@@ -450,13 +454,23 @@ necessary correctness fix but not the cause of the radar discrepancy:
 | Exact 0 m / local-linear / 2,500 km | +70.511 dB | +59.617 dB | 125.385 dB | `3.065e-15 A/m` |
 | Exact 0 m / local-linear / no Shield | +70.443 dB | +58.971 dB | 124.364 dB | `1.083e-15 A/m` |
 
-In contrast, replacing the containing-face `Hr` sample by a four-face local
-linear reconstruction at the exact oil-field coordinate improves the
-normalized radial result by 24.5 dB. This is promoted to the production
-receiver because radial interpolation alone does not correct a horizontal
-face-center offset. Removing the approximate Shield changes the normalized
-radial peak by only 0.07 dB; the unpublished Shield boundary changes absolute
-scale but is rejected as the primary normalized-error cause.
+At subdivision 5, replacing the containing-face `Hr` sample by a four-face
+local-linear reconstruction at the exact oil-field coordinate improves the
+normalized radial result by 24.5 dB. The reconstruction is promoted on
+correctness grounds because radial interpolation alone cannot correct a
+horizontal face-center offset. It is not, however, a fitted remedy: the final
+subdivision-7 run moves the pointwise median from +95.691 to +97.941 dB and
+the peak-normalized result from +103.991 to +112.300 dB. The opposite changes
+at the two resolutions expose strong horizontal sampling sensitivity rather
+than convergence toward the published result. Removing the approximate Shield
+changes the subdivision-5 normalized radial peak by only 0.07 dB; the
+unpublished Shield boundary changes absolute scale but is rejected as the
+primary normalized-error cause.
+
+| Subdivision-7 `Hr` receiver | Peak-normalized `ΔHr` | Median pointwise `ΔHr` | Median advantage | Reference `Hr` peak |
+|---|---:|---:|---:|---:|
+| Containing face | +103.991 dB | +95.691 dB | 137.450 dB | `4.7439e-17 A/m` |
+| Exact local-linear | +112.300 dB | +97.941 dB | 136.940 dB | `7.2689e-17 A/m` |
 
 The paper specifies two orthogonal 300-A ground lines but not their relative
 polarity. Separate north and east basis simulations permit linear synthesis
@@ -504,7 +518,8 @@ production results were accepted:
 5. The first tangential source projection preserved direction but not the
    subcell line moment. Scaling each edge by the line-length/edge-length ratio
    corrected the absolute field while retaining the line direction. The final
-   source is distributed over the three oriented edges of the containing face.
+   source is distributed over the three oriented edges of the containing face
+   and adjoint-linearly staggered across the two radial source planes.
 
 Coarse source-deposition and resolution diagnostics performed before the
 geographic correction are retained in git history as implementation tests, but
@@ -520,7 +535,7 @@ water contamination but leaves a disclosed horizontal voxelization error.
 
 The corrected Figure 7 absolute fields show that the solver does generate a
 radial scattered field, but not a radial absolute-field advantage: the
-tangential difference is 28.73 dB larger. The reported 137.45 dB advantage is
+tangential difference is 17.41 dB larger. The reported 136.94 dB advantage is
 created by dividing by an almost-zero reference `Hr`. The paper does not
 publish enough information to determine whether the discrepancy comes from
 its exact optimized cell positions, ground-line phase/deposition, Canadian
@@ -568,22 +583,24 @@ The paired Figure 7 runs were:
 ```bash
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case reference --subdivision 7 --material etopo5 \
-  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
+  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --torch-compile --courant 1.0 \
-  --source-edge-assignment projected --synchronize-every 1024 \
-  --output artifacts/simpson-taflove-2006/level-7-courant-1-float64-cuda/reference.npz
+  --source-basis both --source-altitude-m 0 \
+  --receiver-support local-linear --synchronize-every 1024 \
+  --output artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/reference.npz
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case anomaly --subdivision 7 --material etopo5 \
-  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
+  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --torch-compile --courant 1.0 \
-  --source-edge-assignment projected --synchronize-every 1024 \
-  --output artifacts/simpson-taflove-2006/level-7-courant-1-float64-cuda/anomaly.npz
+  --source-basis both --source-altitude-m 0 \
+  --receiver-support local-linear --synchronize-every 1024 \
+  --output artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/anomaly.npz
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli analyze-radar \
-  --reference artifacts/simpson-taflove-2006/level-7-courant-1-float64-cuda/reference.npz \
-  --anomaly artifacts/simpson-taflove-2006/level-7-courant-1-float64-cuda/anomaly.npz \
-  --figure artifacts/simpson-taflove-2006/level-7-courant-1-float64-cuda/figure-7.png
+  --reference artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/reference.npz \
+  --anomaly artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/anomaly.npz \
+  --figure artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/figure-7.png
 ```
 
 ## Reproducibility limits
@@ -634,5 +651,8 @@ high-frequency spatial-dispersion residual. Figure 7 remains limited by inputs
 that cannot be reconstructed from the paper: optimized cell positions, exact
 three-dimensional lithosphere conductivity, Canadian Shield mask, horizontal
 subcell treatment of the 4,800 km² body, source phase/deposition, and a
-consistent normalization definition. Forcing the published Figure 7 values by
-undocumented tuning would not be a valid verification.
+consistent normalization definition. The corrected geographic `Hr` receiver
+also changes in opposite directions at subdivisions 5 and 7, confirming that
+the residual is not a removable face-center observation artifact. Forcing the
+published Figure 7 values by undocumented tuning would not be a valid
+verification.
