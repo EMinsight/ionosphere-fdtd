@@ -13,7 +13,10 @@ with `float64` fields.
 
 Figure 5 is reproduced qualitatively: the quarter-antipode and half-antipode
 responses have the published arrival ordering, relative peak amplitude,
-overshoot, and slow-tail morphology. Figure 6 follows the published daytime
+overshoot, and slow-tail morphology. Follow-up CUDA `float64` experiments rule
+out the paper's plain radial Yee coupling and pentagon orientation as primary
+causes; ionosphere scale height changes the residual but does not remove it
+without worsening other metrics. Figure 6 follows the published daytime
 attenuation trend in mean, but it fails the paper's pointwise ±0.5 dB/Mm
 statement near the upper end of the 50–500 Hz comparison window. The east and
 west mean absolute errors are 0.387 and 0.589 dB/Mm, while their maximum
@@ -141,6 +144,99 @@ same antipodal observation point in this grid representation.
 Figure 5 is therefore a **qualitative pass**. It is not assigned an absolute
 amplitude error because the paper labels the vertical scale as arbitrary and
 does not state the current amplitude for this validation pulse.
+
+### Follow-up diagnosis of the Figure 5 mismatch
+
+#### Radial coupling is the paper's intentional thin-shell approximation
+
+A review of Taflove and Hagness, Chapter 3, Section 3.6.8, and the supplied
+2006 paper changes the interpretation of the radial update. Chapter 3 derives
+the Yee scheme from integral Ampere and Faraday contours. Opposite contour
+segments have the same length on a Cartesian Yee cell, so their circulation
+reduces to a plain field difference divided by the cell increment. Simpson,
+Heikes, and Taflove explicitly say that their alternating geodesic TE and TM
+planes are coupled in the radial direction by “regular Yee-type updates.”
+Their equations (5)–(7) and (10)–(12) then use
+`Δt/(μ0 Δr) [E(k+1/2) - E(k-1/2)]` and
+`Δt/(ε0 Δr) [H(k+1) - H(k)]`, without radius-weighted fields.
+
+The implementation uses those same plain radial differences. A fully spherical
+curl over a thick shell would instead contain `(1/r) ∂(rEt)/∂r` and
+`(1/r) ∂(rHt)/∂r`, but adding them would depart from the target algorithm. The
+paper treats the 200-km domain as a stack of locally prismatic Yee cells around
+an Earth radius of approximately 6,371 km. This is an intentional thin-shell
+approximation, not an accidental omission in the reproduction.
+
+As a numerical check, a paired subdivision-5 ETOPO5 calculation replaced only
+the radial differences with their radius-weighted counterparts. Both runs used
+CUDA `float64` and 40,000 steps. The normalized four-trace RMS change was only
+`3.39e-6`; the common absolute peak changed by 0.053%, peak times were
+unchanged, and the far/near ratio changed from 0.386870128 to 0.386869895.
+Radial metric weighting therefore cannot explain the Figure 5 mismatch even if
+the continuum spherical form is preferred for another application.
+
+#### Rigid polar-orientation A/B test
+
+The paper places one pentagonal cell at each geographic pole, whereas the
+native mesh orientation does not. A selectable `polar` orientation was added
+which rigidly rotates the existing icosahedron before subdivision. It changes
+neither topology nor metric terms: sorted primal-edge lengths and dual-cell
+areas agree with the native orientation to floating-point precision.
+
+One paper-scale polar run used the same 163,842 cells, ETOPO5 model, 3.33-km
+ionosphere scale height, CUDA `float64`, and 40,000 steps as the production
+case. It required 922.4 seconds.
+
+| Level-7 result | Native orientation | Polar orientation |
+|---|---:|---:|
+| Near peak time | 22.710 ms | 22.713 ms |
+| Far peak time | 43.482 ms | 43.479 ms |
+| Far/near peak ratio | 0.34385 | 0.34599 |
+| Quarter-path east/west relative RMS | 8.215% | 8.054% |
+| East/west attenuation MAE | 0.387 / 0.589 dB/Mm | 0.399 / 0.572 dB/Mm |
+| East/west attenuation maximum error | 1.746 / 2.016 dB/Mm | 1.954 / 1.930 dB/Mm |
+
+The polar run has normalized near/far tails of 0.02823/0.05150 at 0.12 s.
+The far/near ratio changes by only 0.6%, and neither waveform timing nor
+attenuation improves consistently. Incorrect placement of the pentagons is
+therefore rejected as the primary cause. The unavailable mesh optimization
+and exact axial orientation can still change individual sampled material
+values, but a rigid paper-like orientation does not resolve Figure 5.
+
+#### Conductivity-profile sensitivity
+
+Subdivision-5 screening varied one parameter at a time around the production
+ETOPO5 model. All cases used CUDA `float64` and 40,000 steps. Rock-conductive
+and rock-resistive multiply all three 500/200/50 Ω·m rock resistivities by 0.5
+and 2.0, respectively.
+
+| Variant | Near / far peak time | Far/near peak ratio | Near / far tail at 0.12 s |
+|---|---:|---:|---:|
+| 70 km, 3.33 km baseline | 23.535 / 44.421 ms | 0.38687 | 0.03267 / 0.05962 |
+| Reference height 68 km | 23.673 / 44.724 ms | 0.38300 | 0.03240 / 0.05684 |
+| Reference height 72 km | 23.409 / 44.142 ms | 0.39102 | 0.03301 / 0.06269 |
+| Scale height 3.00 km | 23.178 / 43.593 ms | 0.40291 | 0.03315 / 0.06965 |
+| Scale height 3.67 km | 23.931 / 45.354 ms | 0.37231 | 0.03305 / 0.05459 |
+| Rock-conductive | 23.535 / 44.418 ms | 0.38659 | 0.03273 / 0.05982 |
+| Rock-resistive | 23.538 / 44.421 ms | 0.38743 | 0.03259 / 0.05928 |
+
+The factor-of-four rock-resistivity span changes the far/near ratio by less
+than 0.001, so the representative lithosphere values are not the dominant
+control at this resolution. Ionosphere scale height is much more influential.
+The most promising 3.00-km case was therefore repeated at level 7. It moved the
+far/near ratio from 0.34385 to 0.35361 and produced a 0.05959 far tail at
+0.12 s, but it also advanced the near/far peaks to 22.362/42.606 ms. It still
+does not reach the published visual estimates of approximately 0.39 for the
+peak ratio and 0.10 for the far tail.
+
+Moreover, the level-7 3.00-km case increased the east/west maximum attenuation
+errors to 2.346/2.838 dB/Mm, versus 1.746/2.016 dB/Mm at 3.33 km. Its west-path
+mean error improved, but the pointwise benchmark became worse. The standard
+3.33-km Bannister value is therefore retained rather than tuning the
+ionosphere to one panel. The remaining Figure 5 difference is most consistent
+with the paper's unavailable optimized mesh coordinates, exact conductivity
+discretization, and material samples, rather than an error in the FDTD radial
+coupling.
 
 ## Figure 6: daytime attenuation
 
@@ -280,7 +376,8 @@ Figures 5 and 6 use the exact ETOPO5 level-7 trace configuration:
 
 ```bash
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2004_cli \
-  --subdivision 7 --steps 40000 --material etopo5 \
+  --subdivision 7 --mesh-orientation native \
+  --steps 40000 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
@@ -293,6 +390,11 @@ Figures 5 and 6 use the exact ETOPO5 level-7 trace configuration:
   --traces artifacts/simpson-taflove-2006/figure-5-level-7-float64-cuda/simpson-taflove-2004-traces.npz \
   --output-dir artifacts/simpson-taflove-2006/figures-5-6
 ```
+
+The polar-orientation diagnostic changes `--mesh-orientation native` to
+`--mesh-orientation polar`. The production-resolution ionosphere sensitivity
+case keeps the native orientation and changes only
+`--ionosphere-scale-height-km 3.33` to `3.00`.
 
 The paired Figure 7 runs were:
 
@@ -328,8 +430,9 @@ The paired Figure 7 runs were:
   to 7,013.6 km² of dual-cell area at level 7; no undocumented conductivity
   retuning is used to force an effective 4,800 km² voxel area.
 - The paper uses an optimized geodesic grid. This project retains its existing
-  recursively subdivided geodesic dual grid, as required; no result is tuned by
-  changing topology or rotating the grid.
+  recursively subdivided geodesic dual grid, as required. The production result
+  is not tuned by changing topology or orientation; a disclosed rigid-rotation
+  diagnostic tests the paper-like polar placement without changing any metric.
 - Figure 7 does not define source phase, Gaussian center time, or a formal
   error norm. The simulation begins three Gaussian `1/e` half-widths before the
   envelope center, and its displayed time is referenced to that center.
@@ -348,8 +451,9 @@ The corrective work did produce reusable, tested capabilities: physically
 scaled horizontal ground-line sources, CUDA-native radial/tangential magnetic
 recording, buried anomalies in the ETOPO5 layered material, protected water
 layers, and a reproducible Figure 5–7 analysis CLI. Precision, time-step
-stability, source moment, and nearest-edge deposition were tested and rejected
-as explanations for the remaining discrepancy.
+stability, source moment, nearest-edge deposition, radial metric weighting, and
+rigid polar orientation were tested and rejected as explanations for the
+remaining discrepancy.
 
 The strongest remaining causes are inputs that cannot be reconstructed from
 the paper: its optimized cell locations, exact three-dimensional lithosphere
