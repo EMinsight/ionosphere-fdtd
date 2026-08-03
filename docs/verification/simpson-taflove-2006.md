@@ -364,6 +364,25 @@ east/west split, while the remaining upper-band oscillation is consistent
 with the high-frequency spatial-dispersion residual documented in the 2004
 verification.
 
+### Spectral-window sensitivity
+
+A corrected-location subdivision-5 diagnostic retained each adaptive
+post-overshoot zero-crossing cutoff but replaced the terminal rectangular
+window by a cosine taper. This isolates hard-cutoff leakage without changing
+the propagation model.
+
+| Terminal window | East MAE / maximum | West MAE / maximum |
+|---|---:|---:|
+| Rectangular | 4.033 / 6.419 dB/Mm | 1.790 / 4.164 dB/Mm |
+| 2% cosine tail | 3.999 / 6.609 dB/Mm | 1.813 / 4.377 dB/Mm |
+| 5% cosine tail | 4.071 / 7.705 dB/Mm | 1.862 / 5.119 dB/Mm |
+| 10% cosine tail | 4.518 / 7.056 dB/Mm | 2.596 / 8.184 dB/Mm |
+| 20% cosine tail | 4.566 / 8.405 dB/Mm | 2.358 / 7.031 dB/Mm |
+
+No taper improves the pointwise maximum error; longer tapers increasingly
+distort the physically isolated pulse. The rectangular window is retained,
+and terminal DFT leakage is rejected as the primary Figure 6 residual.
+
 ## Figure 7: oil-field radar response
 
 ![Published and reproduced Figure 7](images/simpson-taflove-2006-fig-7-comparison.png)
