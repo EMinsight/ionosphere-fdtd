@@ -126,6 +126,7 @@ def create_radar_simulation(
     courant_factor: float = 0.4,
     source_edge_assignment: str = "projected",
     tangential_interface_mode: str = "point",
+    tangential_material_support: str = "point",
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -169,6 +170,7 @@ def create_radar_simulation(
             maximum_altitude_m=altitudes[-1],
             courant_factor=courant_factor,
             radial_altitudes_m=altitudes,
+            tangential_material_support=tangential_material_support,
         ),
         material=material,
         source=source,

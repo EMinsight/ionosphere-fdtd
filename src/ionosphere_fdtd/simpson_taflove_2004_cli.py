@@ -64,6 +64,12 @@ def _parser() -> argparse.ArgumentParser:
         default="point",
         help="sample Et materials at cell centers or average radial interfaces",
     )
+    parser.add_argument(
+        "--tangential-support",
+        choices=("point", "edge-diamond"),
+        default="point",
+        help="sample Et material at one edge point or four dual-support points",
+    )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--dtype", choices=("auto", "float32", "float64"), default="float32")
@@ -120,6 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
             etopo5_path=args.etopo5_path,
             tangential_interface_mode=args.tangential_interface,
+            tangential_material_support=args.tangential_support,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -128,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         f"backend={simulation.backend.name} device={simulation.backend.device} "
         f"dtype={simulation.backend.dtype_name} material={args.material} "
         f"interface={args.tangential_interface} "
+        f"support={args.tangential_support} "
         f"dt={simulation.time_step_s:.3e}s",
         flush=True,
     )

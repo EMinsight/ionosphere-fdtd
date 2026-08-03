@@ -224,6 +224,11 @@ def test_simulation_config_rejects_unknown_mesh_orientation() -> None:
         small_config(mesh_orientation="sideways")
 
 
+def test_simulation_config_rejects_unknown_material_support() -> None:
+    with pytest.raises(ValueError, match="tangential_material_support"):
+        small_config(tangential_material_support="unknown")
+
+
 def test_nonuniform_radial_grid_advances() -> None:
     altitudes = (
         -100_000.0,
@@ -267,6 +272,45 @@ def test_solver_uses_fractional_tangential_material_cells() -> None:
 
     np.testing.assert_allclose(
         simulation.to_numpy(simulation.sigma_et)[:, 0], expected
+    )
+
+
+def test_edge_diamond_support_averages_tangential_material() -> None:
+    class DirectionMaterial(EarthIonosphereMaterial):
+        def sample(
+            self,
+            directions: np.ndarray,
+            altitudes_m: np.ndarray,
+            earth_radius_m: float,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            del earth_radius_m
+            sigma = 1.0e-3 * (2.0 + directions[:, 0, None])
+            sigma = np.broadcast_to(
+                sigma, (len(directions), len(altitudes_m))
+            ).copy()
+            return sigma, np.ones_like(sigma)
+
+    config = small_config(tangential_material_support="edge-diamond")
+    simulation = GeodesicFDTD(config=config, material=DirectionMaterial())
+    mesh = simulation.mesh
+    midpoint = mesh.edge_midpoints()
+    endpoints = mesh.vertices[mesh.edges]
+    left = mesh.face_centers[mesh.edge_left_faces]
+    right = mesh.face_centers[mesh.edge_right_faces]
+    supports = (
+        midpoint + endpoints[:, 0] + left,
+        midpoint + left + endpoints[:, 1],
+        midpoint + endpoints[:, 1] + right,
+        midpoint + right + endpoints[:, 0],
+    )
+    expected_direction_x = np.zeros(mesh.n_edges)
+    for directions in supports:
+        directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+        expected_direction_x += 0.25 * directions[:, 0]
+    expected_sigma = 1.0e-3 * (2.0 + expected_direction_x)
+
+    np.testing.assert_allclose(
+        simulation.to_numpy(simulation.sigma_et)[:, 0], expected_sigma
     )
 
 

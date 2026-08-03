@@ -158,6 +158,7 @@ def create_validation_simulation(
     ionosphere_scale_height_m: float = REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     etopo5_path: str | Path | None = None,
     tangential_interface_mode: str = "point",
+    tangential_material_support: str = "point",
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
@@ -205,6 +206,7 @@ def create_validation_simulation(
             courant_factor=0.4,
             time_step_s=PAPER_TIME_STEP_S,
             mesh_orientation=mesh_orientation,
+            tangential_material_support=tangential_material_support,
         ),
         material=material,
         source=source,

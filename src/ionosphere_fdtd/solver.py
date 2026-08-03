@@ -29,6 +29,7 @@ class SimulationConfig:
     mesh_relaxations: int = 0
     mesh_orientation: str = "native"
     radial_altitudes_m: tuple[float, ...] | None = None
+    tangential_material_support: str = "point"
 
     def __post_init__(self) -> None:
         if self.subdivision < 0:
@@ -37,6 +38,10 @@ class SimulationConfig:
             raise ValueError("radial_cells must be at least 2")
         if self.mesh_orientation not in {"native", "polar"}:
             raise ValueError("mesh_orientation must be 'native' or 'polar'")
+        if self.tangential_material_support not in {"point", "edge-diamond"}:
+            raise ValueError(
+                "tangential_material_support must be 'point' or 'edge-diamond'"
+            )
         if self.minimum_altitude_m >= self.maximum_altitude_m:
             raise ValueError("altitude bounds are reversed")
         if self.earth_radius_m + self.minimum_altitude_m <= 0.0:
@@ -209,22 +214,46 @@ class GeodesicFDTD:
         sigma_er, epsilon_r_er = self.material.sample(
             self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
         )
-        sample_tangential_cells = getattr(
-            self.material, "sample_tangential_cells", None
-        )
-        if sample_tangential_cells is None:
-            sigma_et, epsilon_r_et = self.material.sample(
-                self.mesh.edge_midpoints(),
-                self.radial_midpoint_altitudes_m,
-                self.config.earth_radius_m,
-            )
-        else:
-            sigma_et, epsilon_r_et = sample_tangential_cells(
-                self.mesh.edge_midpoints(),
+        def sample_tangential(
+            directions: NDArray[np.float64],
+        ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+            sample_cells = getattr(self.material, "sample_tangential_cells", None)
+            if sample_cells is None:
+                return self.material.sample(
+                    directions,
+                    self.radial_midpoint_altitudes_m,
+                    self.config.earth_radius_m,
+                )
+            return sample_cells(
+                directions,
                 self.altitudes_m[:-1],
                 self.altitudes_m[1:],
                 self.config.earth_radius_m,
             )
+
+        edge_midpoints = self.mesh.edge_midpoints()
+        if self.config.tangential_material_support == "point":
+            sigma_et, epsilon_r_et = sample_tangential(edge_midpoints)
+        else:
+            endpoints = self.mesh.vertices[self.mesh.edges]
+            left = self.mesh.face_centers[self.mesh.edge_left_faces]
+            right = self.mesh.face_centers[self.mesh.edge_right_faces]
+            support_directions = (
+                edge_midpoints + endpoints[:, 0] + left,
+                edge_midpoints + left + endpoints[:, 1],
+                edge_midpoints + endpoints[:, 1] + right,
+                edge_midpoints + right + endpoints[:, 0],
+            )
+            sigma_et = np.zeros(
+                (self.mesh.n_edges, len(self.radial_midpoints_m)),
+                dtype=np.float64,
+            )
+            epsilon_r_et = np.zeros_like(sigma_et)
+            for directions in support_directions:
+                directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+                support_sigma, support_epsilon = sample_tangential(directions)
+                sigma_et += 0.25 * support_sigma
+                epsilon_r_et += 0.25 * support_epsilon
         epsilon_er = EPSILON_0 * epsilon_r_er
         epsilon_et = EPSILON_0 * epsilon_r_et
         loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
