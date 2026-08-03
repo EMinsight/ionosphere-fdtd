@@ -101,6 +101,39 @@ Phase velocity is compared with Bannister equation (4).
 Surface cell counts are 40,962, 163,842, and 655,362 for subdivisions 6, 7,
 and 8. Subdivision 7 matches the paper's 163,842 cells per radial plane.
 
+## Published-plot comparison
+
+The left-hand panels below are cropped from page 450 of the
+[author-hosted paper PDF](https://my.ece.utah.edu/~simpson/Papers/Paper2.pdf).
+The published panels are © 2004 IEEE and are excerpted here for
+source-attributed technical comparison.
+The right-hand panels were regenerated with the current analysis code from the
+archived subdivision-8 CUDA `float64` receiver trace. The Figure 8 reproduction
+uses Bannister's source equations and the final fixed comparison frequencies,
+not the deprecated plot-fit reference.
+
+![Published and reproduced Figure 7 temporal responses](images/simpson-taflove-2004-fig-7-comparison.png)
+
+The reproduced Figure 7 waveforms have the same primary sequence as the
+published plots: a quiet pre-arrival interval, a sharp negative main pulse, a
+positive overshoot, and a decaying slow tail. The level-8 negative peaks occur
+at steps 7,489 for A/A′ and 14,446 for B/B′, consistent with the locations
+visible in the published panels. Absolute amplitudes are not an acceptance
+criterion because the paper does not state its source-current amplitude; the
+reproduction uses a 1 A normalization. The near-overlap of east and west
+curves in the reproduction, compared with the visible separation in the paper,
+also reflects the unavailable detailed lithosphere model discussed below.
+
+![Published and reproduced Figure 8 attenuation curves](images/simpson-taflove-2004-fig-8-comparison.png)
+
+The reproduced Figure 8 points follow the same overall attenuation trend and
+are close to the Bannister daytime curve through most of the valid 50–500 Hz
+window. The visual divergence and oscillation near the upper end of that
+window correspond to the final subdivision-8 maximum residuals of 1.218 and
+1.225 dB/Mm at 478.109 Hz. Thus the side-by-side plot supports the same mixed
+conclusion as the scalar metrics: qualitative and mean agreement are good, but
+the strict pointwise criterion fails at high frequency.
+
 ## Investigation history
 
 ### Baseline and precision check
