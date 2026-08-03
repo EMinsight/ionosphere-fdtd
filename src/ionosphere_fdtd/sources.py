@@ -260,7 +260,7 @@ class TangentialGaussianCurrent(GaussianCurrent):
     def edge_distribution(
         self, simulation: GeodesicFDTD
     ) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
-        """Project the ground-line currents onto local primal-edge samples."""
+        """Project ground-line currents onto horizontal and radial samples."""
 
         face = geographic_face_index(
             simulation, self.latitude_deg, self.longitude_deg
@@ -293,7 +293,13 @@ class TangentialGaussianCurrent(GaussianCurrent):
                 weights[selected] += (
                     line_length_m * projections[selected] / edge_lengths[selected]
                 )
-        midpoints = simulation.radial_midpoint_altitudes_m
-        layer = int(np.argmin(np.abs(midpoints - self.altitude_m)))
-        layers = np.full(len(edges), layer, dtype=np.int64)
-        return edges, layers, weights
+        radial_layers, radial_weights = radial_linear_distribution(
+            simulation.radial_midpoint_altitudes_m,
+            self.altitude_m,
+        )
+        support_edges = np.repeat(edges, len(radial_layers))
+        support_layers = np.tile(radial_layers, len(edges))
+        support_weights = np.repeat(weights, len(radial_layers)) * np.tile(
+            radial_weights, len(edges)
+        )
+        return support_edges, support_layers, support_weights

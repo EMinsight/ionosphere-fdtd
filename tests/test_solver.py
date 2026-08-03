@@ -145,6 +145,49 @@ def test_tangential_source_update_uses_dual_face_current_density() -> None:
     np.testing.assert_allclose(represented_currents, expected_weights)
 
 
+def test_tangential_surface_source_preserves_exact_staggered_altitude() -> None:
+    source = TangentialGaussianCurrent(
+        altitude_m=0.0,
+        azimuths_deg=(0.0,),
+        line_lengths_m=(22_500.0,),
+    )
+    simulation = GeodesicFDTD(
+        config=small_config(
+            radial_altitudes_m=(
+                -5_000.0,
+                -3_750.0,
+                -2_500.0,
+                -1_250.0,
+                0.0,
+                5_000.0,
+                10_000.0,
+            ),
+            radial_cells=6,
+            minimum_altitude_m=-5_000.0,
+            maximum_altitude_m=10_000.0,
+        ),
+        source=source,
+    )
+
+    edges, layers, weights = source.edge_distribution(simulation)
+
+    assert set(simulation.radial_midpoint_altitudes_m[layers]) == {
+        -625.0,
+        2_500.0,
+    }
+    for edge in np.unique(edges):
+        selected = edges == edge
+        edge_weights = weights[selected]
+        if np.any(edge_weights):
+            assert edge_weights.sum() != pytest.approx(0.0)
+            represented_altitude = (
+                edge_weights
+                @ simulation.radial_midpoint_altitudes_m[layers[selected]]
+                / edge_weights.sum()
+            )
+            assert represented_altitude == pytest.approx(source.altitude_m)
+
+
 def test_tangential_source_rejects_mismatched_ground_lines() -> None:
     with pytest.raises(ValueError, match="line_lengths_m must match"):
         TangentialGaussianCurrent(
@@ -160,9 +203,9 @@ def test_nearest_edge_source_uses_at_most_one_edge_per_ground_line() -> None:
         edge_assignment="nearest",
     )
     simulation = GeodesicFDTD(config=small_config(), source=source)
-    _, _, weights = source.edge_distribution(simulation)
+    edges, _, weights = source.edge_distribution(simulation)
 
-    assert np.count_nonzero(weights) <= 2
+    assert len(np.unique(edges[weights != 0.0])) <= 2
 
 
 def test_requested_unstable_time_step_is_rejected() -> None:
