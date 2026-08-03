@@ -26,6 +26,7 @@ from .simpson_taflove_2004 import (
     record_validation_traces,
     render_figure_7,
     render_figure_8,
+    source_distribution_metrics,
     trace_metrics,
     validation_metrics,
 )
@@ -152,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     metrics = validation_metrics(curves)
     metrics.update(trace_metrics(traces))
     metrics.update(arrival_metrics(traces))
+    metrics.update(source_distribution_metrics(simulation))
     metrics.update(
         phase_velocity_metrics(
             compute_phase_velocity(

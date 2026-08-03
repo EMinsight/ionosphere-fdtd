@@ -157,8 +157,10 @@ be supplied without changing the field-update equations.
 `126.8526° E`).  It distributes vertical current among the three dual cells of
 the containing primal triangle using barycentric weights, preserving both the
 requested geographic direction and total current on a coarse grid.  The radial
-coordinate uses the closest plane.  Location, amplitude, Gaussian width/center,
-and optional carrier frequency are configurable.  With a carrier and no
+coordinate uses linear cloud-in-cell weights on adjacent staggered `Er` planes,
+preserving both the requested altitude and total current. Location, amplitude,
+Gaussian width/center, and optional carrier frequency are configurable. With a
+carrier and no
 explicit width, the 1/e half-width is `0.5 / frequency` (25 ms at 20 Hz, close
 to the paper's 42.5 ms FWHM envelope).  Use `--source-width` and
 `--source-center` to override it.  The CLI warns when an anomaly is smaller than
@@ -367,6 +369,15 @@ air, seawater, and rock boundaries. Hermance (1995) supplies the bounded
 oceanic/continental resistivity regions in Figure 6, not a downloadable 3-D
 conductivity grid; the implementation therefore uses explicit representative
 500/200/50 Ω·m depth profiles and records this limitation in each report.
+
+The paper's 5-km vertical source is centered at 2.5 km, halfway between this
+solver's 0 and 5 km staggered `Er` planes. The source now combines the three
+horizontal barycentric weights with 0.5/0.5 radial cloud-in-cell weights. This
+places the current centroid at exactly 2,500 m while preserving the total
+current. A matched ETOPO5 level-7 CUDA run changes the receiver traces by only
+`5.50e-4` relative RMS and leaves all negative-peak steps unchanged; its
+artifacts are in
+[`etopo5-level-7-float64-cuda-staggered-source`](artifacts/simpson-taflove-2004/etopo5-level-7-float64-cuda-staggered-source/verification-report.md).
 
 This workflow is deliberately a verification test, not a claim of complete
 agreement.  Correcting the ionosphere profile and DFT criterion reduced the

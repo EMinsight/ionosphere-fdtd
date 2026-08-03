@@ -131,6 +131,8 @@ def write_validation_report(
 ## 논문 파라미터
 
 - 소스: 적도, 47° W, 지표 바로 위의 5 km 수직 전류 셀
+- 소스 방사 배치: 2.5 km 중심을 인접 staggered `Er` 평면에 선형
+  cloud-in-cell 가중하고, 수평 barycentric 가중치와 함께 총전류를 보존
 - Gaussian `1/e` full width: `480 Δt`
 - Gaussian center: `960 Δt`
 - `Δt = 3.0 μs`

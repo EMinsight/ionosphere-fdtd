@@ -287,9 +287,48 @@ level-7 표면 표본의 relief 범위는 −9.69~+6.30 km이고 육지 비율�
 일치한다. 다만 두 경로의 최대 감쇠 오차가 여전히 논문 범위를 넘으므로
 전체 정량 판정은 실패다.
 
-## 다음 검증 순서
+## 2.5 km source staggered 배치 검증
 
-1. 2.5 km 소스를 방사 격자의 정확한 staggered 위치에 배치한다.
+기존 `GaussianCurrent`는 2.5 km 요청을 가장 가까운 `Er` 평면 하나에
+배치했다. 0 km와 5 km가 같은 거리일 때 `argmin`이 0 km를 선택해 실제
+표현 고도가 2.5 km 낮았다. 수정 구현은 수평 triangle의 barycentric
+가중치 3개와 방사 0/5 km 평면의 0.5/0.5 cloud-in-cell 가중치를 곱해
+6개 `Er` 자유도에 전류를 배치한다. 결합 가중치 합은 1이고 방사 가중
+중심은 정확히 2,500 m다.
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 7 --steps 25023 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.33 --synchronize-every 1024 \
+  --output-dir \
+    artifacts/simpson-taflove-2004/etopo5-level-7-float64-cuda-staggered-source
+```
+
+[staggered source level-7 전체 보고서](../../artifacts/simpson-taflove-2004/etopo5-level-7-float64-cuda-staggered-source/verification-report.md)
+
+| source 배치 | 표현 중심 | A/A′/B/B′ 피크 스텝 | 동서 RMS | 감쇠 MAE A–B/A′–B′ | 최대 오차 A–B/A′–B′ |
+|---|---:|---:|---:|---:|---:|
+| 최근접 평면 | 0 m | 7,546 / 7,589 / 14,494 / 14,494 | 0.082197 | 0.387016 / 0.589615 | 1.7465 / 2.0198 |
+| 선형 staggered | 2,500 m | 7,546 / 7,589 / 14,494 / 14,494 | 0.082151 | 0.386878 / 0.589475 | 1.7458 / 2.0160 |
+
+수정 전후 전체 수신 파형의 상대 RMS 차이는 `5.496e-4`이고 모든 주펄스
+피크 스텝은 동일하다. A′–B′ 최대 감쇠 오차는 2.0198에서
+2.0160 dB/Mm로 소폭 감소했지만 엄격 판정은 여전히 실패다. 따라서
+소스 중심 반올림은 제거됐으나 남은 고주파 잔차의 주원인은 아니다.
+
+solver 단위 테스트는 6개 주입 성분을 `area/Cb`로 역환산해 각 결합
+가중치와 일치하는지, 합계가 정확히 1 A인지 검증한다. CLI 보고서도 요청
+고도, 실제 중심, 지지 평면, 총가중치를 기록한다.
+
+## 계획된 검증 단계 완료
+
+균질 모델 격자 수렴, NOAA ETOPO5/Hermance 재료, 2.5 km staggered source
+검증을 모두 완료했다. 전체 정량 불일치는 여전히 고주파 공간 분산과 원
+논문의 merged latitude–longitude grid와 geodesic dual grid의 차이에
+집중된다.
 
 ## 참고문헌
 

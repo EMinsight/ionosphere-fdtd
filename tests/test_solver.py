@@ -50,6 +50,37 @@ def test_source_distribution_preserves_exact_direction() -> None:
     assert represented @ source.direction() == pytest.approx(1.0)
 
 
+def test_source_distribution_preserves_exact_staggered_altitude() -> None:
+    source = GaussianCurrent(altitude_m=2_500.0)
+    simulation = GeodesicFDTD(config=small_config(), source=source)
+    vertices, layers, weights = source.staggered_distribution(simulation)
+    represented_altitude = weights @ simulation.altitudes_m[layers]
+    horizontal_weights = np.asarray(
+        [weights[vertices == vertex].sum() for vertex in np.unique(vertices)]
+    )
+
+    assert represented_altitude == pytest.approx(source.altitude_m)
+    assert weights.sum() == pytest.approx(1.0)
+    assert horizontal_weights.sum() == pytest.approx(1.0)
+    assert len(np.unique(layers)) == 2
+
+
+def test_staggered_source_update_preserves_total_current() -> None:
+    source = GaussianCurrent(altitude_m=2_500.0)
+    simulation = GeodesicFDTD(config=small_config(), source=source)
+    vertices, layers, expected_weights = source.staggered_distribution(simulation)
+
+    simulation._update_electric_fields(1.0)
+    represented_currents = (
+        -simulation.er[vertices, layers]
+        * simulation._dual_areas_tm[vertices, layers]
+        / simulation._cb_er[vertices, layers]
+    )
+
+    np.testing.assert_allclose(represented_currents, expected_weights)
+    assert represented_currents.sum() == pytest.approx(1.0)
+
+
 def test_requested_unstable_time_step_is_rejected() -> None:
     baseline = GeodesicFDTD(config=small_config())
     with pytest.raises(ValueError, match="exceeds conservative limit"):

@@ -136,10 +136,10 @@ class GeodesicFDTD:
         if self.source is None:
             self._source_distribution = None
         else:
-            vertices, layer, weights = self.source.distribution(self)
+            vertices, layers, weights = self.source.staggered_distribution(self)
             self._source_distribution = (
                 self.backend.index_array(vertices),
-                layer,
+                self.backend.index_array(layers),
                 self.backend.asarray(weights),
             )
         self.time_s = 0.0
@@ -294,17 +294,19 @@ class GeodesicFDTD:
 
         current_density = None
         if self.source is not None and self._source_distribution is not None:
-            vertices, layer, weights = self._source_distribution
+            vertices, layers, weights = self._source_distribution
             current_density = (
-                weights * current_a / self._dual_areas_tm[vertices, layer]
+                weights * current_a / self._dual_areas_tm[vertices, layers]
             )
 
         self.er *= self._ca_er
         magnetic_circulation *= self._cb_er
         self.er += magnetic_circulation
         if current_density is not None:
-            vertices, layer, _ = self._source_distribution
-            self.er[vertices, layer] -= self._cb_er[vertices, layer] * current_density
+            vertices, layers, _ = self._source_distribution
+            self.er[vertices, layers] -= (
+                self._cb_er[vertices, layers] * current_density
+            )
 
         surface_gradient_hr = self.backend.dual_edge_difference(
             self.hr

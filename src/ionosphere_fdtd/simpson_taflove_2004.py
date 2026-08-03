@@ -636,6 +636,31 @@ def arrival_metrics(traces: ValidationTraces) -> dict[str, float | int]:
     return result
 
 
+def source_distribution_metrics(
+    simulation: GeodesicFDTD,
+) -> dict[str, float | int]:
+    """Describe the represented radial position of the validation source."""
+
+    if simulation.source is None:
+        return {}
+    _, layers, weights = simulation.source.staggered_distribution(simulation)
+    active_altitudes = simulation.altitudes_m[layers]
+    return {
+        "source_requested_altitude_m": float(simulation.source.altitude_m),
+        "source_staggered_centroid_altitude_m": float(
+            np.sum(weights * active_altitudes)
+        ),
+        "source_staggered_lower_plane_altitude_m": float(
+            np.min(active_altitudes)
+        ),
+        "source_staggered_upper_plane_altitude_m": float(
+            np.max(active_altitudes)
+        ),
+        "source_staggered_radial_support_planes": int(len(np.unique(layers))),
+        "source_distribution_weight_sum": float(np.sum(weights)),
+    }
+
+
 def trace_metrics(traces: ValidationTraces) -> dict[str, float | int]:
     """Summarize pulse arrival and east/west asymmetry in Figure 7 traces."""
 

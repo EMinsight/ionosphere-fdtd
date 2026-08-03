@@ -21,6 +21,7 @@ from ionosphere_fdtd.simpson_taflove_2004 import (
     create_validation_simulation,
     find_dft_truncations,
     record_validation_traces,
+    source_distribution_metrics,
     trace_metrics,
     validation_metrics,
 )
@@ -56,6 +57,13 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     assert simulation.material.ionosphere_scale_height_m == pytest.approx(
         REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M
     )
+    source_metrics = source_distribution_metrics(simulation)
+    assert source_metrics["source_requested_altitude_m"] == 2_500.0
+    assert source_metrics["source_staggered_centroid_altitude_m"] == 2_500.0
+    assert source_metrics["source_staggered_lower_plane_altitude_m"] == 0.0
+    assert source_metrics["source_staggered_upper_plane_altitude_m"] == 5_000.0
+    assert source_metrics["source_staggered_radial_support_planes"] == 2
+    assert source_metrics["source_distribution_weight_sum"] == pytest.approx(1.0)
 
 
 def test_receiver_longitudes_follow_east_and_west_quarter_arcs() -> None:

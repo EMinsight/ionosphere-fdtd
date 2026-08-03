@@ -88,6 +88,36 @@ def geographic_distribution(
     return vertices.copy(), layer, weights
 
 
+def radial_linear_distribution(
+    radial_altitudes_m: NDArray[np.float64],
+    altitude_m: float,
+) -> tuple[NDArray[np.int64], NDArray[np.float64]]:
+    """Represent an altitude exactly on adjacent staggered radial planes."""
+
+    altitudes = np.asarray(radial_altitudes_m, dtype=np.float64)
+    if altitudes.ndim != 1 or len(altitudes) < 1:
+        raise ValueError("radial_altitudes_m must be a nonempty 1-D array")
+    if not np.all(np.diff(altitudes) > 0.0):
+        raise ValueError("radial_altitudes_m must be strictly increasing")
+    if altitude_m < altitudes[0] or altitude_m > altitudes[-1]:
+        raise ValueError("source altitude is outside the radial grid")
+
+    upper = int(np.searchsorted(altitudes, altitude_m, side="left"))
+    if upper < len(altitudes) and altitudes[upper] == altitude_m:
+        return (
+            np.asarray((upper,), dtype=np.int64),
+            np.asarray((1.0,), dtype=np.float64),
+        )
+    lower = upper - 1
+    upper_weight = (altitude_m - altitudes[lower]) / (
+        altitudes[upper] - altitudes[lower]
+    )
+    return (
+        np.asarray((lower, upper), dtype=np.int64),
+        np.asarray((1.0 - upper_weight, upper_weight), dtype=np.float64),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class GaussianCurrent:
     """Localized vertical current with a Gaussian (optionally modulated) pulse."""
@@ -124,6 +154,23 @@ class GaussianCurrent:
             self.longitude_deg,
             self.altitude_m,
         )
+
+    def staggered_distribution(
+        self, simulation: GeodesicFDTD
+    ) -> tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.float64]]:
+        """Distribute current exactly in both surface and radial coordinates."""
+
+        vertices, _, horizontal_weights = self.distribution(simulation)
+        layers, radial_weights = radial_linear_distribution(
+            simulation.altitudes_m, self.altitude_m
+        )
+        count = len(layers)
+        combined_vertices = np.repeat(vertices, count)
+        combined_layers = np.tile(layers, len(vertices))
+        combined_weights = np.repeat(horizontal_weights, count) * np.tile(
+            radial_weights, len(vertices)
+        )
+        return combined_vertices, combined_layers, combined_weights
 
     def current_a(self, time_s: float, dt_s: float) -> float:
         if self.one_over_e_half_width_s is not None:
