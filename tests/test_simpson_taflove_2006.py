@@ -12,6 +12,7 @@ from ionosphere_fdtd.simpson_taflove_2006 import (
     compute_radar_perturbation,
     create_radar_simulation,
     paper_anomalies,
+    radar_field_metrics,
     radar_radial_altitudes_m,
     record_radar_traces,
 )
@@ -109,3 +110,6 @@ def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
 
     np.testing.assert_allclose(curves.delta_hr_db[curves.valid_hr], 20.0)
     np.testing.assert_allclose(curves.delta_ht_db[curves.valid_ht], -30.0)
+    metrics = radar_field_metrics(reference, anomaly, curves)
+    assert metrics["delta_hr_peak_normalized_db"] == pytest.approx(20.0)
+    assert metrics["delta_ht_peak_normalized_db"] == pytest.approx(-30.0)

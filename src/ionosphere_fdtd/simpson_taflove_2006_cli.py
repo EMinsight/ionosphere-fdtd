@@ -15,6 +15,7 @@ from .simpson_taflove_2006 import (
     compute_radar_perturbation,
     create_radar_simulation,
     load_radar_traces,
+    radar_field_metrics,
     radar_metrics,
     record_radar_traces,
     render_figure_5,
@@ -48,6 +49,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     radar.add_argument("--source-center", type=float, default=PAPER_SOURCE_CENTER_S)
     radar.add_argument("--courant", type=float, default=0.4)
+    radar.add_argument(
+        "--source-edge-assignment",
+        choices=("projected", "nearest"),
+        default="projected",
+    )
     radar.add_argument(
         "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
     )
@@ -96,6 +102,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         compile_step=args.torch_compile,
         source_center_s=args.source_center,
         courant_factor=args.courant,
+        source_edge_assignment=args.source_edge_assignment,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -125,7 +132,9 @@ def _analyze_radar(args: argparse.Namespace) -> int:
     curves = compute_radar_perturbation(reference, anomaly)
     figure = render_figure_7(curves, args.figure)
     print(f"figure={figure}")
-    for name, value in radar_metrics(curves).items():
+    metrics = radar_metrics(curves)
+    metrics.update(radar_field_metrics(reference, anomaly, curves))
+    for name, value in metrics.items():
         print(f"{name}={value:.9g}")
     return 0
 

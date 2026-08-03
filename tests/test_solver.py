@@ -109,6 +109,18 @@ def test_tangential_source_rejects_mismatched_ground_lines() -> None:
         )
 
 
+def test_nearest_edge_source_uses_at_most_one_edge_per_ground_line() -> None:
+    source = TangentialGaussianCurrent(
+        azimuths_deg=(0.0, 90.0),
+        line_lengths_m=(22_500.0, 22_500.0),
+        edge_assignment="nearest",
+    )
+    simulation = GeodesicFDTD(config=small_config(), source=source)
+    _, _, weights = source.edge_distribution(simulation)
+
+    assert np.count_nonzero(weights) <= 2
+
+
 def test_requested_unstable_time_step_is_rejected() -> None:
     baseline = GeodesicFDTD(config=small_config())
     with pytest.raises(ValueError, match="exceeds conservative limit"):

@@ -238,6 +238,7 @@ class TangentialGaussianCurrent(GaussianCurrent):
     altitude_m: float = 0.0
     azimuths_deg: tuple[float, ...] = (0.0,)
     line_lengths_m: tuple[float, ...] | None = None
+    edge_assignment: str = "projected"
 
     def __post_init__(self) -> None:
         if not self.azimuths_deg:
@@ -249,6 +250,8 @@ class TangentialGaussianCurrent(GaussianCurrent):
                 raise ValueError("line_lengths_m must match azimuths_deg")
             if not all(value > 0.0 for value in self.line_lengths_m):
                 raise ValueError("ground-line lengths must be positive")
+        if self.edge_assignment not in {"projected", "nearest"}:
+            raise ValueError("edge_assignment must be 'projected' or 'nearest'")
 
     def edge_distribution(
         self, simulation: GeodesicFDTD
@@ -278,7 +281,14 @@ class TangentialGaussianCurrent(GaussianCurrent):
         ):
             azimuth = np.deg2rad(azimuth_deg)
             requested = np.cos(azimuth) * north + np.sin(azimuth) * east
-            weights += line_length_m * (edge_directions @ requested) / edge_lengths
+            projections = edge_directions @ requested
+            if self.edge_assignment == "projected":
+                weights += line_length_m * projections / edge_lengths
+            else:
+                selected = int(np.argmax(np.abs(projections)))
+                weights[selected] += (
+                    line_length_m * projections[selected] / edge_lengths[selected]
+                )
         midpoints = simulation.radial_midpoint_altitudes_m
         layer = int(np.argmin(np.abs(midpoints - self.altitude_m)))
         layers = np.full(len(edges), layer, dtype=np.int64)

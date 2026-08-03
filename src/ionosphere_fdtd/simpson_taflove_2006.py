@@ -124,6 +124,7 @@ def create_radar_simulation(
     compile_step: bool = True,
     source_center_s: float = PAPER_SOURCE_CENTER_S,
     courant_factor: float = 0.4,
+    source_edge_assignment: str = "projected",
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -153,6 +154,7 @@ def create_radar_simulation(
             PAPER_TRANSMITTER_LINE_LENGTH_M,
             PAPER_TRANSMITTER_LINE_LENGTH_M,
         ),
+        edge_assignment=source_edge_assignment,
     )
     altitudes = radar_radial_altitudes_m()
     return GeodesicFDTD(
@@ -366,6 +368,48 @@ def radar_metrics(curves: RadarPerturbation) -> dict[str, float]:
             np.median(curves.delta_hr_db[common] - curves.delta_ht_db[common])
         ),
     }
+
+
+def radar_field_metrics(
+    reference: RadarTraces,
+    anomaly: RadarTraces,
+    curves: RadarPerturbation,
+) -> dict[str, float]:
+    """Report absolute peaks and the paper-body peak normalization."""
+
+    relative_time = reference.time_s - reference.source_center_s
+    selected = (relative_time >= curves.time_s[0]) & (
+        relative_time <= curves.time_s[-1]
+    )
+    projection = curves.ht_projection_east_north
+    reference_ht = (
+        projection[0] * reference.ht_east_a_m[selected]
+        + projection[1] * reference.ht_north_a_m[selected]
+    )
+    anomaly_ht = (
+        projection[0] * anomaly.ht_east_a_m[selected]
+        + projection[1] * anomaly.ht_north_a_m[selected]
+    )
+    fields = {
+        "ht": (reference_ht, anomaly_ht),
+        "hr": (reference.hr_a_m[selected], anomaly.hr_a_m[selected]),
+    }
+    metrics: dict[str, float] = {}
+    for name, (base, changed) in fields.items():
+        reference_peak = float(np.max(np.abs(base)))
+        anomaly_peak = float(np.max(np.abs(changed)))
+        difference_peak = float(np.max(np.abs(changed - base)))
+        metrics.update(
+            {
+                f"{name}_reference_peak_a_m": reference_peak,
+                f"{name}_anomaly_peak_a_m": anomaly_peak,
+                f"delta_{name}_peak_a_m": difference_peak,
+                f"delta_{name}_peak_normalized_db": float(
+                    20.0 * np.log10(difference_peak / reference_peak)
+                ),
+            }
+        )
+    return metrics
 
 
 def render_figure_5(traces: ValidationTraces, path: str | Path) -> Path:
