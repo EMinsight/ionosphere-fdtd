@@ -237,12 +237,18 @@ class TangentialGaussianCurrent(GaussianCurrent):
 
     altitude_m: float = 0.0
     azimuths_deg: tuple[float, ...] = (0.0,)
+    line_lengths_m: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         if not self.azimuths_deg:
             raise ValueError("azimuths_deg must contain at least one direction")
         if not all(np.isfinite(value) for value in self.azimuths_deg):
             raise ValueError("source azimuths must be finite")
+        if self.line_lengths_m is not None:
+            if len(self.line_lengths_m) != len(self.azimuths_deg):
+                raise ValueError("line_lengths_m must match azimuths_deg")
+            if not all(value > 0.0 for value in self.line_lengths_m):
+                raise ValueError("ground-line lengths must be positive")
 
     def edge_distribution(
         self, simulation: GeodesicFDTD
@@ -259,11 +265,20 @@ class TangentialGaussianCurrent(GaussianCurrent):
         east, north = geographic_tangent_basis(
             self.latitude_deg, self.longitude_deg
         )
-        requested = np.zeros(3, dtype=np.float64)
-        for azimuth_deg in self.azimuths_deg:
+        edge_lengths = (
+            simulation.mesh.primal_edge_angles[edges]
+            * (simulation.config.earth_radius_m + self.altitude_m)
+        )
+        weights = np.zeros(len(edges), dtype=np.float64)
+        line_lengths = self.line_lengths_m or tuple(
+            1.0 for _ in self.azimuths_deg
+        )
+        for azimuth_deg, line_length_m in zip(
+            self.azimuths_deg, line_lengths, strict=True
+        ):
             azimuth = np.deg2rad(azimuth_deg)
-            requested += np.cos(azimuth) * north + np.sin(azimuth) * east
-        weights = edge_directions @ requested
+            requested = np.cos(azimuth) * north + np.sin(azimuth) * east
+            weights += line_length_m * (edge_directions @ requested) / edge_lengths
         midpoints = simulation.radial_midpoint_altitudes_m
         layer = int(np.argmin(np.abs(midpoints - self.altitude_m)))
         layers = np.full(len(edges), layer, dtype=np.int64)

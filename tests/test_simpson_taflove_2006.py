@@ -57,6 +57,7 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert simulation.source.carrier_frequency_hz == 20.0
     assert simulation.source.peak_current_a == 300.0
     assert simulation.source.azimuths_deg == (0.0, 90.0)
+    assert simulation.source.line_lengths_m == (22_500.0, 22_500.0)
     assert PAPER_ENVELOPE_FWHM_S == pytest.approx(42.5e-3)
     assert traces.hr_a_m.shape == (4,)
     assert traces.ht_east_a_m.shape == (4,)

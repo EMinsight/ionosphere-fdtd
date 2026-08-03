@@ -86,6 +86,7 @@ def test_tangential_source_update_uses_dual_face_current_density() -> None:
         altitude_m=0.0,
         peak_current_a=1.0,
         azimuths_deg=(0.0, 90.0),
+        line_lengths_m=(22_500.0, 22_500.0),
     )
     simulation = GeodesicFDTD(config=small_config(), source=source)
     edges, layers, expected_weights = source.edge_distribution(simulation)
@@ -98,6 +99,14 @@ def test_tangential_source_update_uses_dual_face_current_density() -> None:
     )
 
     np.testing.assert_allclose(represented_currents, expected_weights)
+
+
+def test_tangential_source_rejects_mismatched_ground_lines() -> None:
+    with pytest.raises(ValueError, match="line_lengths_m must match"):
+        TangentialGaussianCurrent(
+            azimuths_deg=(0.0, 90.0),
+            line_lengths_m=(22_500.0,),
+        )
 
 
 def test_requested_unstable_time_step_is_rejected() -> None:

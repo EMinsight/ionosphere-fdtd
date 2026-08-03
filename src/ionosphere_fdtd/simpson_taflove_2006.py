@@ -147,6 +147,10 @@ def create_radar_simulation(
         one_over_e_half_width_s=PAPER_ENVELOPE_ONE_OVER_E_HALF_WIDTH_S,
         carrier_frequency_hz=PAPER_CARRIER_FREQUENCY_HZ,
         azimuths_deg=(0.0, 90.0),
+        line_lengths_m=(
+            PAPER_TRANSMITTER_LINE_LENGTH_M,
+            PAPER_TRANSMITTER_LINE_LENGTH_M,
+        ),
     )
     altitudes = radar_radial_altitudes_m()
     return GeodesicFDTD(
@@ -396,11 +400,15 @@ def render_figure_6(curves: AttenuationCurves, path: str | Path) -> Path:
 
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    valid = curves.frequency_hz > 0.0
+    positive = curves.frequency_hz > 0.0
+    simulated = (
+        (curves.frequency_hz >= curves.valid_frequency_hz[0])
+        & (curves.frequency_hz <= curves.valid_frequency_hz[1])
+    )
     figure, axis = plt.subplots(figsize=(7.0, 4.5), constrained_layout=True)
-    axis.loglog(curves.frequency_hz[valid], curves.path_ab_db_per_mm[valid], color="black", label="East of source")
-    axis.loglog(curves.frequency_hz[valid], curves.path_apbp_db_per_mm[valid], color="0.55", label="West of source")
-    axis.loglog(curves.frequency_hz[valid], curves.benchmark_db_per_mm[valid], color="black", linestyle=":", label="Previous theoretical results")
+    axis.loglog(curves.frequency_hz[simulated], curves.path_ab_db_per_mm[simulated], color="black", label="East of source")
+    axis.loglog(curves.frequency_hz[simulated], curves.path_apbp_db_per_mm[simulated], color="0.55", label="West of source")
+    axis.loglog(curves.frequency_hz[positive], curves.benchmark_db_per_mm[positive], color="black", linestyle=":", label="Previous theoretical results")
     axis.set(xlim=(5.0, 2_000.0), ylim=(0.1, 30.0), xlabel="Frequency (Hz)", ylabel="Attenuation rate (dB/Mm)")
     axis.legend(frameon=False)
     figure.savefig(output, dpi=180)
