@@ -77,7 +77,7 @@ def _parser() -> argparse.ArgumentParser:
     radar.add_argument(
         "--receiver-support",
         choices=("face", "local-linear"),
-        default="face",
+        default="local-linear",
     )
 
     analyze = commands.add_parser("analyze-radar")

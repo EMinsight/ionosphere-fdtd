@@ -201,7 +201,7 @@ def _linear_radial_distribution(
 def _surface_h_distributions(
     simulation: GeodesicFDTD,
     *,
-    receiver_support: str = "face",
+    receiver_support: str = "local-linear",
 ) -> tuple[NDArray[np.int64], ...]:
     if receiver_support not in {"face", "local-linear"}:
         raise ValueError("receiver_support must be 'face' or 'local-linear'")
@@ -282,7 +282,7 @@ def record_radar_traces(
     steps: int,
     case: str,
     synchronize_every: int = 128,
-    receiver_support: str = "face",
+    receiver_support: str = "local-linear",
 ) -> RadarTraces:
     """Record interpolated surface ``Hr`` and east/north ``Htan`` traces."""
 

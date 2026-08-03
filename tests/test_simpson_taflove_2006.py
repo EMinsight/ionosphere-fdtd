@@ -149,6 +149,21 @@ def test_local_linear_radar_receiver_reconstructs_target_direction() -> None:
     assert represented @ target == pytest.approx(1.0, abs=2.0e-3)
 
 
+def test_default_radar_receiver_uses_local_linear_support() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=1,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+
+    faces, *_ = _surface_h_distributions(simulation)
+
+    assert len(np.unique(faces)) == 4
+
+
 def test_radar_receiver_rejects_unknown_support() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
