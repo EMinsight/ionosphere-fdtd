@@ -101,11 +101,6 @@ Surface cell counts are `10 * 4**level + 2`:
 | 4 | 2,562 | 482 km |
 | 5 | 10,242 | 241 km |
 
-The paper's validation grid used 163,842 cells per radial plane and 40 radial
-cells.  That resolution is intentionally not the default for a laptop.  The
-small defaults exercise the complete algorithm but are not sufficient for a
-quantitatively converged 50-500 Hz propagation study.
-
 ## Numerical layout
 
 Let the oriented primal edge point from vertex `tail` to `head`.  Its positive
@@ -317,126 +312,6 @@ animations always use a symmetric color scale about zero.  The optional
 `--coastlines` flag may cause Cartopy to download Natural Earth data on first
 use.
 
-### Simpson–Taflove 2004 validation
-
-The validation command recreates the Figure 7 observation geometry and the
-Figure 8 DFT procedure.  It uses the paper's 3 µs step, 40 radial cells, source
-at 0°, 47° W, Gaussian `1/e` full width of `480 Δt`, and center at `960 Δt`.
-Each DFT record ends at the simulated waveform's post-overshoot zero crossing,
-as described by the paper; `--dft-window paper` preserves the published sample
-numbers for sensitivity checks.  The representative daytime exponential
-ionosphere defaults to a 70 km reference height and 3.33 km scale height, both
-of which are exposed as CLI options. Natural Earth's land polygons provide a
-data-free fallback, while `--material etopo5` reads the archived NOAA-NGDC
-relief used by the paper. The paper
-does not state the pulse amplitude, so Figure 7 uses a 1 A normalization; the
-Figure 8 spectral ratios are independent of that choice:
-
-```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
-  --subdivision 7 --steps 25023 \
-  --backend torch --device cuda --dtype float64 --torch-compile
-```
-
-The figures, compressed receiver traces, and a self-contained
-`verification-report.md` are written to `artifacts/simpson-taflove-2004`.  The
-report records the exact command, Git revision, ionosphere and DFT settings,
-runtime configuration, all metrics, and artifact links.  A level-5 run is
-useful as a short pipeline check.  The first Natural Earth run may download its
-public 110-m land dataset.  Use `--material uniform` for a data-free symmetry
-baseline.
-
-For the paper's NOAA-NGDC relief input, download the archived big-endian
-ETOPO5 file and verify it before selecting `--material etopo5`:
-
-```bash
-mkdir -p data
-curl -L https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO5/TOPO/ETOPO5/ETOPO5.DAT \
-  -o data/ETOPO5.DAT
-echo "471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3  data/ETOPO5.DAT" \
-  | sha256sum --check
-
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
-  --subdivision 7 --steps 25023 \
-  --material etopo5 --etopo5-path data/ETOPO5.DAT \
-  --backend torch --device cuda --dtype float64 --torch-compile
-```
-
-The 18.7 MB input remains outside version control. The loader validates its
-exact byte count and checksum, then bilinearly samples the native 5-arc-minute
-cell-center grid at every geodesic material point. Relief determines the actual
-air, seawater, and rock boundaries. Hermance (1995) supplies the bounded
-oceanic/continental resistivity regions in Figure 6, not a downloadable 3-D
-conductivity grid; the implementation therefore uses explicit representative
-500/200/50 Ω·m depth profiles and records this limitation in each report.
-
-The paper's 5-km vertical source is centered at 2.5 km, halfway between this
-solver's 0 and 5 km staggered `Er` planes. The source now combines the three
-horizontal barycentric weights with 0.5/0.5 radial cloud-in-cell weights. This
-places the current centroid at exactly 2,500 m while preserving the total
-current. A matched ETOPO5 level-7 CUDA run changes the receiver traces by only
-`5.50e-4` relative RMS and leaves all negative-peak steps unchanged. The
-comparison is consolidated in the
-[final verification report](docs/verification/simpson-taflove-2004.md).
-
-This workflow is deliberately a verification test, not a claim of complete
-agreement.  Correcting the ionosphere profile and DFT criterion reduced the
-large baseline errors substantially.  Source-based reanalysis now evaluates
-Bannister's 1984 equations at the 45 frequencies implied by the Figure 8
-32,768-point DFT.  On this fixed grid, the corrected level-7 `float64` MAEs are
-0.387/0.399 dB/Mm for A–B/A′–B′.  A CUDA subdivision-8 run reduces them to
-0.274/0.275 dB/Mm, with maxima of 1.218/1.225 dB/Mm.  Both strict pointwise
-ranges therefore remain unmet.  The result is invariant to DFT zero-padding,
-and the residual is now isolated mainly to a 400–500 Hz spatial-dispersion
-ripple.
-
-The command prints pulse timings, selected DFT cutoffs, and east/west RMS
-differences so remaining material and discretization improvements can be
-measured.
-
-A uniform-material CUDA `float64` convergence run now also measures complex-DFT
-phase velocity and negative-peak travel time at subdivisions 6–8.  The maximum
-phase-velocity error against Bannister equation (4) falls from 0.094/0.103 c to
-0.028/0.028 c for A–B/A′–B′, with an observed order close to one.  The quarter-
-arc east/west RMS difference converges at approximately second order, from
-1.50e-2 to 1.01e-3. Commands and aggregate results are consolidated in the
-[final verification report](docs/verification/simpson-taflove-2004.md).
-
-Directional dispersion of the existing geodesic dual grid is measured without
-introducing the paper's merged latitude–longitude grid. Twelve equally spaced
-azimuths use matched receivers at 45° and 90° in a laterally uniform model. The
-mean azimuthal phase-velocity spread falls from 4.24% at subdivision 5 to 0.097%
-at subdivision 7; the maximum falls from 12.08% to 0.295%. The level 6→7
-observed order is about two, and a common-window sensitivity check gives the
-same result. Commands, bandwise metrics, and the interpretation are
-consolidated in the
-[final verification report](docs/verification/simpson-taflove-2004.md).
-
-The complete investigation history, final metrics, limitations, and verdict
-are documented in the
-[Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).
-
-The subdivision-8 compiled CUDA run used about 10.1 GB of peak allocated GPU
-memory in a one-step preflight and completed 25,023 steps in 3,477.9 seconds on
-an RTX 3060. The generated artifacts can be reproduced with the command below;
-the authoritative source-based metrics and fixed comparison points are
-consolidated in the
-[final verification report](docs/verification/simpson-taflove-2004.md).
-
-Apple MPS does not support PyTorch `float64`.  Run the double-precision
-validation on a CUDA Linux host instead:
-
-```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
-  --subdivision 7 --steps 25023 \
-  --material natural-earth \
-  --backend torch --device cuda --dtype float64 --torch-compile \
-  --dft-window adaptive \
-  --ionosphere-reference-height-km 70 \
-  --ionosphere-scale-height-km 3.33 \
-  --output-dir artifacts/simpson-taflove-2004/level-7-float64-cuda-corrected
-```
-
 ## Tests
 
 ```bash
@@ -457,21 +332,6 @@ provide a working OpenGL context:
 IONOSPHERE_TEST_PYVISTA_RENDER=1 \
   uv run --extra test --extra visualization --extra pytorch pytest -q
 ```
-
-## Scientific scope and validation
-
-The laptop defaults demonstrate the complete 3-D algorithm. The 2004
-validation workflow supplies the paper-scale grid, observation records, DFT
-windowing, and optional original NOAA-NGDC ETOPO5 relief. Hermance Figure 6 is
-a bounded conceptual section rather than a complete numeric 3-D conductivity
-model, so its oceanic and continental depth profiles remain representative.
-The paper's merged latitude–longitude cells and this project's geodesic dual
-grid do not share an identical dispersion relation. Their directional
-component is now isolated by the uniform-model azimuth sweep and shown to
-converge at about second order from subdivision 6 to 7. The remaining absolute
-high-frequency residual also contains isotropic spatial dispersion and finite
-radial-model differences. The Bannister daytime comparison is implemented
-directly from the cited 1984 equations rather than a plot fit.
 
 ## References
 
