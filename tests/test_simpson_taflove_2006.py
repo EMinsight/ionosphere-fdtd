@@ -9,6 +9,7 @@ from ionosphere_fdtd.simpson_taflove_2006 import (
     PAPER_OIL_RADIUS_M,
     PAPER_OIL_THICKNESS_M,
     RadarTraces,
+    _surface_h_distributions,
     compute_radar_perturbation,
     create_radar_simulation,
     normalized_figure_5_traces,
@@ -91,6 +92,75 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert traces.hr_a_m.shape == (4,)
     assert traces.ht_east_a_m.shape == (4,)
     assert traces.ht_north_a_m.shape == (4,)
+
+
+def test_radar_source_basis_and_altitude_are_configurable() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        source_altitude_m=-625.0,
+        source_azimuths_deg=(90.0,),
+    )
+
+    assert simulation.source is not None
+    assert simulation.source.altitude_m == -625.0
+    assert simulation.source.azimuths_deg == (90.0,)
+    assert simulation.source.line_lengths_m == (22_500.0,)
+
+
+def test_local_linear_radar_receiver_reconstructs_target_direction() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=1,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+    faces, layers, weights, *_ = _surface_h_distributions(
+        simulation, receiver_support="local-linear"
+    )
+    unique_faces = np.unique(faces)
+    horizontal_weights = np.asarray(
+        [weights[faces == face].sum() for face in unique_faces]
+    )
+    represented = (
+        horizontal_weights @ simulation.mesh.face_centers[unique_faces]
+    )
+    represented /= np.linalg.norm(represented)
+    target = np.asarray(
+        (
+            np.cos(np.deg2rad(69.0)) * np.cos(np.deg2rad(-156.0)),
+            np.cos(np.deg2rad(69.0)) * np.sin(np.deg2rad(-156.0)),
+            np.sin(np.deg2rad(69.0)),
+        )
+    )
+    radial_altitude = float(
+        weights.ravel() @ simulation.radial_midpoint_altitudes_m[layers.ravel()]
+    )
+
+    assert len(unique_faces) == 4
+    assert weights.sum() == pytest.approx(1.0)
+    assert radial_altitude == pytest.approx(0.0)
+    assert represented @ target == pytest.approx(1.0, abs=2.0e-3)
+
+
+def test_radar_receiver_rejects_unknown_support() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+
+    with pytest.raises(ValueError, match="receiver_support"):
+        _surface_h_distributions(simulation, receiver_support="unknown")
 
 
 def test_radar_courant_factor_controls_automatic_time_step() -> None:

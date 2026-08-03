@@ -127,6 +127,8 @@ def create_radar_simulation(
     source_edge_assignment: str = "projected",
     tangential_interface_mode: str = "point",
     tangential_material_support: str = "point",
+    source_altitude_m: float = 0.0,
+    source_azimuths_deg: tuple[float, ...] = (0.0, 90.0),
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -149,15 +151,14 @@ def create_radar_simulation(
     source = TangentialGaussianCurrent(
         latitude_deg=PAPER_TRANSMITTER_LATITUDE_DEG,
         longitude_deg=PAPER_TRANSMITTER_LONGITUDE_DEG,
-        altitude_m=0.0,
+        altitude_m=source_altitude_m,
         peak_current_a=PAPER_TRANSMITTER_CURRENT_A,
         center_time_s=source_center_s,
         one_over_e_half_width_s=PAPER_ENVELOPE_ONE_OVER_E_HALF_WIDTH_S,
         carrier_frequency_hz=PAPER_CARRIER_FREQUENCY_HZ,
-        azimuths_deg=(0.0, 90.0),
-        line_lengths_m=(
-            PAPER_TRANSMITTER_LINE_LENGTH_M,
-            PAPER_TRANSMITTER_LINE_LENGTH_M,
+        azimuths_deg=source_azimuths_deg,
+        line_lengths_m=tuple(
+            PAPER_TRANSMITTER_LINE_LENGTH_M for _ in source_azimuths_deg
         ),
         edge_assignment=source_edge_assignment,
     )
@@ -199,14 +200,55 @@ def _linear_radial_distribution(
 
 def _surface_h_distributions(
     simulation: GeodesicFDTD,
+    *,
+    receiver_support: str = "face",
 ) -> tuple[NDArray[np.int64], ...]:
+    if receiver_support not in {"face", "local-linear"}:
+        raise ValueError("receiver_support must be 'face' or 'local-linear'")
     face = geographic_face_index(
         simulation, PAPER_OIL_LATITUDE_DEG, PAPER_OIL_LONGITUDE_DEG
     )
     hr_layers, hr_weights = _linear_radial_distribution(
         simulation.radial_midpoint_altitudes_m, 0.0
     )
-    hr_faces = np.full((1, len(hr_layers)), face, dtype=np.int64)
+    if receiver_support == "face":
+        support_faces = np.asarray((face,), dtype=np.int64)
+        horizontal_weights = np.asarray((1.0,))
+    else:
+        edges = simulation.mesh.face_edges[face]
+        edge_faces = np.column_stack(
+            (
+                simulation.mesh.edge_left_faces[edges],
+                simulation.mesh.edge_right_faces[edges],
+            )
+        )
+        neighbors = np.asarray(
+            sorted(set(edge_faces.ravel()) - {face}), dtype=np.int64
+        )
+        support_faces = np.concatenate((np.asarray((face,)), neighbors))
+        if len(support_faces) != 4:
+            raise RuntimeError("face receiver must have three neighbors")
+        radial = geographic_direction(
+            PAPER_OIL_LATITUDE_DEG, PAPER_OIL_LONGITUDE_DEG
+        )
+        east, north = geographic_tangent_basis(
+            PAPER_OIL_LATITUDE_DEG, PAPER_OIL_LONGITUDE_DEG
+        )
+        centers = simulation.mesh.face_centers[support_faces]
+        coordinates = np.column_stack((centers @ east, centers @ north))
+        constraints = np.vstack(
+            (np.ones(len(support_faces)), coordinates.T)
+        )
+        target = np.asarray((1.0, 0.0, 0.0))
+        horizontal_weights = constraints.T @ np.linalg.solve(
+            constraints @ constraints.T, target
+        )
+    hr_faces = np.repeat(support_faces, len(hr_layers))[None, :]
+    hr_layer_indices = np.tile(hr_layers, len(support_faces))[None, :]
+    hr_sample_weights = (
+        np.repeat(horizontal_weights, len(hr_layers))
+        * np.tile(hr_weights, len(support_faces))
+    )[None, :]
 
     edges = simulation.mesh.face_edges[face]
     left = simulation.mesh.face_centers[simulation.mesh.edge_left_faces[edges]]
@@ -226,8 +268,8 @@ def _surface_h_distributions(
     ht_layers = np.full_like(ht_edges, surface_layer)
     return (
         hr_faces,
-        hr_layers[None, :],
-        hr_weights[None, :],
+        hr_layer_indices,
+        hr_sample_weights,
         ht_edges,
         ht_layers,
         ht_weights,
@@ -240,12 +282,15 @@ def record_radar_traces(
     steps: int,
     case: str,
     synchronize_every: int = 128,
+    receiver_support: str = "face",
 ) -> RadarTraces:
     """Record interpolated surface ``Hr`` and east/north ``Htan`` traces."""
 
     if simulation.steps != 0:
         raise ValueError("radar recording requires a fresh simulation")
-    distributions = _surface_h_distributions(simulation)
+    distributions = _surface_h_distributions(
+        simulation, receiver_support=receiver_support
+    )
     hr, ht = simulation.record_h_observations(
         *distributions,
         steps,
