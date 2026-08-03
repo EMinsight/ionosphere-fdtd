@@ -415,6 +415,48 @@ Figure 7 is a **quantitative fail**, although it qualitatively confirms that a
 buried conductivity anomaly can generate a radial magnetic component while
 only weakly perturbing the dominant tangential reference field.
 
+### Correctness and uncertainty gates after the production run
+
+The original tangential ground-line deposition snapped the requested 0-m
+source to the nearest TE-r midpoint, which is 625 m below the surface in the
+Figure 7 subgrid. The source now uses adjoint radial interpolation over the
+−625-m and +2,500-m planes with weights 0.8/0.2, preserving both its exact
+altitude and current moment. A subdivision-5 paired test shows that this is a
+necessary correctness fix but not the cause of the radar discrepancy:
+
+| Source / receiver / Shield | Peak-normalized `ΔHr` | Median pointwise `ΔHr` | Median advantage | Reference `Hr` peak |
+|---|---:|---:|---:|---:|
+| Snapped −625 m / face / 2,500 km | +94.972 dB | +84.885 dB | 151.750 dB | `7.176e-16 A/m` |
+| Exact 0 m / face / 2,500 km | +95.040 dB | +85.085 dB | 151.944 dB | `7.728e-16 A/m` |
+| Exact 0 m / local-linear / 2,500 km | +70.511 dB | +59.617 dB | 125.385 dB | `3.065e-15 A/m` |
+| Exact 0 m / local-linear / no Shield | +70.443 dB | +58.971 dB | 124.364 dB | `1.083e-15 A/m` |
+
+In contrast, replacing the containing-face `Hr` sample by a four-face local
+linear reconstruction at the exact oil-field coordinate improves the
+normalized radial result by 24.5 dB. This is promoted to the production
+receiver because radial interpolation alone does not correct a horizontal
+face-center offset. Removing the approximate Shield changes the normalized
+radial peak by only 0.07 dB; the unpublished Shield boundary changes absolute
+scale but is rejected as the primary normalized-error cause.
+
+The paper specifies two orthogonal 300-A ground lines but not their relative
+polarity. Separate north and east basis simulations permit linear synthesis
+without selecting a combination to fit the target:
+
+| Source basis | Peak-normalized `ΔHtan` | Peak-normalized `ΔHr` | Absolute `ΔHr/ΔHtan` |
+|---|---:|---:|---:|
+| North only | −47.743 dB | +70.956 dB | −6.467 dB |
+| East only | −46.111 dB | +72.670 dB | −7.228 dB |
+| North + east | −66.515 dB | +70.511 dB | +3.590 dB |
+| North − east | −46.585 dB | +71.865 dB | −6.878 dB |
+
+The absolute scattered components are now within about 7 dB for every basis,
+consistent with the paper's statement that they are comparable. Source
+polarity changes the apparent advantage substantially through tangential
+cancellation, but all four radial results remain 50 dB or more above the
+paper's approximate +20 dB scale. Source convention is therefore retained as
+a disclosed uncertainty, not used as a fitting parameter.
+
 ## Failure analysis and corrective work
 
 The following implementation issues were found and corrected before the final
