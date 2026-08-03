@@ -375,9 +375,9 @@ solver's 0 and 5 km staggered `Er` planes. The source now combines the three
 horizontal barycentric weights with 0.5/0.5 radial cloud-in-cell weights. This
 places the current centroid at exactly 2,500 m while preserving the total
 current. A matched ETOPO5 level-7 CUDA run changes the receiver traces by only
-`5.50e-4` relative RMS and leaves all negative-peak steps unchanged; its
-artifacts are in
-[`etopo5-level-7-float64-cuda-staggered-source`](artifacts/simpson-taflove-2004/etopo5-level-7-float64-cuda-staggered-source/verification-report.md).
+`5.50e-4` relative RMS and leaves all negative-peak steps unchanged. The
+comparison is consolidated in the
+[final verification report](docs/verification/simpson-taflove-2004.md).
 
 This workflow is deliberately a verification test, not a claim of complete
 agreement.  Correcting the ionosphere profile and DFT criterion reduced the
@@ -399,9 +399,8 @@ phase velocity and negative-peak travel time at subdivisions 6–8.  The maximum
 phase-velocity error against Bannister equation (4) falls from 0.094/0.103 c to
 0.028/0.028 c for A–B/A′–B′, with an observed order close to one.  The quarter-
 arc east/west RMS difference converges at approximately second order, from
-1.50e-2 to 1.01e-3.  Commands, per-frequency values, and the residual plot are
-preserved in the
-[`uniform-phase-convergence` report](artifacts/simpson-taflove-2004/uniform-phase-convergence/verification-report.md).
+1.50e-2 to 1.01e-3. Commands and aggregate results are consolidated in the
+[final verification report](docs/verification/simpson-taflove-2004.md).
 
 Directional dispersion of the existing geodesic dual grid is measured without
 introducing the paper's merged latitude–longitude grid. Twelve equally spaced
@@ -412,17 +411,16 @@ observed order is about two, and a common-window sensitivity check gives the
 same result. Commands, bandwise metrics, traces, and plots are preserved in the
 [`directional-dispersion` report](artifacts/directional-dispersion/grid-convergence/verification-report.md).
 
-The baseline level-7 result, interpretation, and recommended next checks are
-documented in
-[the Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).
+The complete investigation history, final metrics, limitations, and verdict
+are documented in the
+[Simpson–Taflove 2004 verification report](docs/verification/simpson-taflove-2004.md).
 
 The subdivision-8 compiled CUDA run used about 10.1 GB of peak allocated GPU
 memory in a one-step preflight and completed 25,023 steps in 3,477.9 seconds on
-an RTX 3060.  Its figures, traces, and generated report are preserved in
-[`artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected`](artifacts/simpson-taflove-2004/level-8-float64-cuda-corrected).
-That run report preserves the earlier fitted guide; the authoritative
-source-based metrics, fixed comparison points, and convergence plot are in the
-[`fixed-frequency-reanalysis`](artifacts/simpson-taflove-2004/fixed-frequency-reanalysis/verification-report.md).
+an RTX 3060. The generated artifacts can be reproduced with the command below;
+the authoritative source-based metrics and fixed comparison points are
+consolidated in the
+[final verification report](docs/verification/simpson-taflove-2004.md).
 
 Apple MPS does not support PyTorch `float64`.  Run the double-precision
 validation on a CUDA Linux host instead:
