@@ -63,6 +63,29 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert traces.ht_north_a_m.shape == (4,)
 
 
+def test_radar_courant_factor_controls_automatic_time_step() -> None:
+    conservative = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        courant_factor=0.4,
+    )
+    limit = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        courant_factor=1.0,
+    )
+
+    assert limit.time_step_s == pytest.approx(2.5 * conservative.time_step_s)
+
+
 def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
     time = np.linspace(0.0, 0.1, 101)
     base = np.sin(2.0 * np.pi * 20.0 * time)

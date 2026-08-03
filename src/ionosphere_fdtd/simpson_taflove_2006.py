@@ -121,6 +121,7 @@ def create_radar_simulation(
     dtype: str = "float64",
     compile_step: bool = True,
     source_center_s: float = PAPER_SOURCE_CENTER_S,
+    courant_factor: float = 0.4,
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -154,7 +155,7 @@ def create_radar_simulation(
             radial_cells=len(altitudes) - 1,
             minimum_altitude_m=altitudes[0],
             maximum_altitude_m=altitudes[-1],
-            courant_factor=0.4,
+            courant_factor=courant_factor,
             radial_altitudes_m=altitudes,
         ),
         material=material,

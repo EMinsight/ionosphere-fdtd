@@ -47,6 +47,7 @@ def _parser() -> argparse.ArgumentParser:
         "--torch-compile", action=argparse.BooleanOptionalAction, default=True
     )
     radar.add_argument("--source-center", type=float, default=PAPER_SOURCE_CENTER_S)
+    radar.add_argument("--courant", type=float, default=0.4)
     radar.add_argument(
         "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
     )
@@ -94,6 +95,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         dtype=args.dtype,
         compile_step=args.torch_compile,
         source_center_s=args.source_center,
+        courant_factor=args.courant,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
