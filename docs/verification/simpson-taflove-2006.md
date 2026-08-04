@@ -344,6 +344,24 @@ strong contrast is caused by the complete surface-geometry voxelization, not
 by the 207-m receiver bathymetry in isolation. Conservative ocean occupancy is
 rejected as a Figure 5 correction and remains an explicit diagnostic only.
 
+#### Surface-resolution convergence screen
+
+The exact-relief polar calculation was next increased from subdivision 5 to 6
+without changing any other model input. Both cases used one projected mesh-
+quality step, 40,000 steps, CUDA `float64`, and point material sampling.
+
+| Subdivision | Surface cells | A / A′ peak | B / B′ peak | B / B′ tail at 0.12 s | A/A′ / B/B′ relative RMS |
+|---:|---:|---:|---:|---:|---:|
+| 5 | 10,242 | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
+| 6 | 40,962 | 0.96277 / 1.00000 | 0.07607 / 0.36672 | 0.01533 / 0.06053 | 36.8% / 347.7% |
+
+The B peak increases by 65.9% and the far-path RMS mismatch is roughly halved,
+so horizontal resolution is moving the eastern path in the correct direction.
+It is nevertheless still 80.5% below the approximate published 0.39 peak and
+79.3% below B′. The convergence is too slow to predict a pass at subdivision 7,
+but it is monotonic enough to justify one final paper-resolution calculation
+for a measured verdict rather than an extrapolation.
+
 #### Conductivity-profile sensitivity
 
 Corrected-location subdivision-5 screening varied the ionosphere around the
