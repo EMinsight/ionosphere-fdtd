@@ -14,14 +14,16 @@ with `float64` fields.
 Figure 5 reproduces the published arrival ordering, timing, overshoot, and
 slow-tail morphology, but not all four relative amplitudes. A corrected
 geographic locator separates the previously collapsed B/B′ observations. The
-level-7 ETOPO5 run then gives normalized far peaks of 0.16425/0.35813 instead
-of approximately 0.39/0.39. CUDA `float64` isolation runs identify binary
-5-km radial sampling of shallow bathymetry as the dominant cause: a fixed-depth
-ocean restores both far peaks and east/west symmetry, while ionosphere changes
-do not restore the suppressed B path. Figure 6 consequently has east/west mean
-absolute errors of 2.064/0.277 dB/Mm and maximum absolute errors of
-5.026/1.650 dB/Mm. Both paths fail the paper's pointwise ±0.5 dB/Mm statement
-over 50–500 Hz.
+final level-7 polar, mesh-smoothed ETOPO5 run gives normalized far peaks of
+0.14159/0.35471 instead of approximately 0.39/0.39. CUDA `float64` isolation
+runs show that a fixed-depth surface restores both far peaks and east/west
+symmetry, but forcing every shallow ocean column to contain a 5-km seawater
+cell has negligible effect. The mismatch is therefore associated with the
+complete relief/lithosphere voxelization and unavailable paper grid
+coordinates, not shallow receiver bathymetry alone. The previously finalized
+Figure 6 run has east/west mean absolute errors of 2.064/0.277 dB/Mm and
+maximum absolute errors of 5.026/1.650 dB/Mm. Both paths fail the paper's
+pointwise ±0.5 dB/Mm statement over 50–500 Hz.
 
 Figure 7 also retains only the direction of the claimed sensitivity after its
 transmitter is corrected from the opposite hemisphere to Clam Lake. Its
@@ -73,11 +75,13 @@ while the rendered curve retains the approach to the zero-crossing spikes.
 
 ## Numerical model
 
-### Figures 5 and 6
+### Figure 5
 
 | Item | Implemented value |
 |---|---:|
 | Surface grid | subdivision 7, 163,842 geodesic dual cells |
+| Orientation | polar; pentagonal cell centers at both poles |
+| Mesh quality | one projected spherical edge-quality step |
 | Radial domain | −100 to +100 km |
 | Radial cells | 40 at 5 km |
 | Time step | 3.0 μs |
@@ -88,12 +92,16 @@ while the rendered curve retains the approach to the zero-crossing spikes.
 | Surface data | NOAA-NGDC ETOPO5, bilinear sampling |
 | Ionosphere | 70 km reference height, 3.33 km scale height |
 | Backend | compiled PyTorch, CUDA, float64 |
-| Production revision | `2ffebdf` |
-| Wall time | 1,132.0 s |
+| Production revision | `25a9441` |
+| Wall time | 905.4 s |
 
 The source is barycentrically distributed in the horizontal plane and linearly
 staggered between the 0 and 5 km `Er` planes, preserving its exact 2.5 km
 centroid and total current.
+
+This configuration is authoritative for the current Figure 5 result. Figure 6
+was not rerun during this focused campaign; its section retains the previously
+reported corrected-location native-grid trace and verdict.
 
 ### Figure 7
 
@@ -142,21 +150,21 @@ the reference/anomaly difference but remains a reproducibility limitation.
 
 All four receiver records are plotted individually with one common
 normalization. The corrected ETOPO5 run gives A/A′ peak times of
-22.539/23.217 ms and B/B′ peak times of 44.505/44.025 ms. The calculated
+22.548/23.235 ms and B/B′ peak times of 44.562/44.043 ms. The calculated
 waveforms preserve the published arrival ordering, negative main pulse,
 opposite-sign overshoot, and subsequent slow tail. Their amplitudes, however,
-are path dependent: the normalized B/B′ peaks are 0.16425/0.35813, versus
+are path dependent: the normalized B/B′ peaks are 0.14159/0.35471, versus
 approximately 0.39 for both published far records by visual reading.
 
 | Figure 5 criterion | Published behavior | Reproduction | Result |
 |---|---|---|---:|
-| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.539/23.217 ms; B/B′ at 44.505/44.025 ms | **PASS** |
+| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.548/23.235 ms; B/B′ at 44.562/44.043 ms | **PASS** |
 | Main-pulse timing | Peaks occur at the corresponding locations in the published panel | All four peaks visually align with the published traces | **PASS** |
 | Waveform morphology | Negative main pulse, opposite-sign overshoot, and slow tail | All three features are present | **PASS** |
-| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.3% | **FAIL** |
-| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 105.0% | **FAIL** |
-| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.16425/0.35813 | **FAIL** |
-| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.03252/0.05968 | **FAIL** |
+| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.6% | **FAIL** |
+| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 134.5% | **FAIL** |
+| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.14159/0.35471 | **FAIL** |
+| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.02820/0.05904 | **FAIL** |
 | Overall qualitative morphology | Ordering and characteristic waveform shape | Required qualitative features are present | **PASS** |
 | Exact plot reproduction | Timing, relative amplitude, and path similarity agree | Timing agrees; amplitude and symmetry do not | **FAIL** |
 
@@ -209,19 +217,23 @@ Hermance-derived cellwise conductivity used by the paper remains unavailable.
 
 The production-resolution comparison confirms the same result:
 
-| Level-7 material | A / A′ peak | B / B′ peak | A/A′ / B/B′ relative RMS |
+| Level-7 configuration | A / A′ peak | B / B′ peak | A/A′ / B/B′ relative RMS |
 |---|---:|---:|---:|
-| Fixed-depth Natural Earth | 1.00000 / 0.99476 | 0.33907 / 0.33993 | 0.6% / 0.5% |
-| ETOPO5 relief | 0.97920 / 1.00000 | 0.16425 / 0.35813 | 37.3% / 105.0% |
+| Native fixed-depth diagnostic | 1.00000 / 0.99476 | 0.33907 / 0.33993 | 0.6% / 0.5% |
+| Prior native ETOPO5 | 0.97920 / 1.00000 | 0.16425 / 0.35813 | 37.3% / 105.0% |
+| Final polar optimized ETOPO5 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 37.6% / 134.5% |
 
 ETOPO5 elevations at the requested source, A, A′, B, and B′ locations are
 −24, −5,014, −3,041, −207, and −4,538 m, respectively. At the
 5-km radial spacing, the first tangential material sample below sea level is
 at −2.5 km. It is therefore rock beneath the shallow 207-m B ocean but
-water beneath the deep B′ ocean. Replacing only the depth field by a uniform
-5-km ocean restores B/B′ to 0.38240/0.38540 at subdivision 5. The dominant
-error is thus binary radial point sampling of bathymetry, especially shallow
-water, rather than the coastline classifier or propagation update.
+water beneath the deep B′ ocean. This initially suggested that shallow-water
+point sampling was dominant. The later conservative test changed 4,258 edge
+columns to preserve a full 5-km surface water cell, however, and left B/B′ at
+0.04580/0.40605 instead of 0.04585/0.40613. The fixed-depth control also
+flattened positive land relief and used a different coastline. It therefore
+isolates the complete surface-geometry representation from the propagation
+update, but it cannot attribute the failure to receiver bathymetry alone.
 
 #### Radial coupling is the paper's intentional thin-shell approximation
 
@@ -354,13 +366,13 @@ quality step, 40,000 steps, CUDA `float64`, and point material sampling.
 |---:|---:|---:|---:|---:|---:|
 | 5 | 10,242 | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
 | 6 | 40,962 | 0.96277 / 1.00000 | 0.07607 / 0.36672 | 0.01533 / 0.06053 | 36.8% / 347.7% |
+| 7 | 163,842 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 0.02820 / 0.05904 | 37.6% / 134.5% |
 
-The B peak increases by 65.9% and the far-path RMS mismatch is roughly halved,
-so horizontal resolution is moving the eastern path in the correct direction.
-It is nevertheless still 80.5% below the approximate published 0.39 peak and
-79.3% below B′. The convergence is too slow to predict a pass at subdivision 7,
-but it is monotonic enough to justify one final paper-resolution calculation
-for a measured verdict rather than an extrapolation.
+The B peak grows monotonically as the surface-cell count quadruples, and the
+far-path mismatch falls substantially. At paper resolution, however, B is
+still 63.7% below the approximate published 0.39 peak and 60.1% below B′.
+Horizontal resolution moves the result in the correct direction but does not
+converge quickly enough to reproduce Figure 5 at the published grid size.
 
 #### Conductivity-profile sensitivity
 
@@ -614,6 +626,13 @@ production results were accepted:
    corrected the absolute field while retaining the line direction. The final
    source is distributed over the three oriented edges of the containing face
    and adjoint-linearly staggered across the two radial source planes.
+6. The original mesh orientation put hexagonal cells at the geographic poles,
+   contrary to the paper. A rigid default rotation now aligns degree-five cell
+   centers with both poles without changing topology or intrinsic metrics.
+7. The paper's exact Mesquite coordinates are unavailable. An opt-in projected
+   spherical edge-quality step reduces edge, triangle-area, dual-area, and
+   adjacent-area variation while fixing all 12 pentagonal anchors. Its
+   objective is independent of ETOPO5 and receiver values.
 
 Coarse source-deposition and resolution diagnostics performed before the
 geographic correction are retained in git history as implementation tests, but
@@ -648,29 +667,33 @@ tuned away.
 
 ## Reproduction commands
 
-Figures 5 and 6 use the exact ETOPO5 level-7 trace configuration:
+The final Figure 5 result uses the exact ETOPO5 level-7 trace configuration:
 
 ```bash
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2004_cli \
-  --subdivision 7 --mesh-orientation native \
+  --subdivision 7 --mesh-orientation polar \
+  --mesh-optimization-steps 1 --minimum-ocean-depth-km 0 \
   --steps 40000 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
-  --ionosphere-scale-height-km 3.33 --torch-compile \
-  --synchronize-every 1024 \
-  --output-dir artifacts/simpson-taflove-2006/figure-5-level-7-float64-cuda
+  --ionosphere-scale-height-km 3.3333333333333335 --torch-compile \
+  --synchronize-every 128 \
+  --output-dir /tmp/fig5-polar-optimized-etopo5-l7
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli \
   figures-5-6 \
-  --traces artifacts/simpson-taflove-2006/figure-5-level-7-float64-cuda/simpson-taflove-2004-traces.npz \
-  --output-dir artifacts/simpson-taflove-2006/figures-5-6
+  --traces /tmp/fig5-polar-optimized-etopo5-l7/simpson-taflove-2004-traces.npz \
+  --output-dir /tmp/fig5-polar-optimized-etopo5-l7/figures-5-6
 ```
 
 The fixed-depth isolation changes `--material etopo5` to
-`--material natural-earth` and omits `--etopo5-path`. The subdivision-5
-ionosphere sensitivity cases keep the ETOPO5 material and change only the
-reference or scale height documented in the table above.
+`--material natural-earth` and omits `--etopo5-path`. The conservative
+shallow-ocean diagnostic changes only `--minimum-ocean-depth-km` from 0 to 5. The
+subdivision-5 ionosphere sensitivity cases keep the ETOPO5 material and change
+only the reference or scale height documented in the table above. Figure 6
+retains the earlier configuration and is not included in the current focused
+rerun.
 
 The paired Figure 7 runs were:
 
@@ -708,9 +731,12 @@ The paired Figure 7 runs were:
   to 7,013.6 km² of dual-cell area at level 7; no undocumented conductivity
   retuning is used to force an effective 4,800 km² voxel area.
 - The paper uses an optimized geodesic grid. This project retains its existing
-  recursively subdivided geodesic dual grid, as required. The production result
-  is not tuned by changing topology or orientation. A pre-correction
-  rigid-rotation diagnostic is explicitly excluded from the final metrics.
+  recursively subdivided geodesic dual-grid topology, as required. Its rigid
+  polar orientation places pentagonal cell centers at both geographic poles.
+  One deterministic projected edge-quality step reduces edge and adjacent-cell
+  area variation without using ETOPO5 or receiver values in its objective. The
+  paper does not publish the exact Mesquite objective or final coordinates, so
+  the resulting vertices cannot be assumed identical to the paper's grid.
 - Figure 7 does not define source phase, Gaussian center time, or a formal
   error norm. The simulation begins three Gaussian `1/e` half-widths before the
   envelope center, and its displayed time is referenced to that center.
@@ -729,18 +755,23 @@ The final status is therefore **FAIL**.
 The corrective work did produce reusable, tested capabilities: physically
 scaled horizontal ground-line sources, CUDA-native radial/tangential magnetic
 recording, buried anomalies in the ETOPO5 layered material, protected water
-layers, and a reproducible Figure 5–7 analysis CLI. Precision, time-step
-stability, source moment, radial metric weighting, and ionosphere-profile
+layers, polar pentagon alignment, constrained mesh-quality optimization,
+conservative ocean-column diagnostics, and a reproducible Figure 5–7 analysis
+CLI. Precision, time-step stability, source moment, radial metric weighting,
+and ionosphere-profile
 sensitivity were tested. The geographic locator defect was corrected and all
 paper-scale production traces affected by it were recomputed.
 
-For Figure 5, the strongest identified cause is actionable: binary material
-sampling aliases shallow water layers and changes strongly with surface
-subdivision. Simple arithmetic radial fractions do not solve it; the next
-local edge-support quadrature is also ineffective. A frequency-dependent
-thin-layer surface impedance could improve physical convergence while
-retaining the required geodesic grid, but it would no longer be the paper's
-published bulk-cell algorithm. Figure 6 additionally retains the known
+For Figure 5, the mismatch changes strongly and monotonically with surface
+subdivision, while fixed-depth geometry restores symmetry. Mesh smoothing,
+arithmetic radial fractions, local edge-support quadrature, and conservative
+5-km ocean occupancy are all insufficient. This leaves the complete ETOPO5
+surface/lithosphere voxelization and the unavailable optimized vertex
+coordinates as the strongest identified limitations; shallow bathymetry alone
+is no longer supported as the dominant cause. A frequency-dependent ground
+surface impedance could improve physical convergence while retaining the
+required geodesic grid, but it would no longer be the paper's published
+bulk-cell algorithm. Figure 6 additionally retains the known
 high-frequency spatial-dispersion residual. Figure 7 remains limited by inputs
 that cannot be reconstructed from the paper: optimized cell positions, exact
 three-dimensional lithosphere conductivity, Canadian Shield mask, horizontal
