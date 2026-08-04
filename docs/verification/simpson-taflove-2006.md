@@ -279,6 +279,35 @@ them. The polar geometry is retained for correctness rather than treated as a
 fit parameter. Subsequent mesh-quality and material-isolation experiments use
 this polar baseline.
 
+#### Constrained mesh-quality and fixed-depth gate
+
+Reference 13 reports that Mesquite was used to smooth the refined geodesic
+mesh, but it does not publish the objective weights or final coordinates. A
+deterministic approximation was therefore added as an opt-in experiment. It
+minimizes great-circle edge-length variance by projected steps on the unit
+sphere while fixing all 12 pentagonal anchors, including both poles. One step
+at subdivision 5 changes the edge-length CV from 0.06503 to 0.06082, triangle-
+area CV from 0.08644 to 0.07911, dual-cell-area CV from 0.08133 to 0.07714,
+and adjacent dual-area-jump RMS from 0.03235 to 0.02524. The worst relative
+adjacent jump also decreases from 0.11071 to 0.08294.
+
+The first propagation gate used the fixed 5-km Natural Earth ocean model so
+that bathymetric depth could not change between neighboring horizontal
+samples. Both calculations used the corrected polar orientation,
+subdivision 5, 40,000 steps, CUDA `float64`, and one common four-trace
+normalization.
+
+| Mesh optimization | A / A′ peak | B / B′ peak | B / B′ tail at 0.12 s | A/A′ / B/B′ relative RMS |
+|---|---:|---:|---:|---:|
+| 0 steps | 1.00000 / 0.99338 | 0.39728 / 0.39777 | 0.07752 / 0.07737 | 0.9% / 0.6% |
+| 1 projected step | 1.00000 / 0.99660 | 0.39700 / 0.39769 | 0.07732 / 0.07717 | 0.7% / 0.6% |
+
+Both meshes recover the published far-peak scale and nearly identical east and
+west paths. The quality step slightly improves the near-path agreement but has
+no material effect on the far response. This passes the fixed-depth gate: the
+polar geodesic FDTD propagation itself can produce the Figure 5 amplitude and
+symmetry, while mesh smoothing alone is not a fit for the ETOPO5 failure.
+
 #### Conductivity-profile sensitivity
 
 Corrected-location subdivision-5 screening varied the ionosphere around the
