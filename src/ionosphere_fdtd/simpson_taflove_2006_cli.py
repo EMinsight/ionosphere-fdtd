@@ -38,6 +38,9 @@ def _parser() -> argparse.ArgumentParser:
     radar.add_argument("--output", type=Path, required=True)
     radar.add_argument("--subdivision", type=int, choices=range(0, 8), default=7)
     radar.add_argument(
+        "--mesh-orientation", choices=("native", "polar"), default="polar"
+    )
+    radar.add_argument(
         "--material", choices=("etopo5", "natural-earth"), default="etopo5"
     )
     radar.add_argument("--etopo5-path", type=Path)
@@ -140,6 +143,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         source_azimuths_deg=source_azimuths,
         include_shield=args.shield,
         shield_radius_m=1_000.0 * args.shield_radius_km,
+        mesh_orientation=args.mesh_orientation,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -148,6 +152,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"case={args.case} grid={simulation.mesh.n_vertices:,}x"
         f"{len(simulation.radial_steps_m)} backend={simulation.backend.name} "
         f"device={simulation.backend.device} dtype={simulation.backend.dtype_name} "
+        f"orientation={args.mesh_orientation} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
         f"source={args.source_basis}@{args.source_altitude_m:g}m "

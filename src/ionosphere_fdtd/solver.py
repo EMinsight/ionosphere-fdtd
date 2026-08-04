@@ -27,7 +27,7 @@ class SimulationConfig:
     courant_factor: float = 0.35
     time_step_s: float | None = None
     mesh_relaxations: int = 0
-    mesh_orientation: str = "native"
+    mesh_orientation: str = "polar"
     radial_altitudes_m: tuple[float, ...] | None = None
     tangential_material_support: str = "point"
 

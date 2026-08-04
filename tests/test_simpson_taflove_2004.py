@@ -57,6 +57,10 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     assert simulation.material.ionosphere_scale_height_m == pytest.approx(
         REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M
     )
+    assert simulation.config.mesh_orientation == "polar"
+    pentagons = simulation.mesh.vertices[simulation.mesh.vertex_degree == 5]
+    assert np.max(pentagons[:, 2]) == pytest.approx(1.0)
+    assert np.min(pentagons[:, 2]) == pytest.approx(-1.0)
     source_metrics = source_distribution_metrics(simulation)
     assert source_metrics["source_requested_altitude_m"] == 2_500.0
     assert source_metrics["source_staggered_centroid_altitude_m"] == 2_500.0
@@ -66,19 +70,21 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     assert source_metrics["source_distribution_weight_sum"] == pytest.approx(1.0)
 
 
-def test_validation_setup_can_align_pentagons_with_poles() -> None:
+def test_validation_setup_can_retain_native_orientation() -> None:
     simulation = create_validation_simulation(
         subdivision=1,
         material_model="uniform",
         backend="numpy",
         dtype="float64",
         compile_step=False,
-        mesh_orientation="polar",
+        mesh_orientation="native",
     )
 
-    pentagons = simulation.mesh.vertices[simulation.mesh.vertex_degree == 5]
-    assert np.max(pentagons[:, 2]) == pytest.approx(1.0)
-    assert np.min(pentagons[:, 2]) == pytest.approx(-1.0)
+    north = int(np.argmax(simulation.mesh.vertices[:, 2]))
+    south = int(np.argmin(simulation.mesh.vertices[:, 2]))
+    assert simulation.config.mesh_orientation == "native"
+    assert simulation.mesh.vertex_degree[north] == 6
+    assert simulation.mesh.vertex_degree[south] == 6
 
 
 def test_receiver_longitudes_follow_east_and_west_quarter_arcs() -> None:

@@ -151,7 +151,7 @@ def create_validation_simulation(
     dtype: str = "float32",
     compile_step: bool = True,
     torch_threads: int | None = None,
-    mesh_orientation: str = "native",
+    mesh_orientation: str = "polar",
     ionosphere_reference_height_m: float = (
         REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M
     ),

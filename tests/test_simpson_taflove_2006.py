@@ -99,10 +99,32 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert simulation.source.peak_current_a == 300.0
     assert simulation.source.azimuths_deg == (0.0, 90.0)
     assert simulation.source.line_lengths_m == (22_500.0, 22_500.0)
+    assert simulation.config.mesh_orientation == "polar"
+    pentagons = simulation.mesh.vertices[simulation.mesh.vertex_degree == 5]
+    assert np.max(pentagons[:, 2]) == pytest.approx(1.0)
+    assert np.min(pentagons[:, 2]) == pytest.approx(-1.0)
     assert PAPER_ENVELOPE_FWHM_S == pytest.approx(42.5e-3)
     assert traces.hr_a_m.shape == (4,)
     assert traces.ht_east_a_m.shape == (4,)
     assert traces.ht_north_a_m.shape == (4,)
+
+
+def test_radar_setup_can_retain_native_orientation() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=1,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        mesh_orientation="native",
+    )
+
+    north = int(np.argmax(simulation.mesh.vertices[:, 2]))
+    south = int(np.argmin(simulation.mesh.vertices[:, 2]))
+    assert simulation.config.mesh_orientation == "native"
+    assert simulation.mesh.vertex_degree[north] == 6
+    assert simulation.mesh.vertex_degree[south] == 6
 
 
 def test_radar_source_basis_and_altitude_are_configurable() -> None:

@@ -88,14 +88,16 @@ class GeodesicMesh:
 def build_geodesic_mesh(
     subdivision: int = 2,
     relaxations: int = 0,
-    orientation: str = "native",
+    orientation: str = "polar",
 ) -> GeodesicMesh:
     """Build a recursively bisected icosahedral mesh on the unit sphere.
 
     ``subdivision=0`` gives 12 dual cells; each increment quarters every
     primal triangular face.  Thus the dual-cell count is
     ``10 * 4**subdivision + 2``.  Small MacBook runs normally use levels 1-2;
-    level 3 gives the 642-cell grid shown in the cited papers.
+    level 3 gives the 642-cell grid shown in the cited papers.  The default
+    orientation places an antipodal pair of pentagonal cells at the geographic
+    poles; ``native`` retains the unrotated Cartesian icosahedron.
     """
 
     if subdivision < 0:

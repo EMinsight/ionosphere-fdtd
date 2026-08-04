@@ -143,6 +143,7 @@ def create_radar_simulation(
     source_azimuths_deg: tuple[float, ...] = (0.0, 90.0),
     include_shield: bool = True,
     shield_radius_m: float = 2_500_000.0,
+    mesh_orientation: str = "polar",
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -189,6 +190,7 @@ def create_radar_simulation(
             maximum_altitude_m=altitudes[-1],
             courant_factor=courant_factor,
             radial_altitudes_m=altitudes,
+            mesh_orientation=mesh_orientation,
             tangential_material_support=tangential_material_support,
         ),
         material=material,

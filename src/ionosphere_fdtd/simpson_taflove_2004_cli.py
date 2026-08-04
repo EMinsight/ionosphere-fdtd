@@ -45,7 +45,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--subdivision", type=int, choices=range(0, 9), default=7)
     parser.add_argument(
-        "--mesh-orientation", choices=("native", "polar"), default="native"
+        "--mesh-orientation", choices=("native", "polar"), default="polar"
     )
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
