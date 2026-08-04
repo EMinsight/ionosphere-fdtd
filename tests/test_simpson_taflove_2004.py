@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
+from ionosphere_fdtd.mesh import build_geodesic_mesh
 from ionosphere_fdtd.simpson_taflove_2004 import (
     PAPER_DFT_SIZE,
     PAPER_EVALUATION_FREQUENCIES_HZ,
@@ -85,6 +86,20 @@ def test_validation_setup_can_retain_native_orientation() -> None:
     assert simulation.config.mesh_orientation == "native"
     assert simulation.mesh.vertex_degree[north] == 6
     assert simulation.mesh.vertex_degree[south] == 6
+
+
+def test_validation_setup_accepts_external_mesh() -> None:
+    mesh = build_geodesic_mesh(1, optimization_steps=1)
+    simulation = create_validation_simulation(
+        subdivision=1,
+        material_model="uniform",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        mesh=mesh,
+    )
+
+    assert simulation.mesh is mesh
 
 
 def test_receiver_longitudes_follow_east_and_west_quarter_arcs() -> None:

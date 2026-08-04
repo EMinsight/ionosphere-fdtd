@@ -17,6 +17,7 @@ from .materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
 )
+from .mesh import GeodesicMesh
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, geographic_distribution
 
@@ -161,6 +162,7 @@ def create_validation_simulation(
     tangential_interface_mode: str = "point",
     tangential_material_support: str = "point",
     minimum_ocean_depth_m: float = 0.0,
+    mesh: GeodesicMesh | None = None,
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
@@ -220,6 +222,7 @@ def create_validation_simulation(
         dtype=dtype,
         compile_step=compile_step,
         torch_threads=torch_threads,
+        mesh=mesh,
     )
 
 

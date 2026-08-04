@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from .backends import BackendUnavailableError
+from .mesquite import load_optimized_mesh
 from .simpson_taflove_2004 import (
     PAPER_DFT_TRUNCATIONS,
     PAPER_MINIMUM_SIMULATION_STEPS,
@@ -52,6 +53,11 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="apply deterministic spherical edge-quality optimization",
+    )
+    parser.add_argument(
+        "--mesh-coordinates",
+        type=Path,
+        help="NPZ coordinates produced by ionosphere-optimize-mesh",
     )
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
@@ -128,6 +134,21 @@ def main(argv: list[str] | None = None) -> int:
             f"{PAPER_MINIMUM_SIMULATION_STEPS} for the validation DFT windows"
         )
     started = time.perf_counter()
+    if args.mesh_coordinates is not None and args.mesh_optimization_steps:
+        raise SystemExit(
+            "--mesh-coordinates cannot be combined with --mesh-optimization-steps"
+        )
+    optimized_mesh = None
+    mesh_metadata = None
+    if args.mesh_coordinates is not None:
+        try:
+            optimized_mesh, mesh_metadata = load_optimized_mesh(
+                args.mesh_coordinates,
+                expected_subdivision=args.subdivision,
+                expected_orientation=args.mesh_orientation,
+            )
+        except (OSError, KeyError, ValueError) as error:
+            raise SystemExit(str(error)) from error
     try:
         simulation = create_validation_simulation(
             subdivision=args.subdivision,
@@ -147,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             tangential_interface_mode=args.tangential_interface,
             tangential_material_support=args.tangential_support,
             minimum_ocean_depth_m=1_000.0 * args.minimum_ocean_depth_km,
+            mesh=optimized_mesh,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -155,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         f"backend={simulation.backend.name} device={simulation.backend.device} "
         f"dtype={simulation.backend.dtype_name} material={args.material} "
         f"mesh_optimization_steps={args.mesh_optimization_steps} "
+        f"mesh_coordinates={args.mesh_coordinates or 'generated'} "
         f"minimum_ocean_depth_km={args.minimum_ocean_depth_km:g} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
@@ -208,6 +231,24 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     )
+    if mesh_metadata is not None:
+        metrics.update(
+            {
+                "mesh_mesquite_maximum_displacement_rad": float(
+                    mesh_metadata["maximum_displacement_rad"]
+                ),
+                "mesh_mesquite_laplace_l1_relative_l2": float(
+                    mesh_metadata["quality_after"][
+                        "laplace_l1_max_relative_l2"
+                    ]
+                ),
+                "mesh_mesquite_laplace_l2_relative_l2": float(
+                    mesh_metadata["quality_after"][
+                        "laplace_l2_max_relative_l2"
+                    ]
+                ),
+            }
+        )
     metrics.update(
         {
             f"{label}_dft_cutoff_step": cutoff
@@ -283,6 +324,8 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         parts.append(f"--torch-threads {args.torch_threads}")
     if args.etopo5_path is not None:
         parts.append(f"--etopo5-path {quote(str(args.etopo5_path))}")
+    if args.mesh_coordinates is not None:
+        parts.append(f"--mesh-coordinates {quote(str(args.mesh_coordinates))}")
     if args.report is not None:
         parts.append(f"--report {quote(str(args.report))}")
     separator = f" {chr(92)}\n  "
