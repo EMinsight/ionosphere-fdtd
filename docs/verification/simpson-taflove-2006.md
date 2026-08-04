@@ -251,22 +251,33 @@ unchanged, and the far/near ratio changed from 0.386870128 to 0.386869895.
 Radial metric weighting therefore cannot explain the Figure 5 mismatch even if
 the continuum spherical form is preferred for another application.
 
-#### Rigid polar-orientation A/B test
+#### Corrected polar-orientation baseline
 
 The paper places one pentagonal cell at each geographic pole, whereas the
-native mesh orientation does not. A selectable `polar` orientation was added
-which rigidly rotates the existing icosahedron before subdivision without
-changing its topology or metric terms. A level-7 A/B run was completed before
-the antipodal face-selection defect was discovered. Because that run sampled
-ETOPO5 at the displaced longitudes listed above, its numerical values are
-superseded and are not used in the final verdict.
+original native mesh orientation placed hexagonal cells there. The production
+default now uses a rigid `polar` rotation before subdivision. This preserves
+the topology and all intrinsic metric terms while making the two polar cell
+centers coincide with the geographic poles. The original `native` orientation
+remains available only as an explicit diagnostic.
 
-The corrected fixed-depth and ETOPO5 comparisons isolate a much larger effect:
-changing only binary bathymetry sampling moves the B peak from 0.38240 to
-0.11120 at subdivision 5. A rigid rotation cannot restore a water layer that
-does not intersect any 5-km radial sample. Polar placement is therefore not
-used as a material-fit parameter; the required native grid implementation is
-retained.
+The first corrected-location polar baseline used subdivision 5, ETOPO5,
+40,000 steps, CUDA `float64`, point material sampling, and the same common
+four-trace normalization as the earlier screens. It changed no propagation or
+material equation.
+
+| Orientation | A / A′ peak | B / B′ peak | B / B′ tail at 0.12 s | A/A′ / B/B′ relative RMS |
+|---|---:|---:|---:|---:|
+| Native diagnostic | 0.94981 / 1.00000 | 0.11120 / 0.39237 | 0.02238 / 0.06673 | 30.8% / 235.9% |
+| Polar paper geometry | 0.97600 / 1.00000 | 0.04036 / 0.40786 | 0.00854 / 0.06923 | 34.5% / 855.1% |
+
+The required polar alignment does not improve Figure 5 by itself. It makes the
+eastern far-path suppression larger at this resolution while leaving B′ near
+the published peak. Because a rigid rotation cannot change numerical
+dispersion on a laterally uniform sphere, this result further localizes the
+change to the ETOPO5 columns and the paths by which the rotated edges sample
+them. The polar geometry is retained for correctness rather than treated as a
+fit parameter. Subsequent mesh-quality and material-isolation experiments use
+this polar baseline.
 
 #### Conductivity-profile sensitivity
 
