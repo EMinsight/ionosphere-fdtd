@@ -211,6 +211,39 @@ def test_point_tangential_interface_retains_midpoint_sampling() -> None:
     )
 
 
+def test_minimum_ocean_depth_preserves_one_radial_water_cell() -> None:
+    material = SimpsonTaflove2004Material(
+        surface_elevation_sampler=lambda directions: np.asarray(
+            (-207.0, -6_000.0, 300.0)
+        ),
+        minimum_ocean_depth_m=5_000.0,
+    )
+    directions = np.asarray(
+        ((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    )
+    sigma, _ = material.sample(
+        directions,
+        np.asarray((-2_500.0, -5_000.0, -7_500.0)),
+        6_371_000.0,
+    )
+
+    water = 1.0 / material.sea_water_resistivity_ohm_m
+    rock = 1.0 / material.upper_crust_resistivity_ohm_m
+    np.testing.assert_allclose(sigma[0], (water, water, rock))
+    np.testing.assert_allclose(sigma[1], (water, water, rock))
+    np.testing.assert_allclose(sigma[2], (rock, rock, rock))
+
+
+def test_simpson_material_rejects_negative_minimum_ocean_depth() -> None:
+    with pytest.raises(ValueError, match="minimum ocean depth"):
+        SimpsonTaflove2004Material(
+            land_classifier=lambda directions: np.ones(
+                len(directions), dtype=np.bool_
+            ),
+            minimum_ocean_depth_m=-1.0,
+        )
+
+
 def test_fractional_tangential_interface_rejects_invalid_bounds() -> None:
     material = SimpsonTaflove2004Material(
         land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),

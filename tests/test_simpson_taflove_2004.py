@@ -299,6 +299,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         git_revision="abc1234",
         subdivision=7,
         mesh_optimization_steps=0,
+        minimum_ocean_depth_m=0.0,
         surface_cells=163_842,
         radial_cells=40,
         time_step_s=3.0e-6,
@@ -330,6 +331,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
 
     assert "정량 검증 상태: **실패**" in text
     assert "mesh optimization steps | 0" in text
+    assert "minimum ocean depth | 0 km" in text
     assert "163,842" in text
     assert "6.146 dB/Mm" in text
     assert "9.000 dB/Mm" in text

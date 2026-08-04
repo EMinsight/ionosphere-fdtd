@@ -160,6 +160,7 @@ def create_validation_simulation(
     etopo5_path: str | Path | None = None,
     tangential_interface_mode: str = "point",
     tangential_material_support: str = "point",
+    minimum_ocean_depth_m: float = 0.0,
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
@@ -169,6 +170,7 @@ def create_validation_simulation(
             ionosphere_reference_height_m=ionosphere_reference_height_m,
             ionosphere_scale_height_m=ionosphere_scale_height_m,
             tangential_interface_mode=tangential_interface_mode,
+            minimum_ocean_depth_m=minimum_ocean_depth_m,
         )
     elif material_model == "etopo5":
         if etopo5_path is None:
@@ -178,6 +180,7 @@ def create_validation_simulation(
             ionosphere_reference_height_m=ionosphere_reference_height_m,
             ionosphere_scale_height_m=ionosphere_scale_height_m,
             tangential_interface_mode=tangential_interface_mode,
+            minimum_ocean_depth_m=minimum_ocean_depth_m,
         )
     elif material_model == "uniform":
         material = EarthIonosphereMaterial(

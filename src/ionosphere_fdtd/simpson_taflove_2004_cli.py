@@ -76,6 +76,12 @@ def _parser() -> argparse.ArgumentParser:
         default="point",
         help="sample Et material at one edge point or four dual-support points",
     )
+    parser.add_argument(
+        "--minimum-ocean-depth-km",
+        type=float,
+        default=0.0,
+        help="opt-in conservative ocean-column depth for radial voxelization",
+    )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--dtype", choices=("auto", "float32", "float64"), default="float32")
@@ -140,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             etopo5_path=args.etopo5_path,
             tangential_interface_mode=args.tangential_interface,
             tangential_material_support=args.tangential_support,
+            minimum_ocean_depth_m=1_000.0 * args.minimum_ocean_depth_km,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -148,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         f"backend={simulation.backend.name} device={simulation.backend.device} "
         f"dtype={simulation.backend.dtype_name} material={args.material} "
         f"mesh_optimization_steps={args.mesh_optimization_steps} "
+        f"minimum_ocean_depth_km={args.minimum_ocean_depth_km:g} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
         f"dt={simulation.time_step_s:.3e}s",
@@ -214,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
             git_revision=_git_revision(),
             subdivision=args.subdivision,
             mesh_optimization_steps=args.mesh_optimization_steps,
+            minimum_ocean_depth_m=1_000.0 * args.minimum_ocean_depth_km,
             surface_cells=simulation.mesh.n_vertices,
             radial_cells=simulation.config.radial_cells,
             time_step_s=simulation.time_step_s,
@@ -256,6 +265,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"--subdivision {args.subdivision}",
         f"--mesh-orientation {quote(args.mesh_orientation)}",
         f"--mesh-optimization-steps {args.mesh_optimization_steps}",
+        f"--minimum-ocean-depth-km {args.minimum_ocean_depth_km:g}",
         f"--steps {args.steps}",
         f"--material {quote(args.material)}",
         f"--backend {quote(args.backend)}",

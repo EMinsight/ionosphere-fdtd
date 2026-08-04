@@ -27,6 +27,7 @@ class ValidationRunSummary:
     git_revision: str
     subdivision: int
     mesh_optimization_steps: int
+    minimum_ocean_depth_m: float
     surface_cells: int
     radial_cells: int
     time_step_s: float
@@ -115,6 +116,7 @@ def write_validation_report(
 | Git revision | `{summary.git_revision}` |
 | subdivision | {summary.subdivision} |
 | mesh optimization steps | {summary.mesh_optimization_steps} |
+| minimum ocean depth | {summary.minimum_ocean_depth_m / 1_000.0:g} km |
 | 표면 셀 | {summary.surface_cells:,} |
 | 방사 셀 | {summary.radial_cells} |
 | 시간 간격 | {summary.time_step_s:.3e} s |

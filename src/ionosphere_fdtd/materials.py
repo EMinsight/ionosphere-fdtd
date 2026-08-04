@@ -271,6 +271,7 @@ class SimpsonTaflove2004Material:
     ionosphere_prefactor_hz: float = 2.5e5
     anomalies: tuple[SphericalAnomaly, ...] = field(default_factory=tuple)
     tangential_interface_mode: str = "point"
+    minimum_ocean_depth_m: float = 0.0
 
     def __post_init__(self) -> None:
         if (self.land_classifier is None) == (
@@ -291,6 +292,8 @@ class SimpsonTaflove2004Material:
         )
         if any(value <= 0.0 for value in positive):
             raise ValueError("material lengths and resistivities must be positive")
+        if self.minimum_ocean_depth_m < 0.0:
+            raise ValueError("minimum ocean depth cannot be negative")
         if self.asthenosphere_top_depth_m >= self.asthenosphere_bottom_depth_m:
             raise ValueError("asthenosphere depth bounds are reversed")
         if min(
@@ -324,6 +327,11 @@ class SimpsonTaflove2004Material:
             raise ValueError("surface data must return one value per direction")
         if not np.all(np.isfinite(surface_elevation_m)):
             raise ValueError("surface elevations must be finite")
+        surface_elevation_m = np.where(
+            is_land,
+            surface_elevation_m,
+            np.minimum(surface_elevation_m, -self.minimum_ocean_depth_m),
+        )
         return normalized, is_land, surface_elevation_m
 
     def _rock_resistivity(
