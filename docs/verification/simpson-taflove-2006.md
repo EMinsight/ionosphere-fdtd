@@ -14,14 +14,19 @@ with `float64` fields.
 Figure 5 reproduces the published arrival ordering, timing, overshoot, and
 slow-tail morphology, but not all four relative amplitudes. A corrected
 geographic locator separates the previously collapsed B/B′ observations. The
-final level-7 polar, mesh-smoothed ETOPO5 run gives normalized far peaks of
-0.14159/0.35471 instead of approximately 0.39/0.39. CUDA `float64` isolation
-runs show that a fixed-depth surface restores both far peaks and east/west
-symmetry, but forcing every shallow ocean column to contain a 5-km seawater
-cell has negligible effect. The mismatch is therefore associated with the
-complete relief/lithosphere voxelization and unavailable paper grid
-coordinates, not shallow receiver bathymetry alone. The previously finalized
-Figure 6 run has east/west mean absolute errors of 2.064/0.277 dB/Mm and
+final level-7 polar ETOPO5 run uses Sandia Mesquite's uniform size-and-shape
+objective on the sphere and gives normalized far peaks of 0.31148/0.35580
+instead of approximately 0.39/0.39. This reduces the far-path relative RMS
+difference from 134.5% with the earlier one-step smoother to 18.5%, and the
+far tails now agree with one another, but their common magnitude remains about
+40% below the published visual estimate. CUDA `float64` isolation runs show
+that a fixed-depth surface restores both far peaks and east/west symmetry,
+while forcing every shallow ocean column to contain a 5-km seawater cell has
+negligible effect. The remaining mismatch is therefore associated with the
+complete relief/lithosphere voxelization and the paper's unpublished exact
+Mesquite configuration and coordinates, not shallow receiver bathymetry
+alone. The previously finalized Figure 6 run has east/west mean absolute
+errors of 2.064/0.277 dB/Mm and
 maximum absolute errors of 5.026/1.650 dB/Mm. Both paths fail the paper's
 pointwise ±0.5 dB/Mm statement over 50–500 Hz.
 
@@ -81,7 +86,7 @@ while the rendered curve retains the approach to the zero-crossing spikes.
 |---|---:|
 | Surface grid | subdivision 7, 163,842 geodesic dual cells |
 | Orientation | polar; pentagonal cell centers at both poles |
-| Mesh quality | one projected spherical edge-quality step |
+| Mesh quality | Mesquite 2.99 uniform size-and-shape optimization on the unit sphere; polar pentagons fixed |
 | Radial domain | −100 to +100 km |
 | Radial cells | 40 at 5 km |
 | Time step | 3.0 μs |
@@ -92,8 +97,12 @@ while the rendered curve retains the approach to the zero-crossing spikes.
 | Surface data | NOAA-NGDC ETOPO5, bilinear sampling |
 | Ionosphere | 70 km reference height, 3.33 km scale height |
 | Backend | compiled PyTorch, CUDA, float64 |
-| Production revision | `25a9441` |
-| Wall time | 905.4 s |
+| Optimizer | `TShapeSizeB1`, `PMeanP(1)`, `TrustRegion` |
+| Mesquite source revision | `7ae51c8e8617c67e63018c8a7effc0f5455f58b4` |
+| Production implementation revision | `b4823c7` |
+| Mesh-coordinate SHA-256 | `5d5f5c531f03e8d9b7124d1cca81987f65e1b2a33d19a3d8d8265b151e03dccb` |
+| Trace SHA-256 | `89cc0d393454439a291333e4081105cd6b7516768b6af78f5efbdfe4e80de85c` |
+| Mesh optimization / FDTD wall time | 181.8 / 1,125.8 s |
 
 The source is barycentrically distributed in the horizontal plane and linearly
 staggered between the 0 and 5 km `Er` planes, preserving its exact 2.5 km
@@ -149,22 +158,24 @@ the reference/anomaly difference but remains a reproducibility limitation.
 ![Published and reproduced Figure 5](images/simpson-taflove-2006-fig-5-comparison.png)
 
 All four receiver records are plotted individually with one common
-normalization. The corrected ETOPO5 run gives A/A′ peak times of
-22.548/23.235 ms and B/B′ peak times of 44.562/44.043 ms. The calculated
-waveforms preserve the published arrival ordering, negative main pulse,
-opposite-sign overshoot, and subsequent slow tail. Their amplitudes, however,
-are path dependent: the normalized B/B′ peaks are 0.14159/0.35471, versus
-approximately 0.39 for both published far records by visual reading.
+normalization. The corrected, Mesquite-optimized ETOPO5 run gives A/A′ peak
+times of 22.545/23.226 ms and B/B′ peak times of 44.406/44.028 ms. The
+calculated waveforms preserve the published arrival ordering, main pulse,
+opposite-sign overshoot, and subsequent slow tail. The raw pulse is negative;
+the comparison applies one common sign reversal to match the published panel.
+Their amplitudes, however, remain low: the normalized B/B′ peaks are
+0.31148/0.35580, versus approximately 0.39 for both published far records by
+visual reading.
 
 | Figure 5 criterion | Published behavior | Reproduction | Result |
 |---|---|---|---:|
-| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.548/23.235 ms; B/B′ at 44.562/44.043 ms | **PASS** |
+| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.545/23.226 ms; B/B′ at 44.406/44.028 ms | **PASS** |
 | Main-pulse timing | Peaks occur at the corresponding locations in the published panel | All four peaks visually align with the published traces | **PASS** |
 | Waveform morphology | Negative main pulse, opposite-sign overshoot, and slow tail | All three features are present | **PASS** |
-| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.6% | **FAIL** |
-| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 134.5% | **FAIL** |
-| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.14159/0.35471 | **FAIL** |
-| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.02820/0.05904 | **FAIL** |
+| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.4% | **FAIL** |
+| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 18.5% | **FAIL** |
+| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.31148/0.35580 | **FAIL** |
+| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.06093/0.05922 | **FAIL** |
 | Overall qualitative morphology | Ordering and characteristic waveform shape | Required qualitative features are present | **PASS** |
 | Exact plot reproduction | Timing, relative amplitude, and path similarity agree | Timing agrees; amplitude and symmetry do not | **FAIL** |
 
@@ -221,7 +232,7 @@ The production-resolution comparison confirms the same result:
 |---|---:|---:|---:|
 | Native fixed-depth diagnostic | 1.00000 / 0.99476 | 0.33907 / 0.33993 | 0.6% / 0.5% |
 | Prior native ETOPO5 | 0.97920 / 1.00000 | 0.16425 / 0.35813 | 37.3% / 105.0% |
-| Final polar optimized ETOPO5 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 37.6% / 134.5% |
+| Prior polar projected-step ETOPO5 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 37.6% / 134.5% |
 
 ETOPO5 elevations at the requested source, A, A′, B, and B′ locations are
 −24, −5,014, −3,041, −207, and −4,538 m, respectively. At the
@@ -374,6 +385,76 @@ still 63.7% below the approximate published 0.39 peak and 60.1% below B′.
 Horizontal resolution moves the result in the correct direction but does not
 converge quickly enough to reproduce Figure 5 at the published grid size.
 
+#### Official Mesquite size-and-shape optimization
+
+The follow-up replaces the one-step in-project smoother with the latest
+publicly available upstream Sandia Mesquite snapshot: version 2.99 at commit
+`7ae51c8e8617c67e63018c8a7effc0f5455f58b4`. The source is downloaded from
+the [official Sandia archive](https://github.com/sandialabs/mesquite) and its
+nested archive is pinned by SHA-256. Mesquite remains an external LGPL
+dependency rather than being copied into this repository.
+
+The paper says that both cell areas and locations were selected for Laplace
+consistency. A scale-invariant shape-only objective was therefore rejected:
+it reduced the Laplace error in a preliminary screen but increased cell-area
+and edge-length variation. The production adapter instead uses Mesquite's
+uniform ideal triangle size-and-shape target, `TShapeSizeB1`, aggregated by
+`PMeanP(1)` and minimized by `TrustRegion` on a `SphericalDomain`. Mesquite's
+`FeasibleNewton` implementation is documented for a truly planar XY mesh and
+is not used on the sphere. The two vertices whose duals are the polar
+pentagons are fixed; all other vertices may move. Connectivity, vertex order,
+the primal triangular cells, and the geodesic dual-grid implementation are
+unchanged. The objective contains no ETOPO5 elevations, source coordinates,
+receiver coordinates, or waveform metric.
+
+At subdivision 7 the optimizer converged in 181.8 s. The largest great-circle
+vertex displacement was 0.015475 rad, or 98.6 km at the Earth radius. Every
+reported metric improved:
+
+| Subdivision-7 mesh metric | Original polar mesh | Mesquite | Reduction |
+|---|---:|---:|---:|
+| Primal-edge length CV | 0.065027 | 0.042243 | 35.0% |
+| Primal-face area CV | 0.086445 | 0.062306 | 27.9% |
+| Dual-cell area CV | 0.085150 | 0.062284 | 26.9% |
+| Adjacent dual-area jump RMS | 0.017174 | 0.003643 | 78.8% |
+| Maximum adjacent dual-area jump | 0.121137 | 0.085704 | 29.3% |
+| Relative Laplace error, real `l=1` harmonic | `7.0163e-5` | `1.0790e-5` | 84.6% |
+| Relative Laplace error, real `l=2` harmonic | `5.4227e-4` | `2.2976e-4` | 57.6% |
+
+The Laplace test is the area-weighted relative L2 error of the circumcentric
+finite-volume scalar Laplacian induced by the same primal/dual metric factors
+as the FDTD curls. For the `l=1` spherical harmonic, optimization also restores
+nearly second-order refinement convergence:
+
+| Refinement | Original `l=1` order | Mesquite `l=1` order | Original `l=2` order | Mesquite `l=2` order |
+|---|---:|---:|---:|---:|
+| subdivision 5 → 6 | 1.505 | 1.993 | 1.080 | 1.211 |
+| subdivision 6 → 7 | 1.503 | 1.992 | 1.037 | 1.112 |
+
+The ETOPO5 propagation experiment was then repeated at subdivisions 5, 6,
+and 7 without changing the material, radial grid, source, receivers, time
+step, or 40,000-step duration. All calculations used PyTorch CUDA `float64`.
+The earlier projected one-step results are retained below as the direct
+control:
+
+| Mesh / subdivision | A / A′ peak | B / B′ peak | B / B′ tail at 0.12 s | A/A′ / B/B′ relative RMS |
+|---|---:|---:|---:|---:|
+| Projected step / 5 | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
+| Mesquite / 5 | 0.97170 / 1.00000 | 0.34303 / 0.40516 | 0.06646 / 0.06814 | 31.4% / 23.8% |
+| Projected step / 6 | 0.96277 / 1.00000 | 0.07607 / 0.36672 | 0.01533 / 0.06053 | 36.8% / 347.7% |
+| Mesquite / 6 | 0.96689 / 1.00000 | 0.28091 / 0.36450 | 0.05441 / 0.06023 | 36.7% / 28.4% |
+| Projected step / 7 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 0.02820 / 0.05904 | 37.6% / 134.5% |
+| Mesquite / 7 | 0.97143 / 1.00000 | 0.31148 / 0.35580 | 0.06093 / 0.05922 | 37.4% / 18.5% |
+
+This is a material improvement and supports Reference 13's claim that Laplace
+consistency benefits Maxwell propagation. In particular, the two far tails
+now agree to 2.9% relative and the level-7 B peak rises by a factor of 2.20.
+It is not a quantitative Figure 5 pass: the far peaks remain approximately
+20% and 9% below the visual paper target, both far tails are about 40% low,
+and the near-path RMS remains 37.4%. The exact Mesquite objective parameters
+and final coordinates used in 2006 were not published, so the present result
+is a reproducible reconstruction rather than a claim of coordinate identity.
+
 #### Conductivity-profile sensitivity
 
 Corrected-location subdivision-5 screening varied the ionosphere around the
@@ -444,9 +525,10 @@ Local quadrature over one edge support therefore does not remove the large
 subdivision-dependent path difference and is not promoted to level 7. The
 remaining alias is global: different surface refinements route the wave over
 different sequences of binary 5-km water and rock columns. Reproducing the
-paper by changing those columns would require its unavailable optimized cell
-coordinates or an explicitly disclosed ocean-column approximation, not a
-local metric correction.
+paper by changing those columns would require its unpublished exact optimized
+cell coordinates or an explicitly disclosed ocean-column approximation, not
+a local metric correction. The later official Mesquite reconstruction reduces
+this alias substantially but does not eliminate it.
 
 ## Figure 6: daytime attenuation
 
@@ -629,10 +711,13 @@ production results were accepted:
 6. The original mesh orientation put hexagonal cells at the geographic poles,
    contrary to the paper. A rigid default rotation now aligns degree-five cell
    centers with both poles without changing topology or intrinsic metrics.
-7. The paper's exact Mesquite coordinates are unavailable. An opt-in projected
-   spherical edge-quality step reduces edge, triangle-area, dual-area, and
-   adjacent-area variation while fixing all 12 pentagonal anchors. Its
-   objective is independent of ETOPO5 and receiver values.
+7. The paper's exact Mesquite coordinates and objective parameters are
+   unavailable. The latest public Mesquite 2.99 snapshot is now integrated as
+   an offline optimizer. Its uniform spherical size-and-shape objective
+   improves every tracked mesh-quality and Laplace metric while fixing only
+   the two polar pentagons. It uses no ETOPO5, source, receiver, or waveform
+   information. The optimized coordinate archive is validated before every
+   FDTD run, and all geometry is rebuilt without changing grid topology.
 
 Coarse source-deposition and resolution diagnostics performed before the
 geographic correction are retained in git history as implementation tests, but
@@ -667,24 +752,34 @@ tuned away.
 
 ## Reproduction commands
 
-The final Figure 5 result uses the exact ETOPO5 level-7 trace configuration:
+The final Figure 5 result first builds the pinned Mesquite source, creates the
+level-7 coordinate archive, and then uses that archive in the ETOPO5 run:
 
 ```bash
+python tools/mesquite/build.py --build-dir build/mesquite
+
+.venv/bin/python -m ionosphere_fdtd.mesh_optimize_cli \
+  --subdivision 7 --orientation polar --fixed-vertices poles \
+  --executable build/mesquite/bin/ionosphere-mesquite-optimize \
+  --movement-tolerance 1e-10 --max-iterations 200 \
+  --output /tmp/ionosphere-mesquite-level-7.npz
+
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2004_cli \
   --subdivision 7 --mesh-orientation polar \
-  --mesh-optimization-steps 1 --minimum-ocean-depth-km 0 \
+  --mesh-coordinates /tmp/ionosphere-mesquite-level-7.npz \
+  --minimum-ocean-depth-km 0 \
   --steps 40000 --material etopo5 \
-  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
+  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
   --ionosphere-scale-height-km 3.3333333333333335 --torch-compile \
   --synchronize-every 128 \
-  --output-dir /tmp/fig5-polar-optimized-etopo5-l7
+  --output-dir /tmp/fig5-mesquite-etopo5-l7
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli \
   figures-5-6 \
-  --traces /tmp/fig5-polar-optimized-etopo5-l7/simpson-taflove-2004-traces.npz \
-  --output-dir /tmp/fig5-polar-optimized-etopo5-l7/figures-5-6
+  --traces /tmp/fig5-mesquite-etopo5-l7/simpson-taflove-2004-traces.npz \
+  --output-dir /tmp/fig5-mesquite-etopo5-l7/figures-5-6
 ```
 
 The fixed-depth isolation changes `--material etopo5` to
@@ -733,10 +828,11 @@ The paired Figure 7 runs were:
 - The paper uses an optimized geodesic grid. This project retains its existing
   recursively subdivided geodesic dual-grid topology, as required. Its rigid
   polar orientation places pentagonal cell centers at both geographic poles.
-  One deterministic projected edge-quality step reduces edge and adjacent-cell
-  area variation without using ETOPO5 or receiver values in its objective. The
-  paper does not publish the exact Mesquite objective or final coordinates, so
-  the resulting vertices cannot be assumed identical to the paper's grid.
+  The pinned Mesquite 2.99 reconstruction uses a documented uniform
+  size-and-shape objective on the sphere and fixes those two vertices. The
+  paper does not publish its exact Mesquite objective parameters, constraints,
+  termination criteria, or final coordinates, so the reconstructed vertices
+  cannot be assumed identical to the paper's grid.
 - Figure 7 does not define source phase, Gaussian center time, or a formal
   error norm. The simulation begins three Gaussian `1/e` half-widths before the
   envelope center, and its displayed time is referenced to that center.
@@ -755,20 +851,25 @@ The final status is therefore **FAIL**.
 The corrective work did produce reusable, tested capabilities: physically
 scaled horizontal ground-line sources, CUDA-native radial/tangential magnetic
 recording, buried anomalies in the ETOPO5 layered material, protected water
-layers, polar pentagon alignment, constrained mesh-quality optimization,
+layers, polar pentagon alignment, a pinned Sandia Mesquite build and spherical
+size-and-shape optimization pipeline, Laplace-consistency metrics,
 conservative ocean-column diagnostics, and a reproducible Figure 5–7 analysis
 CLI. Precision, time-step stability, source moment, radial metric weighting,
-and ionosphere-profile
-sensitivity were tested. The geographic locator defect was corrected and all
-paper-scale production traces affected by it were recomputed.
+and ionosphere-profile sensitivity were tested. The geographic locator defect
+was corrected and all paper-scale production traces affected by it were
+recomputed.
 
-For Figure 5, the mismatch changes strongly and monotonically with surface
-subdivision, while fixed-depth geometry restores symmetry. Mesh smoothing,
-arithmetic radial fractions, local edge-support quadrature, and conservative
-5-km ocean occupancy are all insufficient. This leaves the complete ETOPO5
-surface/lithosphere voxelization and the unavailable optimized vertex
-coordinates as the strongest identified limitations; shallow bathymetry alone
-is no longer supported as the dominant cause. A frequency-dependent ground
+For Figure 5, fixed-depth geometry restores symmetry. The official Mesquite
+optimization materially improves the ETOPO5 result: it reduces the level-7
+far-path RMS difference from 134.5% to 18.5%, raises B from 0.14159 to
+0.31148, and restores nearly second-order `l=1` Laplace convergence. It does
+not repair the 37.4% near-path mismatch or the approximately 40% low far
+tails. Arithmetic radial fractions, local edge-support quadrature, and
+conservative 5-km ocean occupancy are also insufficient. This leaves the
+complete ETOPO5 surface/lithosphere voxelization and the difference between
+the reconstructed and unpublished paper-specific optimized coordinates as the
+strongest identified limitations; shallow bathymetry alone is no longer
+supported as the dominant cause. A frequency-dependent ground
 surface impedance could improve physical convergence while retaining the
 required geodesic grid, but it would no longer be the paper's published
 bulk-cell algorithm. Figure 6 additionally retains the known
