@@ -320,8 +320,29 @@ The smoother mesh raises B by 13.6% relative to its very small baseline value,
 but B remains 88.7% below B′ and 88.2% below the approximate published 0.39
 peak. Its arrival shifts by only 0.192 ms. This is not sufficient evidence to
 promote the approximation to subdivision 7. The controlled fixed-depth versus
-ETOPO5 contrast instead requires a representation of shallow water that does
-not switch an entire 5-km radial sample between seawater and rock.
+ETOPO5 contrast instead requires further isolation of the complete surface-
+geometry voxelization.
+
+#### Conservative shallow-ocean voxelization
+
+An opt-in conservative rasterization then forced every ETOPO5 ocean column to
+contain at least one 5-km seawater cell while preserving the actual coastline,
+deeper bathymetry, and positive land topography. This changed 4,258 of 30,720
+tangential material columns at subdivision 5 from rock to seawater in the
+uppermost subsurface cell, so the experiment did exercise the missing shallow-
+water case rather than merely changing metadata.
+
+| Polar optimized ETOPO5 | A / A′ peak | B / B′ peak | B / B′ tail at 0.12 s | A/A′ / B/B′ relative RMS |
+|---|---:|---:|---:|---:|
+| Exact relief | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
+| Minimum 5-km ocean column | 0.97081 / 1.00000 | 0.04580 / 0.40605 | 0.00966 / 0.06863 | 34.1% / 734.5% |
+
+The waveform is effectively unchanged. The earlier fixed-depth comparison
+therefore did not isolate shallow-water depth alone: it also flattened positive
+land relief to sea level and used a different Natural Earth coastline. The
+strong contrast is caused by the complete surface-geometry voxelization, not
+by the 207-m receiver bathymetry in isolation. Conservative ocean occupancy is
+rejected as a Figure 5 correction and remains an explicit diagnostic only.
 
 #### Conductivity-profile sensitivity
 
@@ -341,7 +362,7 @@ The ionosphere changes B′ in the expected direction but leaves B strongly
 suppressed in every case. Even the 3.00-km scale height raises B only from
 0.11120 to 0.11603 while moving B′ above the published visual estimate. The
 standard 70-km/3.33-km Bannister profile is therefore retained. Parameter
-tuning cannot repair a path-selective missing-water-layer error.
+tuning cannot repair a path-selective surface-geometry discretization error.
 
 #### Fractional radial-interface experiment
 
