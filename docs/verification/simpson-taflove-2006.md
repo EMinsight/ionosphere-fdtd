@@ -308,6 +308,21 @@ no material effect on the far response. This passes the fixed-depth gate: the
 polar geodesic FDTD propagation itself can produce the Figure 5 amplitude and
 symmetry, while mesh smoothing alone is not a fit for the ETOPO5 failure.
 
+The corresponding ETOPO5 rerun fails the next gate:
+
+| Polar subdivision-5 material | A / A′ peak | B / B′ peak | B / B′ tail at 0.12 s | A/A′ / B/B′ relative RMS |
+|---|---:|---:|---:|---:|
+| ETOPO5, 0 optimization steps | 0.97600 / 1.00000 | 0.04036 / 0.40786 | 0.00854 / 0.06923 | 34.5% / 855.1% |
+| ETOPO5, 1 projected step | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
+| Fixed-depth, 1 projected step | 1.00000 / 0.99660 | 0.39700 / 0.39769 | 0.07732 / 0.07717 | 0.7% / 0.6% |
+
+The smoother mesh raises B by 13.6% relative to its very small baseline value,
+but B remains 88.7% below B′ and 88.2% below the approximate published 0.39
+peak. Its arrival shifts by only 0.192 ms. This is not sufficient evidence to
+promote the approximation to subdivision 7. The controlled fixed-depth versus
+ETOPO5 contrast instead requires a representation of shallow water that does
+not switch an entire 5-km radial sample between seawater and rock.
+
 #### Conductivity-profile sensitivity
 
 Corrected-location subdivision-5 screening varied the ionosphere around the
