@@ -26,6 +26,7 @@ class ValidationRunSummary:
     command: str
     git_revision: str
     subdivision: int
+    mesh_optimization_steps: int
     surface_cells: int
     radial_cells: int
     time_step_s: float
@@ -113,6 +114,7 @@ def write_validation_report(
 |---|---:|
 | Git revision | `{summary.git_revision}` |
 | subdivision | {summary.subdivision} |
+| mesh optimization steps | {summary.mesh_optimization_steps} |
 | 표면 셀 | {summary.surface_cells:,} |
 | 방사 셀 | {summary.radial_cells} |
 | 시간 간격 | {summary.time_step_s:.3e} s |

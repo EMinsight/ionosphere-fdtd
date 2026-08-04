@@ -21,6 +21,13 @@ def small_config(**changes: object) -> SimulationConfig:
     return SimulationConfig(**values)
 
 
+def test_simulation_config_rejects_negative_mesh_steps() -> None:
+    with pytest.raises(ValueError, match="mesh_relaxations"):
+        small_config(mesh_relaxations=-1)
+    with pytest.raises(ValueError, match="mesh_optimization_steps"):
+        small_config(mesh_optimization_steps=-1)
+
+
 def test_zero_fields_are_stationary() -> None:
     simulation = GeodesicFDTD(config=small_config())
     simulation.step(3)

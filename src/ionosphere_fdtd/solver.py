@@ -27,6 +27,7 @@ class SimulationConfig:
     courant_factor: float = 0.35
     time_step_s: float | None = None
     mesh_relaxations: int = 0
+    mesh_optimization_steps: int = 0
     mesh_orientation: str = "polar"
     radial_altitudes_m: tuple[float, ...] | None = None
     tangential_material_support: str = "point"
@@ -36,6 +37,10 @@ class SimulationConfig:
             raise ValueError("subdivision must be non-negative")
         if self.radial_cells < 2:
             raise ValueError("radial_cells must be at least 2")
+        if self.mesh_relaxations < 0:
+            raise ValueError("mesh_relaxations must be non-negative")
+        if self.mesh_optimization_steps < 0:
+            raise ValueError("mesh_optimization_steps must be non-negative")
         if self.mesh_orientation not in {"native", "polar"}:
             raise ValueError("mesh_orientation must be 'native' or 'polar'")
         if self.tangential_material_support not in {"point", "edge-diamond"}:
@@ -87,9 +92,10 @@ class GeodesicFDTD:
     ) -> None:
         self.config = config or SimulationConfig()
         self.mesh = mesh or build_geodesic_mesh(
-            self.config.subdivision,
-            self.config.mesh_relaxations,
-            self.config.mesh_orientation,
+            subdivision=self.config.subdivision,
+            relaxations=self.config.mesh_relaxations,
+            orientation=self.config.mesh_orientation,
+            optimization_steps=self.config.mesh_optimization_steps,
         )
         if self.mesh.subdivision != self.config.subdivision:
             raise ValueError("provided mesh subdivision does not match config")

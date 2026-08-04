@@ -47,6 +47,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mesh-orientation", choices=("native", "polar"), default="polar"
     )
+    parser.add_argument(
+        "--mesh-optimization-steps",
+        type=int,
+        default=0,
+        help="apply deterministic spherical edge-quality optimization",
+    )
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
         "--material",
@@ -126,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
             compile_step=args.torch_compile,
             torch_threads=args.torch_threads,
             mesh_orientation=args.mesh_orientation,
+            mesh_optimization_steps=args.mesh_optimization_steps,
             ionosphere_reference_height_m=(
                 1_000.0 * args.ionosphere_reference_height_km
             ),
@@ -140,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         f"grid={simulation.mesh.n_vertices:,}x{simulation.config.radial_cells} "
         f"backend={simulation.backend.name} device={simulation.backend.device} "
         f"dtype={simulation.backend.dtype_name} material={args.material} "
+        f"mesh_optimization_steps={args.mesh_optimization_steps} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
         f"dt={simulation.time_step_s:.3e}s",
@@ -205,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
             command=_reproduction_command(args),
             git_revision=_git_revision(),
             subdivision=args.subdivision,
+            mesh_optimization_steps=args.mesh_optimization_steps,
             surface_cells=simulation.mesh.n_vertices,
             radial_cells=simulation.config.radial_cells,
             time_step_s=simulation.time_step_s,
@@ -246,6 +255,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         "uv run --extra pytorch --extra visualization ionosphere-verify-2004",
         f"--subdivision {args.subdivision}",
         f"--mesh-orientation {quote(args.mesh_orientation)}",
+        f"--mesh-optimization-steps {args.mesh_optimization_steps}",
         f"--steps {args.steps}",
         f"--material {quote(args.material)}",
         f"--backend {quote(args.backend)}",

@@ -89,6 +89,7 @@ def build_geodesic_mesh(
     subdivision: int = 2,
     relaxations: int = 0,
     orientation: str = "polar",
+    optimization_steps: int = 0,
 ) -> GeodesicMesh:
     """Build a recursively bisected icosahedral mesh on the unit sphere.
 
@@ -104,6 +105,8 @@ def build_geodesic_mesh(
         raise ValueError("subdivision must be non-negative")
     if relaxations < 0:
         raise ValueError("relaxations must be non-negative")
+    if optimization_steps < 0:
+        raise ValueError("optimization_steps must be non-negative")
     if orientation not in {"native", "polar"}:
         raise ValueError("orientation must be 'native' or 'polar'")
 
@@ -114,6 +117,8 @@ def build_geodesic_mesh(
         vertices, faces = _subdivide(vertices, faces)
     for _ in range(relaxations):
         vertices = _relax(vertices, faces)
+    if optimization_steps:
+        vertices = _optimize_edge_lengths(vertices, faces, optimization_steps)
     faces = _orient_faces(vertices, faces)
 
     face_centers = _spherical_face_centers(vertices, faces)
@@ -290,6 +295,66 @@ def _relax(vertices: FloatArray, faces: IntArray) -> FloatArray:
         np.add.at(accumulated, faces[:, corner], centers)
         np.add.at(counts, faces[:, corner], 1)
     return _normalize(accumulated / counts[:, None])
+
+
+def _optimize_edge_lengths(
+    vertices: FloatArray,
+    faces: IntArray,
+    steps: int,
+) -> FloatArray:
+    """Reduce spherical edge-length variance without changing the topology.
+
+    This deterministic projected edge-quality optimizer is inspired by the
+    Mesquite metrics cited by Simpson, Heikes, and Taflove. Each step descends
+    the squared deviation from the global mean great-circle edge length and
+    projects the displacement back onto the unit sphere. The twelve
+    degree-five vertices remain fixed, preserving the base-icosahedron anchors
+    and, in the polar orientation, the exact polar cell centers.
+
+    It is intentionally separate from the legacy face-centroid relaxation.
+    The paper does not publish the Mesquite objective, weights, or optimized
+    coordinates, so callers must opt in to this reproducible approximation.
+    """
+
+    edges = _build_edges(faces)[0]
+    degree = np.bincount(edges.ravel(), minlength=len(vertices))
+    fixed = degree == 5
+    result = vertices.copy()
+    tails = edges[:, 0]
+    heads = edges[:, 1]
+
+    for _ in range(steps):
+        tail_vertices = result[tails]
+        head_vertices = result[heads]
+        dot = np.clip(
+            np.einsum("ij,ij->i", tail_vertices, head_vertices),
+            -1.0,
+            1.0,
+        )
+        sine = np.linalg.norm(np.cross(tail_vertices, head_vertices), axis=1)
+        lengths = np.arctan2(sine, dot)
+        residual = lengths - float(np.mean(lengths))
+
+        tail_gradient = (
+            residual[:, None]
+            * (dot[:, None] * tail_vertices - head_vertices)
+            / sine[:, None]
+        )
+        head_gradient = (
+            residual[:, None]
+            * (dot[:, None] * head_vertices - tail_vertices)
+            / sine[:, None]
+        )
+        gradient = np.zeros_like(result)
+        np.add.at(gradient, tails, tail_gradient)
+        np.add.at(gradient, heads, head_gradient)
+        gradient /= degree[:, None]
+        gradient -= np.einsum("ij,ij->i", gradient, result)[:, None] * result
+        gradient[fixed] = 0.0
+        result = _normalize(result - gradient)
+        result[fixed] = vertices[fixed]
+
+    return result
 
 
 def _spherical_face_centers(vertices: FloatArray, faces: IntArray) -> FloatArray:

@@ -152,6 +152,7 @@ def create_validation_simulation(
     compile_step: bool = True,
     torch_threads: int | None = None,
     mesh_orientation: str = "polar",
+    mesh_optimization_steps: int = 0,
     ionosphere_reference_height_m: float = (
         REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M
     ),
@@ -206,6 +207,7 @@ def create_validation_simulation(
             courant_factor=0.4,
             time_step_s=PAPER_TIME_STEP_S,
             mesh_orientation=mesh_orientation,
+            mesh_optimization_steps=mesh_optimization_steps,
             tangential_material_support=tangential_material_support,
         ),
         material=material,

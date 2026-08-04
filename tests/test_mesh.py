@@ -53,3 +53,38 @@ def test_default_orientation_places_pentagons_at_geographic_poles() -> None:
 def test_mesh_rejects_unknown_orientation() -> None:
     with pytest.raises(ValueError, match="orientation"):
         build_geodesic_mesh(0, orientation="sideways")
+
+
+def test_edge_optimizer_improves_mesh_quality_and_fixes_pentagons() -> None:
+    base = build_geodesic_mesh(3)
+    optimized = build_geodesic_mesh(3, optimization_steps=1)
+
+    np.testing.assert_allclose(
+        optimized.vertices[base.vertex_degree == 5],
+        base.vertices[base.vertex_degree == 5],
+        rtol=0.0,
+        atol=0.0,
+    )
+    assert np.std(optimized.primal_edge_angles) < np.std(base.primal_edge_angles)
+    assert np.std(optimized.face_solid_angles) < np.std(base.face_solid_angles)
+    assert np.std(optimized.dual_cell_solid_angles) < np.std(
+        base.dual_cell_solid_angles
+    )
+
+    base_area_jump = np.abs(
+        base.dual_cell_solid_angles[base.edges[:, 0]]
+        - base.dual_cell_solid_angles[base.edges[:, 1]]
+    )
+    optimized_area_jump = np.abs(
+        optimized.dual_cell_solid_angles[optimized.edges[:, 0]]
+        - optimized.dual_cell_solid_angles[optimized.edges[:, 1]]
+    )
+    assert np.sqrt(np.mean(optimized_area_jump**2)) < np.sqrt(
+        np.mean(base_area_jump**2)
+    )
+    assert np.max(optimized_area_jump) < np.max(base_area_jump)
+
+
+def test_mesh_rejects_negative_optimization_steps() -> None:
+    with pytest.raises(ValueError, match="optimization_steps"):
+        build_geodesic_mesh(0, optimization_steps=-1)
