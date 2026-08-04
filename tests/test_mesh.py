@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from ionosphere_fdtd.mesh import build_geodesic_mesh
+from ionosphere_fdtd.mesh import (
+    build_geodesic_mesh,
+    build_geodesic_mesh_from_vertices,
+)
 
 
 @pytest.mark.parametrize("level", range(4))
@@ -88,3 +91,22 @@ def test_edge_optimizer_improves_mesh_quality_and_fixes_pentagons() -> None:
 def test_mesh_rejects_negative_optimization_steps() -> None:
     with pytest.raises(ValueError, match="optimization_steps"):
         build_geodesic_mesh(0, optimization_steps=-1)
+
+
+def test_mesh_accepts_external_unit_sphere_vertices() -> None:
+    base = build_geodesic_mesh(2)
+    serialized = np.round(base.vertices, decimals=10)
+    rebuilt = build_geodesic_mesh_from_vertices(2, serialized)
+
+    np.testing.assert_array_equal(rebuilt.faces, base.faces)
+    np.testing.assert_array_equal(rebuilt.edges, base.edges)
+    np.testing.assert_allclose(np.linalg.norm(rebuilt.vertices, axis=1), 1.0)
+    assert np.isclose(rebuilt.face_solid_angles.sum(), 4.0 * np.pi)
+    assert np.isclose(rebuilt.dual_cell_solid_angles.sum(), 4.0 * np.pi)
+
+
+def test_mesh_rejects_invalid_external_vertices() -> None:
+    with pytest.raises(ValueError, match="shape"):
+        build_geodesic_mesh_from_vertices(1, np.ones((4, 3)))
+    with pytest.raises(ValueError, match="unit sphere"):
+        build_geodesic_mesh_from_vertices(0, np.ones((12, 3)))

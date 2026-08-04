@@ -110,15 +110,62 @@ def build_geodesic_mesh(
     if orientation not in {"native", "polar"}:
         raise ValueError("orientation must be 'native' or 'polar'")
 
+    vertices, faces = _subdivided_icosahedron(subdivision, orientation)
+    for _ in range(relaxations):
+        vertices = _relax(vertices, faces)
+    if optimization_steps:
+        vertices = _optimize_edge_lengths(vertices, faces, optimization_steps)
+    return _assemble_geodesic_mesh(vertices, faces, subdivision)
+
+
+def build_geodesic_mesh_from_vertices(
+    subdivision: int,
+    vertices: FloatArray,
+    *,
+    orientation: str = "polar",
+) -> GeodesicMesh:
+    """Build the standard topology using externally optimized coordinates.
+
+    The coordinates must correspond, in the original vertex order, to the
+    recursively subdivided icosahedron at ``subdivision``. Small radial drift
+    introduced by mesh-file serialization is normalized away, but inputs that
+    are not already on the unit sphere are rejected.
+    """
+
+    if subdivision < 0:
+        raise ValueError("subdivision must be non-negative")
+    if orientation not in {"native", "polar"}:
+        raise ValueError("orientation must be 'native' or 'polar'")
+    _, faces = _subdivided_icosahedron(subdivision, orientation)
+    coordinates = np.asarray(vertices, dtype=np.float64)
+    expected_shape = (10 * 4**subdivision + 2, 3)
+    if coordinates.shape != expected_shape:
+        raise ValueError(
+            f"optimized vertices must have shape {expected_shape}, "
+            f"got {coordinates.shape}"
+        )
+    if not np.all(np.isfinite(coordinates)):
+        raise ValueError("optimized vertices must be finite")
+    radii = np.linalg.norm(coordinates, axis=1)
+    if not np.allclose(radii, 1.0, rtol=0.0, atol=1.0e-7):
+        raise ValueError("optimized vertices must lie on the unit sphere")
+    return _assemble_geodesic_mesh(coordinates / radii[:, None], faces, subdivision)
+
+
+def _subdivided_icosahedron(
+    subdivision: int, orientation: str
+) -> tuple[FloatArray, IntArray]:
     vertices, faces = _icosahedron()
     if orientation == "polar":
         vertices = _polar_orientation(vertices)
     for _ in range(subdivision):
         vertices, faces = _subdivide(vertices, faces)
-    for _ in range(relaxations):
-        vertices = _relax(vertices, faces)
-    if optimization_steps:
-        vertices = _optimize_edge_lengths(vertices, faces, optimization_steps)
+    return vertices, faces
+
+
+def _assemble_geodesic_mesh(
+    vertices: FloatArray, faces: IntArray, subdivision: int
+) -> GeodesicMesh:
     faces = _orient_faces(vertices, faces)
 
     face_centers = _spherical_face_centers(vertices, faces)
