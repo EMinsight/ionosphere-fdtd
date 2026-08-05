@@ -53,9 +53,6 @@ class TorchBackend(ArrayBackend):
                     "torch_threads is only valid for the PyTorch CPU backend"
                 )
             torch.set_num_threads(int(threads))
-        self.threads = (
-            torch.get_num_threads() if self.torch_device.type == "cpu" else None
-        )
         self.dtype = torch.float32 if dtype == "float32" else torch.float64
         self.dtype_name = dtype
         self.edges = self.index_array(mesh.edges)
@@ -191,12 +188,23 @@ class TorchBackend(ArrayBackend):
         return result
 
     def dual_cell_circulation(self, edge_values: Any) -> Any:
-        selected = edge_values[self.vertex_edges]
-        sign_shape = self.vertex_edge_signs.shape + (1,) * (
-            edge_values.ndim - 1
-        )
-        return self.torch.sum(
-            selected * self.vertex_edge_signs.reshape(sign_shape), dim=1
+        sign_shape = (self.n_vertices,) + (1,) * (edge_values.ndim - 1)
+        result = edge_values[self.vertex_edges[:, 0]]
+        result.mul_(self.vertex_edge_signs[:, 0].reshape(sign_shape))
+        for slot in range(1, self.vertex_edges.shape[1]):
+            term = edge_values[self.vertex_edges[:, slot]]
+            term.mul_(self.vertex_edge_signs[:, slot].reshape(sign_shape))
+            result.add_(term)
+        return result
+
+    @property
+    def threads(self) -> int | None:
+        """Return the current process-wide CPU thread count."""
+
+        return (
+            self.torch.get_num_threads()
+            if self.torch_device.type == "cpu"
+            else None
         )
 
     def to_numpy(self, values: Array) -> np.ndarray:

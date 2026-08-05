@@ -12,7 +12,6 @@ from .backends import ArrayBackend, create_backend
 from .constants import C_0, EARTH_RADIUS_M, EPSILON_0, MU_0
 from .materials import (
     EarthIonosphereMaterial,
-    SimpsonTaflove2004Material,
     apply_fractional_cell_anomalies,
     apply_fractional_point_anomalies,
     conservative_anomaly_fractions,
@@ -243,6 +242,14 @@ class GeodesicFDTD:
                 f"time step {self.time_step_s:.6e} s exceeds conservative limit "
                 f"{self.maximum_stable_time_step_s:.6e} s"
             )
+        if (
+            self.source is not None
+            and self.source.carrier_frequency_hz
+            >= 0.5 / self.time_step_s
+        ):
+            raise ValueError(
+                "source carrier frequency must be below the time-step Nyquist limit"
+            )
 
         self.er = self.backend.zeros((self.mesh.n_vertices, len(self.radii_m)))
         self.ht = self.backend.zeros((self.mesh.n_edges, len(self.radii_m)))
@@ -358,16 +365,28 @@ class GeodesicFDTD:
     def _sample_material_properties(self) -> None:
         """Sample validated host-side material properties before choosing dt."""
 
+        material_anomalies = getattr(self.material, "anomalies", None)
+        if (
+            self.config.horizontal_anomaly_mode == "conservative-nearest"
+            and material_anomalies is None
+        ):
+            raise ValueError(
+                "conservative-nearest anomalies require a material with an "
+                "anomalies collection"
+            )
         conservative_anomalies = (
             self.config.horizontal_anomaly_mode == "conservative-nearest"
-            and isinstance(self.material, SimpsonTaflove2004Material)
-            and bool(self.material.anomalies)
+            and bool(material_anomalies)
         )
-        sampling_material = (
-            replace(self.material, anomalies=())
-            if conservative_anomalies
-            else self.material
-        )
+        if conservative_anomalies:
+            try:
+                sampling_material = replace(self.material, anomalies=())
+            except TypeError as error:
+                raise ValueError(
+                    "conservative-nearest anomalies require a dataclass material"
+                ) from error
+        else:
+            sampling_material = self.material
         sigma_er, epsilon_r_er = self._validated_material_sample(
             sampling_material.sample(
                 self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
@@ -376,7 +395,7 @@ class GeodesicFDTD:
             "radial",
         )
         if conservative_anomalies:
-            anomalies = self.material.anomalies
+            anomalies = tuple(material_anomalies)
             fractions_er = tuple(
                 conservative_anomaly_fractions(
                     self.mesh.vertices,
@@ -436,11 +455,16 @@ class GeodesicFDTD:
                 dtype=np.float64,
             )
             epsilon_r_et = np.zeros_like(sigma_et)
-            for directions in support_directions:
+            quadrant_areas = self.mesh.edge_diamond_quadrant_solid_angles()
+            quadrant_weights = quadrant_areas / np.sum(
+                quadrant_areas, axis=1, keepdims=True
+            )
+            for quadrant, directions in enumerate(support_directions):
                 directions /= np.linalg.norm(directions, axis=1, keepdims=True)
                 support_sigma, support_epsilon = sample_tangential(directions)
-                sigma_et += 0.25 * support_sigma
-                epsilon_r_et += 0.25 * support_epsilon
+                weight = quadrant_weights[:, quadrant, None]
+                sigma_et += weight * support_sigma
+                epsilon_r_et += weight * support_epsilon
         if conservative_anomalies:
             fractions_et = tuple(
                 conservative_anomaly_fractions(
@@ -650,6 +674,8 @@ class GeodesicFDTD:
         return {
             "step": self.steps,
             "time_s": self.time_s,
+            "electric_time_s": self.electric_time_s,
+            "magnetic_time_s": self.magnetic_time_s,
             "backend": self.backend.name,
             "device": self.backend.device,
             "dtype": self.backend.dtype_name,
@@ -666,6 +692,18 @@ class GeodesicFDTD:
             "max_abs_hr_a_m": self.backend.max_abs(self.hr),
             "max_abs_ht_a_m": self.backend.max_abs(self.ht),
         }
+
+    @property
+    def electric_time_s(self) -> float:
+        """Time associated with the integer-step electric fields."""
+
+        return self.steps * self.time_step_s
+
+    @property
+    def magnetic_time_s(self) -> float:
+        """Time associated with the half-step magnetic fields."""
+
+        return (self.steps - 0.5) * self.time_step_s
 
     def to_numpy(self, values: Any) -> NDArray[np.generic]:
         """Expose values as a host NumPy array for analysis or plotting."""

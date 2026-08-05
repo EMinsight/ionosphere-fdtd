@@ -104,17 +104,14 @@ class NumPyBackend(ArrayBackend):
         return np.sum(selected * signs, axis=1)
 
     def dual_cell_circulation(self, edge_values: np.ndarray) -> np.ndarray:
-        selected = edge_values[self.vertex_edges]
-        flattened = selected.reshape(
-            self.n_vertices, self.vertex_edges.shape[1], -1
-        )
-        result = np.einsum(
-            "vdk,vd->vk",
-            flattened,
-            self.vertex_edge_signs,
-            optimize=True,
-        )
-        return result.reshape((self.n_vertices,) + edge_values.shape[1:])
+        sign_shape = (self.n_vertices,) + (1,) * (edge_values.ndim - 1)
+        result = edge_values[self.vertex_edges[:, 0]].copy()
+        result *= self.vertex_edge_signs[:, 0].reshape(sign_shape)
+        for slot in range(1, self.vertex_edges.shape[1]):
+            result += edge_values[self.vertex_edges[:, slot]] * (
+                self.vertex_edge_signs[:, slot].reshape(sign_shape)
+            )
+        return result
 
     def to_numpy(self, values: Array) -> np.ndarray:
         return np.asarray(values)

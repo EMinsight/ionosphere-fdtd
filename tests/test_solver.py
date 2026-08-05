@@ -5,6 +5,7 @@ from ionosphere_fdtd.constants import MU_0
 from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
+    SphericalAnomaly,
 )
 from ionosphere_fdtd.mesh import build_geodesic_mesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
@@ -368,6 +369,17 @@ def test_sources_reject_nonfinite_or_invalid_waveforms() -> None:
         GaussianCurrent(vertical_element_length_m=0.0)
 
 
+def test_solver_rejects_temporally_aliased_source_carrier() -> None:
+    baseline = GeodesicFDTD(config=small_config())
+    nyquist = 0.5 / baseline.time_step_s
+
+    with pytest.raises(ValueError, match="Nyquist"):
+        GeodesicFDTD(
+            config=small_config(),
+            source=GaussianCurrent(carrier_frequency_hz=nyquist),
+        )
+
+
 def test_nearest_edge_source_uses_at_most_one_edge_per_ground_line() -> None:
     source = TangentialGaussianCurrent(
         azimuths_deg=(0.0, 90.0),
@@ -627,10 +639,12 @@ def test_edge_diamond_support_averages_tangential_material() -> None:
         midpoint + endpoints[:, 1] + right,
         midpoint + right + endpoints[:, 0],
     )
+    quadrant_areas = mesh.edge_diamond_quadrant_solid_angles()
+    quadrant_weights = quadrant_areas / quadrant_areas.sum(axis=1, keepdims=True)
     expected_direction_x = np.zeros(mesh.n_edges)
-    for directions in supports:
+    for quadrant, directions in enumerate(supports):
         directions /= np.linalg.norm(directions, axis=1, keepdims=True)
-        expected_direction_x += 0.25 * directions[:, 0]
+        expected_direction_x += quadrant_weights[:, quadrant] * directions[:, 0]
     expected_sigma = 1.0e-3 * (2.0 + expected_direction_x)
 
     np.testing.assert_allclose(
@@ -713,6 +727,64 @@ def test_backend_native_h_recording_includes_initial_state() -> None:
     assert simulation.steps == 5
     assert np.isfinite(hr).all()
     assert np.isfinite(ht).all()
+
+
+def test_electric_and_magnetic_clocks_follow_leapfrog_staggering() -> None:
+    simulation = GeodesicFDTD(config=small_config())
+
+    assert simulation.electric_time_s == 0.0
+    assert simulation.magnetic_time_s == pytest.approx(
+        -0.5 * simulation.time_step_s
+    )
+    simulation.step(3)
+    diagnostics = simulation.diagnostics()
+
+    assert simulation.electric_time_s == pytest.approx(3.0 * simulation.time_step_s)
+    assert simulation.magnetic_time_s == pytest.approx(2.5 * simulation.time_step_s)
+    assert diagnostics["electric_time_s"] == pytest.approx(
+        simulation.electric_time_s
+    )
+    assert diagnostics["magnetic_time_s"] == pytest.approx(
+        simulation.magnetic_time_s
+    )
+
+
+def test_conservative_anomalies_support_default_material() -> None:
+    anomaly = SphericalAnomaly(
+        latitude_deg=0.0,
+        longitude_deg=0.0,
+        radius_m=1_000_000.0,
+        altitude_min_m=-100_000.0,
+        altitude_max_m=-1.0,
+        conductivity_factor=0.5,
+        target_area_m2=1.0e12,
+    )
+    simulation = GeodesicFDTD(
+        config=small_config(horizontal_anomaly_mode="conservative-nearest"),
+        material=EarthIonosphereMaterial(anomalies=(anomaly,)),
+    )
+
+    assert hasattr(simulation, "anomaly_horizontal_fractions_er")
+    assert hasattr(simulation, "anomaly_horizontal_fractions_et")
+
+
+def test_conservative_anomaly_mode_rejects_unsupported_material() -> None:
+    class MaterialWithoutAnomalies:
+        def sample(
+            self,
+            directions: np.ndarray,
+            altitudes_m: np.ndarray,
+            earth_radius_m: float,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            del earth_radius_m
+            shape = (len(directions), len(altitudes_m))
+            return np.zeros(shape), np.ones(shape)
+
+    with pytest.raises(ValueError, match="anomalies collection"):
+        GeodesicFDTD(
+            config=small_config(horizontal_anomaly_mode="conservative-nearest"),
+            material=MaterialWithoutAnomalies(),  # type: ignore[arg-type]
+        )
 
 
 def test_step_and_observation_controls_require_integers() -> None:

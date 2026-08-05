@@ -83,6 +83,23 @@ class GeodesicMesh:
             tail, head, right
         )
 
+    def edge_diamond_quadrant_solid_angles(self) -> FloatArray:
+        """Return the four spherical support areas around every edge midpoint."""
+
+        tail = self.vertices[self.edges[:, 0]]
+        head = self.vertices[self.edges[:, 1]]
+        midpoint = self.edge_midpoints()
+        left = self.face_centers[self.edge_left_faces]
+        right = self.face_centers[self.edge_right_faces]
+        return np.column_stack(
+            (
+                _spherical_triangle_area(midpoint, tail, left),
+                _spherical_triangle_area(midpoint, left, head),
+                _spherical_triangle_area(midpoint, head, right),
+                _spherical_triangle_area(midpoint, right, tail),
+            )
+        )
+
     def face_circulation(self, edge_values: FloatArray) -> FloatArray:
         """Counter-clockwise circulation around every primal triangle."""
 

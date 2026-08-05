@@ -163,7 +163,9 @@ radar grid.
 
 These values and anomaly volumes are configurable.  Material sampling is
 isolated from the solver so alternative ionospheric and crustal profiles can
-be supplied without changing the field-update equations.
+be supplied without changing the field-update equations. Tangential electric
+material coefficients use the four spherical subareas of each edge diamond as
+quadrature weights, avoiding the equal-quadrant bias of distorted cells.
 
 `GaussianCurrent` defaults to Gwangju, Republic of Korea (`35.1595° N`,
 `126.8526° E`).  It distributes vertical current among the three dual cells of
@@ -176,9 +178,10 @@ width/center, and optional carrier frequency are configurable. With a
 carrier and no
 explicit width, the 1/e half-width is `0.5 / frequency` (25 ms at 20 Hz, close
 to the paper's 42.5 ms FWHM envelope).  Use `--source-width` and
-`--source-center` to override it.  The CLI warns when an anomaly is smaller than
-the selected surface grid.  The same warning covers an anomaly thinner than the
-selected radial spacing.
+`--source-center` to override it. The solver rejects carrier frequencies at or
+above the time-step Nyquist limit. The CLI warns when an anomaly is smaller
+than the selected surface grid. The same warning covers an anomaly thinner
+than the selected radial spacing.
 
 ## Python API
 
@@ -203,6 +206,11 @@ The public field arrays are backend-native NumPy arrays or PyTorch tensors:
 - `hr[triangle, radial_half_node]`
 
 All values use SI units.
+
+The leapfrog fields do not share one physical time: `er` and `et` are at
+`simulation.electric_time_s`, while `hr` and `ht` are half a step earlier at
+`simulation.magnetic_time_s`. Both clocks are included in `diagnostics()` and
+visualization labels use the clock associated with the displayed component.
 
 Use `simulation.to_numpy(simulation.er)` when analysis, plotting, or export code
 requires a host NumPy array.  `simulation.field_value("er", vertex, layer)`
@@ -338,9 +346,10 @@ uv run --extra test --extra visualization --extra pytorch pytest -q
 
 The tests cover icosphere counts, pentagon/hexagon topology, exact
 boundary-of-boundary cancellation, spherical area closure, material/anomaly
-selection, zero-field invariance, conductive damping, source launching, and
-Courant-limit rejection.  Backend tests compare NumPy and PyTorch CPU fields
-and exercise MPS or CUDA when the corresponding device is available.
+selection and quadrature, zero-field invariance, conductive damping, source
+launching, leapfrog timing, carrier alias rejection, and Courant-limit
+rejection. Backend tests compare NumPy and PyTorch CPU fields and exercise MPS
+or CUDA when the corresponding device is available.
 Visualization tests additionally cover coordinate
 conversion, projected maps, radial interpolation, receiver sampling, and
 PyVista point/cell associations.  The GIF render test is opt-in because CI must

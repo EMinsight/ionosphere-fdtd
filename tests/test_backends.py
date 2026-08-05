@@ -174,7 +174,12 @@ def test_cuda_dual_cell_circulation_is_bitwise_repeatable() -> None:
         pytest.skip("CUDA is unavailable")
     mesh = build_geodesic_mesh(3)
     simulation = GeodesicFDTD(
-        config=config(), backend="torch", device="cuda", dtype="float64"
+        config=SimulationConfig(
+            subdivision=3, radial_cells=6, courant_factor=0.2
+        ),
+        backend="torch",
+        device="cuda",
+        dtype="float64",
     )
     values = simulation.backend.asarray(
         np.random.default_rng(20260805).standard_normal((mesh.n_edges, 7))
@@ -330,6 +335,27 @@ def test_torch_cpu_thread_count_is_configurable() -> None:
         )
         assert simulation.backend.threads == 1
         assert torch.get_num_threads() == 1
+    finally:
+        torch.set_num_threads(previous_threads)
+
+
+def test_torch_cpu_thread_metadata_tracks_process_global_state() -> None:
+    torch = pytest.importorskip("torch")
+    previous_threads = torch.get_num_threads()
+    alternate = 1 if previous_threads != 1 else 2
+    try:
+        first = GeodesicFDTD(
+            config=config(), backend="torch", device="cpu", torch_threads=1
+        )
+        second = GeodesicFDTD(
+            config=config(),
+            backend="torch",
+            device="cpu",
+            torch_threads=alternate,
+        )
+
+        assert first.backend.threads == alternate
+        assert second.backend.threads == alternate
     finally:
         torch.set_num_threads(previous_threads)
 

@@ -55,6 +55,16 @@ def test_surface_field_renders_headlessly(simulation: GeodesicFDTD) -> None:
     assert artist.get_array().size > simulation.mesh.n_vertices
 
 
+def test_magnetic_surface_uses_half_step_timestamp(
+    simulation: GeodesicFDTD,
+) -> None:
+    figure, ax, _ = plot_surface_field(simulation, "hr")
+    figure.canvas.draw()
+
+    assert f"t = {simulation.magnetic_time_s:.6g} s" in ax.get_title()
+    assert f"t = {simulation.electric_time_s:.6g} s" not in ax.get_title()
+
+
 def test_surface_field_rejects_zero_neighbors(simulation: GeodesicFDTD) -> None:
     with pytest.raises(ValueError, match="neighbors must be positive"):
         plot_surface_field(simulation, neighbors=0)

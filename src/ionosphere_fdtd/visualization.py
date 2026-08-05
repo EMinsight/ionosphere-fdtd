@@ -135,7 +135,7 @@ def plot_surface_field(
     ax.set_title(
         title
         or f"{component.upper()} at {field_altitude / 1_000.0:.1f} km, "
-        f"t = {simulation.time_s:.6g} s"
+        f"t = {_field_time_s(simulation, component):.6g} s"
     )
     return figure, ax, artist
 
@@ -500,13 +500,15 @@ def run_live_surface(
             actor.mapper.scalar_range = (-limit, limit)
         completed_frames += 1
         plotter.add_text(
-            _live_status(simulation, updated, limit, color_limit is None),
+            _live_status(
+                simulation, component, updated, limit, color_limit is None
+            ),
             font_size=10,
             name="simulation-status",
         )
 
     plotter.add_text(
-        _live_status(simulation, values, limit, color_limit is None),
+        _live_status(simulation, component, values, limit, color_limit is None),
         font_size=10,
         name="simulation-status",
     )
@@ -591,7 +593,9 @@ def animate_surface_field(
     if earth_texture:
         _add_source_marker(plotter, pv, simulation, altitude_m, radial_exaggeration)
     plotter.add_text(
-        f"t = {simulation.time_s:.6g} s", font_size=10, name="simulation-time"
+        f"t = {_field_time_s(simulation, component):.6g} s",
+        font_size=10,
+        name="simulation-time",
     )
     _set_source_camera(plotter, simulation, altitude_m, radial_exaggeration)
     if output_path.suffix.lower() == ".gif":
@@ -609,7 +613,7 @@ def animate_surface_field(
                 dataset.cell_data[name] = updated
                 dataset.Modified()
                 plotter.add_text(
-                    f"t = {simulation.time_s:.6g} s",
+                    f"t = {_field_time_s(simulation, component):.6g} s",
                     font_size=10,
                     name="simulation-time",
                 )
@@ -668,6 +672,16 @@ def _surface_values(
             "cell",
         )
     raise ValueError("surface component must be 'er' or 'hr'")
+
+
+def _field_time_s(simulation: GeodesicFDTD, component: str) -> float:
+    """Return the staggered time associated with an electric or magnetic field."""
+
+    return (
+        simulation.magnetic_time_s
+        if component.lower().startswith("h")
+        else simulation.electric_time_s
+    )
 
 
 def _great_circle_directions(
@@ -877,6 +891,7 @@ def _color_limit(values: FloatArray, requested: float | None) -> float:
 
 def _live_status(
     simulation: GeodesicFDTD,
+    component: str,
     values: FloatArray,
     color_limit: float,
     automatic_scale: bool,
@@ -884,7 +899,8 @@ def _live_status(
     maximum = float(np.nanmax(np.abs(values))) if values.size else 0.0
     scale_label = "auto" if automatic_scale else "fixed"
     return (
-        f"step {simulation.steps:,}   t = {simulation.time_s:.6g} s\n"
+        f"step {simulation.steps:,}   "
+        f"t = {_field_time_s(simulation, component):.6g} s\n"
         f"max |field| = {maximum:.4g}   {scale_label} scale = ±{color_limit:.4g}\n"
         "Drag: rotate   Wheel: zoom   q: stop"
     )

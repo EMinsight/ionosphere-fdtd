@@ -71,6 +71,20 @@ def test_edge_diamonds_partition_the_sphere() -> None:
     assert np.sum(areas) == pytest.approx(4.0 * np.pi, rel=1.0e-12)
 
 
+def test_edge_diamond_quadrants_partition_each_support() -> None:
+    mesh = build_geodesic_mesh(3)
+    quadrants = mesh.edge_diamond_quadrant_solid_angles()
+
+    assert quadrants.shape == (mesh.n_edges, 4)
+    assert np.all(quadrants > 0.0)
+    np.testing.assert_allclose(
+        np.sum(quadrants, axis=1),
+        mesh.edge_diamond_solid_angles(),
+        rtol=2.0e-14,
+        atol=2.0e-16,
+    )
+
+
 def test_dual_areas_equal_explicit_ordered_polygon_fans() -> None:
     mesh = build_geodesic_mesh(3)
     expected = np.empty(mesh.n_vertices)
