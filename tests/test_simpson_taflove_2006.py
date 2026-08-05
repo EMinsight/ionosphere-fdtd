@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from ionosphere_fdtd.materials import ETOPO5Relief
 from ionosphere_fdtd.simpson_taflove_2006 import (
     PAPER_ENVELOPE_FWHM_S,
     PAPER_OIL_AREA_KM2,
@@ -149,6 +150,69 @@ def test_radar_source_basis_and_altitude_are_configurable() -> None:
     assert simulation.source.line_lengths_m == (22_500.0,)
 
 
+def test_etopo_radar_geometry_can_follow_local_terrain(monkeypatch) -> None:
+    source_direction = np.asarray(
+        (
+            np.cos(np.deg2rad(46.5)) * np.cos(np.deg2rad(-90.9)),
+            np.cos(np.deg2rad(46.5)) * np.sin(np.deg2rad(-90.9)),
+            np.sin(np.deg2rad(46.5)),
+        )
+    )
+    oil_direction = np.asarray(
+        (
+            np.cos(np.deg2rad(69.0)) * np.cos(np.deg2rad(-156.0)),
+            np.cos(np.deg2rad(69.0)) * np.sin(np.deg2rad(-156.0)),
+            np.sin(np.deg2rad(69.0)),
+        )
+    )
+
+    class FakeRelief:
+        def __call__(self, directions: np.ndarray) -> np.ndarray:
+            result = np.zeros(len(directions))
+            result[directions @ source_direction > 1.0 - 1.0e-12] = 236.8
+            result[directions @ oil_direction > 1.0 - 1.0e-12] = 305.0
+            return result
+
+    monkeypatch.setattr(
+        ETOPO5Relief,
+        "from_file",
+        classmethod(lambda cls, path: FakeRelief()),
+    )
+    terrain = create_radar_simulation(
+        include_oil=True,
+        subdivision=0,
+        material_model="etopo5",
+        etopo5_path="unused.dat",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        vertical_reference="terrain",
+    )
+    sea_level = create_radar_simulation(
+        include_oil=True,
+        subdivision=0,
+        material_model="etopo5",
+        etopo5_path="unused.dat",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        vertical_reference="sea-level",
+    )
+
+    terrain_oil = terrain.material.anomalies[-1]
+    sea_level_oil = sea_level.material.anomalies[-1]
+    assert terrain.source.altitude_m == pytest.approx(236.8)
+    assert terrain.radar_receiver_altitude_m == pytest.approx(305.0)
+    assert 305.0 - 0.5 * (
+        terrain_oil.altitude_min_m + terrain_oil.altitude_max_m
+    ) == pytest.approx(PAPER_OIL_MEDIAN_DEPTH_M)
+    assert sea_level.source.altitude_m == 0.0
+    assert sea_level.radar_receiver_altitude_m == 0.0
+    assert -0.5 * (
+        sea_level_oil.altitude_min_m + sea_level_oil.altitude_max_m
+    ) == pytest.approx(PAPER_OIL_MEDIAN_DEPTH_M)
+
+
 def test_local_linear_radar_receiver_reconstructs_target_direction() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -199,6 +263,39 @@ def test_default_radar_receiver_uses_local_linear_support() -> None:
     faces, *_ = _surface_h_distributions(simulation)
 
     assert len(np.unique(faces)) == 4
+
+
+def test_radar_receiver_interpolates_both_h_components_to_terrain() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=1,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+    simulation.radar_receiver_altitude_m = 305.0
+
+    faces, hr_layers, hr_weights, edges, ht_layers, ht_weights = (
+        _surface_h_distributions(simulation)
+    )
+
+    del faces, edges
+    represented_hr_altitude = float(
+        hr_weights.ravel()
+        @ simulation.radial_midpoint_altitudes_m[hr_layers.ravel()]
+    )
+    assert represented_hr_altitude == pytest.approx(305.0)
+    radial_count = 2
+    for component in range(2):
+        for offset in range(0, ht_layers.shape[1], radial_count):
+            selected = slice(offset, offset + radial_count)
+            weights = ht_weights[component, selected]
+            represented = float(
+                weights @ simulation.altitudes_m[ht_layers[component, selected]]
+                / weights.sum()
+            )
+            assert represented == pytest.approx(305.0)
 
 
 def test_radar_receiver_rejects_unknown_support() -> None:

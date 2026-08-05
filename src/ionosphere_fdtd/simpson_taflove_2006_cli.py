@@ -61,7 +61,16 @@ def _parser() -> argparse.ArgumentParser:
         "--torch-compile", action=argparse.BooleanOptionalAction, default=True
     )
     radar.add_argument("--source-center", type=float, default=PAPER_SOURCE_CENTER_S)
-    radar.add_argument("--source-altitude-m", type=float, default=0.0)
+    radar.add_argument(
+        "--source-altitude-m",
+        type=float,
+        help="override source altitude; otherwise use --vertical-reference",
+    )
+    radar.add_argument(
+        "--vertical-reference",
+        choices=("terrain", "sea-level"),
+        default="terrain",
+    )
     radar.add_argument(
         "--source-basis",
         choices=("both", "north", "east", "difference"),
@@ -144,6 +153,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         include_shield=args.shield,
         shield_radius_m=1_000.0 * args.shield_radius_km,
         mesh_orientation=args.mesh_orientation,
+        vertical_reference=args.vertical_reference,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -155,8 +165,9 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"orientation={args.mesh_orientation} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
-        f"source={args.source_basis}@{args.source_altitude_m:g}m "
+        f"source={args.source_basis}@{simulation.source.altitude_m:g}m "
         f"receiver={args.receiver_support} "
+        f"vertical_reference={args.vertical_reference} "
         f"shield={args.shield_radius_km:g}km/{args.shield} "
         f"dt={simulation.time_step_s:.9e}s steps={steps:,}",
         flush=True,

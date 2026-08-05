@@ -187,6 +187,44 @@ def test_fractional_tangential_interface_preserves_shallow_water_fraction() -> N
     assert sigma[0, 0] > 1.0 / material.upper_crust_resistivity_ohm_m
 
 
+@pytest.mark.parametrize("interface_mode", ("point", "fractional"))
+def test_tangential_anomaly_preserves_radial_overlap(
+    interface_mode: str,
+) -> None:
+    anomaly = SphericalAnomaly(
+        latitude_deg=0.0,
+        longitude_deg=0.0,
+        radius_m=100_000.0,
+        altitude_min_m=-1_825.0,
+        altitude_max_m=-575.0,
+        conductivity_factor=0.1,
+    )
+    material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),
+        anomalies=(anomaly,),
+        tangential_interface_mode=interface_mode,
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0),))
+    lower = np.asarray((-2_500.0, -1_250.0, 0.0))
+    upper = np.asarray((-1_250.0, 0.0, 1_250.0))
+
+    sigma, _ = material.sample_tangential_cells(
+        directions, lower, upper, 6_371_000.0
+    )
+
+    background_material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),
+        tangential_interface_mode=interface_mode,
+    )
+    background, _ = background_material.sample_tangential_cells(
+        directions, lower, upper, 6_371_000.0
+    )
+    fractions = np.asarray((575.0 / 1_250.0, 675.0 / 1_250.0, 0.0))
+    expected = background[0] * (1.0 + fractions * (0.1 - 1.0))
+    np.testing.assert_allclose(sigma[0], expected, rtol=0.0, atol=1.0e-18)
+    assert np.sum(fractions) == pytest.approx(1.0)
+
+
 def test_point_tangential_interface_retains_midpoint_sampling() -> None:
     material = SimpsonTaflove2004Material(
         surface_elevation_sampler=lambda directions: np.asarray(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -187,6 +187,42 @@ def _apply_spherical_anomalies(
         sigma[inside] *= anomaly.conductivity_factor
         if anomaly.relative_permittivity is not None:
             epsilon_r[inside] = anomaly.relative_permittivity
+
+
+def _apply_cell_averaged_spherical_anomalies(
+    sigma: FloatArray,
+    epsilon_r: FloatArray,
+    directions: FloatArray,
+    lower_altitudes_m: FloatArray,
+    upper_altitudes_m: FloatArray,
+    earth_radius_m: float,
+    anomalies: tuple[SphericalAnomaly, ...],
+) -> None:
+    """Apply radial overlap fractions for tangential electric cells."""
+
+    widths = upper_altitudes_m - lower_altitudes_m
+    for anomaly in anomalies:
+        angular_radius = anomaly.radius_m / earth_radius_m
+        inside_horizontal = np.arccos(
+            np.clip(directions @ anomaly.center, -1.0, 1.0)
+        ) <= angular_radius
+        overlap = np.clip(
+            np.minimum(upper_altitudes_m, anomaly.altitude_max_m)
+            - np.maximum(lower_altitudes_m, anomaly.altitude_min_m),
+            0.0,
+            widths,
+        )
+        fraction = inside_horizontal[:, None] * (overlap / widths)[None, :]
+        if anomaly.maximum_background_conductivity_s_m is not None:
+            fraction = np.where(
+                sigma <= anomaly.maximum_background_conductivity_s_m,
+                fraction,
+                0.0,
+            )
+        sigma *= 1.0 + fraction * (anomaly.conductivity_factor - 1.0)
+        if anomaly.relative_permittivity is not None:
+            epsilon_r *= 1.0 - fraction
+            epsilon_r += fraction * anomaly.relative_permittivity
 
 
 @dataclass(frozen=True, slots=True)
@@ -447,7 +483,22 @@ class SimpsonTaflove2004Material:
             raise ValueError("radial cell upper bounds must exceed lower bounds")
         midpoints = 0.5 * (lower + upper)
         if self.tangential_interface_mode == "point":
-            return self.sample(directions, midpoints, earth_radius_m)
+            background = replace(self, anomalies=())
+            sigma, epsilon_r = background.sample(
+                directions, midpoints, earth_radius_m
+            )
+            normalized = np.array(directions, dtype=np.float64, copy=True)
+            normalized /= np.linalg.norm(normalized, axis=1, keepdims=True)
+            _apply_cell_averaged_spherical_anomalies(
+                sigma,
+                epsilon_r,
+                normalized,
+                lower,
+                upper,
+                earth_radius_m,
+                self.anomalies,
+            )
+            return sigma, epsilon_r
 
         directions, is_land, surface = self._surface_geometry(directions)
         width = upper - lower
@@ -510,11 +561,12 @@ class SimpsonTaflove2004Material:
             + fractions[1] * self.sea_water_relative_permittivity
             + fractions[2] * self.atmosphere_relative_permittivity
         )
-        _apply_spherical_anomalies(
+        _apply_cell_averaged_spherical_anomalies(
             sigma,
             epsilon_r,
             directions,
-            midpoints,
+            lower,
+            upper,
             earth_radius_m,
             self.anomalies,
         )

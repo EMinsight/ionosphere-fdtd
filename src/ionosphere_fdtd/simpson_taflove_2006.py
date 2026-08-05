@@ -31,6 +31,7 @@ from .sources import (
     geographic_direction,
     geographic_face_index,
     geographic_tangent_basis,
+    radial_linear_distribution,
 )
 
 FloatArray = NDArray[np.float64]
@@ -98,6 +99,7 @@ def paper_anomalies(
     include_oil: bool,
     include_shield: bool = True,
     shield_radius_m: float = 2_500_000.0,
+    oil_surface_altitude_m: float = 0.0,
 ) -> tuple[SphericalAnomaly, ...]:
     """Return the approximate Laurentian Shield and optional oil anomaly."""
 
@@ -125,8 +127,10 @@ def paper_anomalies(
         latitude_deg=PAPER_OIL_LATITUDE_DEG,
         longitude_deg=PAPER_OIL_LONGITUDE_DEG,
         radius_m=PAPER_OIL_RADIUS_M,
-        altitude_min_m=-(PAPER_OIL_MEDIAN_DEPTH_M + half_thickness),
-        altitude_max_m=-(PAPER_OIL_MEDIAN_DEPTH_M - half_thickness),
+        altitude_min_m=oil_surface_altitude_m
+        - (PAPER_OIL_MEDIAN_DEPTH_M + half_thickness),
+        altitude_max_m=oil_surface_altitude_m
+        - (PAPER_OIL_MEDIAN_DEPTH_M - half_thickness),
         conductivity_factor=PAPER_OIL_CONDUCTIVITY_FACTOR,
         maximum_background_conductivity_s_m=0.01,
     )
@@ -149,38 +153,62 @@ def create_radar_simulation(
     source_edge_assignment: str = "projected",
     tangential_interface_mode: str = "point",
     tangential_material_support: str = "point",
-    source_altitude_m: float = 0.0,
+    source_altitude_m: float | None = None,
     source_azimuths_deg: tuple[float, ...] = (0.0, 90.0),
     include_shield: bool = True,
     shield_radius_m: float = 2_500_000.0,
     mesh_orientation: str = "polar",
+    vertical_reference: str = "terrain",
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
-    anomalies = paper_anomalies(
-        include_oil=include_oil,
-        include_shield=include_shield,
-        shield_radius_m=shield_radius_m,
-    )
+    if vertical_reference not in {"sea-level", "terrain"}:
+        raise ValueError("vertical_reference must be 'sea-level' or 'terrain'")
     material_arguments: dict[str, Any] = {
-        "anomalies": anomalies,
         "tangential_interface_mode": tangential_interface_mode,
     }
+    relief: ETOPO5Relief | None = None
     if material_model == "etopo5":
         if etopo5_path is None:
             raise ValueError("etopo5_path is required for the ETOPO5 material")
-        material_arguments["surface_elevation_sampler"] = ETOPO5Relief.from_file(
-            etopo5_path
-        )
+        relief = ETOPO5Relief.from_file(etopo5_path)
+        material_arguments["surface_elevation_sampler"] = relief
     elif material_model == "natural-earth":
         material_arguments["land_classifier"] = natural_earth_land_classifier()
     else:
         raise ValueError("material_model must be 'etopo5' or 'natural-earth'")
+    source_surface_altitude_m = 0.0
+    receiver_surface_altitude_m = 0.0
+    if vertical_reference == "terrain" and relief is not None:
+        surface_directions = np.stack(
+            (
+                geographic_direction(
+                    PAPER_TRANSMITTER_LATITUDE_DEG,
+                    PAPER_TRANSMITTER_LONGITUDE_DEG,
+                ),
+                geographic_direction(PAPER_OIL_LATITUDE_DEG, PAPER_OIL_LONGITUDE_DEG),
+            )
+        )
+        source_surface_altitude_m, receiver_surface_altitude_m = (
+            float(value) for value in relief(surface_directions)
+        )
+    anomalies = paper_anomalies(
+        include_oil=include_oil,
+        include_shield=include_shield,
+        shield_radius_m=shield_radius_m,
+        oil_surface_altitude_m=receiver_surface_altitude_m,
+    )
+    material_arguments["anomalies"] = anomalies
     material = SimpsonTaflove2004Material(**material_arguments)
+    effective_source_altitude_m = (
+        source_surface_altitude_m
+        if source_altitude_m is None
+        else source_altitude_m
+    )
     source = TangentialGaussianCurrent(
         latitude_deg=PAPER_TRANSMITTER_LATITUDE_DEG,
         longitude_deg=PAPER_TRANSMITTER_LONGITUDE_DEG,
-        altitude_m=source_altitude_m,
+        altitude_m=effective_source_altitude_m,
         peak_current_a=PAPER_TRANSMITTER_CURRENT_A,
         center_time_s=source_center_s,
         one_over_e_half_width_s=PAPER_ENVELOPE_ONE_OVER_E_HALF_WIDTH_S,
@@ -192,7 +220,7 @@ def create_radar_simulation(
         edge_assignment=source_edge_assignment,
     )
     altitudes = radar_radial_altitudes_m()
-    return GeodesicFDTD(
+    simulation = GeodesicFDTD(
         config=SimulationConfig(
             subdivision=subdivision,
             radial_cells=len(altitudes) - 1,
@@ -210,22 +238,9 @@ def create_radar_simulation(
         dtype=dtype,
         compile_step=compile_step,
     )
-
-
-def _linear_radial_distribution(
-    altitudes_m: FloatArray, altitude_m: float
-) -> tuple[NDArray[np.int64], FloatArray]:
-    upper = int(np.searchsorted(altitudes_m, altitude_m, side="left"))
-    if upper < len(altitudes_m) and altitudes_m[upper] == altitude_m:
-        return np.asarray((upper,), dtype=np.int64), np.asarray((1.0,))
-    lower = upper - 1
-    upper_weight = (altitude_m - altitudes_m[lower]) / (
-        altitudes_m[upper] - altitudes_m[lower]
-    )
-    return (
-        np.asarray((lower, upper), dtype=np.int64),
-        np.asarray((1.0 - upper_weight, upper_weight)),
-    )
+    simulation.radar_receiver_altitude_m = receiver_surface_altitude_m
+    simulation.radar_vertical_reference = vertical_reference
+    return simulation
 
 
 def _surface_h_distributions(
@@ -235,11 +250,14 @@ def _surface_h_distributions(
 ) -> tuple[NDArray[np.int64], ...]:
     if receiver_support not in {"face", "local-linear"}:
         raise ValueError("receiver_support must be 'face' or 'local-linear'")
+    receiver_altitude_m = float(
+        getattr(simulation, "radar_receiver_altitude_m", 0.0)
+    )
     face = geographic_face_index(
         simulation, PAPER_OIL_LATITUDE_DEG, PAPER_OIL_LONGITUDE_DEG
     )
-    hr_layers, hr_weights = _linear_radial_distribution(
-        simulation.radial_midpoint_altitudes_m, 0.0
+    hr_layers, hr_weights = radial_linear_distribution(
+        simulation.radial_midpoint_altitudes_m, receiver_altitude_m
     )
     if receiver_support == "face":
         support_faces = np.asarray((face,), dtype=np.int64)
@@ -292,10 +310,20 @@ def _surface_h_distributions(
     )
     samples = np.column_stack((dual_directions @ east, dual_directions @ north))
     reconstruction = samples @ np.linalg.inv(samples.T @ samples)
-    ht_weights = np.stack((reconstruction[:, 0], reconstruction[:, 1]))
-    surface_layer = int(np.argmin(np.abs(simulation.altitudes_m)))
-    ht_edges = np.stack((edges, edges))
-    ht_layers = np.full_like(ht_edges, surface_layer)
+    ht_radial_layers, ht_radial_weights = radial_linear_distribution(
+        simulation.altitudes_m, receiver_altitude_m
+    )
+    ht_support_edges = np.repeat(edges, len(ht_radial_layers))
+    ht_support_layers = np.tile(ht_radial_layers, len(edges))
+    ht_edges = np.stack((ht_support_edges, ht_support_edges))
+    ht_layers = np.stack((ht_support_layers, ht_support_layers))
+    ht_weights = np.stack(
+        tuple(
+            np.repeat(reconstruction[:, component], len(ht_radial_layers))
+            * np.tile(ht_radial_weights, len(edges))
+            for component in range(2)
+        )
+    )
     return (
         hr_faces,
         hr_layer_indices,
@@ -493,6 +521,12 @@ def _radar_run_signature(
         ),
         "source": _signature_value(simulation.source),
         "receiver_support": receiver_support,
+        "receiver_altitude_m": float(
+            getattr(simulation, "radar_receiver_altitude_m", 0.0)
+        ),
+        "vertical_reference": str(
+            getattr(simulation, "radar_vertical_reference", "sea-level")
+        ),
         "backend": simulation.backend.name,
         "dtype": simulation.backend.dtype_name,
         "compiled": simulation.compiled,
@@ -507,16 +541,14 @@ def _is_paper_oil(anomaly: Any) -> bool:
         PAPER_OIL_LATITUDE_DEG,
         PAPER_OIL_LONGITUDE_DEG,
         PAPER_OIL_RADIUS_M,
-        -(PAPER_OIL_MEDIAN_DEPTH_M + 0.5 * PAPER_OIL_THICKNESS_M),
-        -(PAPER_OIL_MEDIAN_DEPTH_M - 0.5 * PAPER_OIL_THICKNESS_M),
+        PAPER_OIL_THICKNESS_M,
         PAPER_OIL_CONDUCTIVITY_FACTOR,
     )
     actual = (
         anomaly.latitude_deg,
         anomaly.longitude_deg,
         anomaly.radius_m,
-        anomaly.altitude_min_m,
-        anomaly.altitude_max_m,
+        anomaly.altitude_max_m - anomaly.altitude_min_m,
         anomaly.conductivity_factor,
     )
     return bool(np.allclose(actual, expected, rtol=0.0, atol=1.0e-12))
