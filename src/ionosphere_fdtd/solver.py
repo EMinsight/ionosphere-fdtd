@@ -450,8 +450,7 @@ class GeodesicFDTD:
     def step(self, count: int = 1) -> None:
         """Advance the fields by ``count`` complete leapfrog time steps."""
 
-        if count < 0:
-            raise ValueError("step count must be non-negative")
+        count = self._validated_count(count, "step count", minimum=0)
         if self.compiled and count:
             currents = self._source_currents(count)
             for offset in range(count):
@@ -605,6 +604,25 @@ class GeodesicFDTD:
             raise ValueError("field must be er, et, hr, or ht")
         return self.backend.scalar(values[indices])
 
+    @staticmethod
+    def _validated_count(value: int, label: str, *, minimum: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+            raise ValueError(f"{label} must be an integer")
+        result = int(value)
+        if result < minimum:
+            qualifier = "non-negative" if minimum == 0 else "positive"
+            raise ValueError(f"{label} must be {qualifier}")
+        return result
+
+    @staticmethod
+    def _validated_index_array(values: Any, label: str) -> NDArray[np.int64]:
+        array = np.asarray(values)
+        if np.issubdtype(array.dtype, np.bool_) or not np.issubdtype(
+            array.dtype, np.integer
+        ):
+            raise ValueError(f"{label} must contain integers")
+        return np.asarray(array, dtype=np.int64)
+
     def record_er_observations(
         self,
         vertex_indices: NDArray[np.int64],
@@ -622,13 +640,13 @@ class GeodesicFDTD:
         faster than reading individual MPS or CUDA scalars every step.
         """
 
-        vertices = np.asarray(vertex_indices, dtype=np.int64)
-        layers = np.asarray(radial_layers, dtype=np.int64)
+        vertices = self._validated_index_array(vertex_indices, "vertex_indices")
+        layers = self._validated_index_array(radial_layers, "radial_layers")
         sample_weights = np.asarray(weights, dtype=np.float64)
-        if steps < 0:
-            raise ValueError("step count must be non-negative")
-        if synchronize_every < 1:
-            raise ValueError("synchronize_every must be positive")
+        steps = self._validated_count(steps, "step count", minimum=0)
+        synchronize_every = self._validated_count(
+            synchronize_every, "synchronize_every", minimum=1
+        )
         if vertices.ndim != 2 or sample_weights.shape != vertices.shape:
             raise ValueError("vertex_indices and weights must have matching 2-D shapes")
         if layers.shape != (vertices.shape[0],):
@@ -637,6 +655,8 @@ class GeodesicFDTD:
             raise ValueError("observation vertex index is out of range")
         if np.any(layers < 0) or np.any(layers >= len(self.radii_m)):
             raise ValueError("observation radial layer is out of range")
+        if not np.all(np.isfinite(sample_weights)):
+            raise ValueError("observation weights must be finite")
         if not np.allclose(sample_weights.sum(axis=1), 1.0):
             raise ValueError("observation weights must sum to one")
 
@@ -680,16 +700,20 @@ class GeodesicFDTD:
         independently of the integer-step electric-field clock.
         """
 
-        faces = np.asarray(face_indices, dtype=np.int64)
-        face_layers = np.asarray(face_radial_layers, dtype=np.int64)
+        faces = self._validated_index_array(face_indices, "face_indices")
+        face_layers = self._validated_index_array(
+            face_radial_layers, "face_radial_layers"
+        )
         radial_weights = np.asarray(face_weights, dtype=np.float64)
-        edges = np.asarray(edge_indices, dtype=np.int64)
-        edge_layers = np.asarray(edge_radial_layers, dtype=np.int64)
+        edges = self._validated_index_array(edge_indices, "edge_indices")
+        edge_layers = self._validated_index_array(
+            edge_radial_layers, "edge_radial_layers"
+        )
         tangential_weights = np.asarray(edge_weights, dtype=np.float64)
-        if steps < 0:
-            raise ValueError("step count must be non-negative")
-        if synchronize_every < 1:
-            raise ValueError("synchronize_every must be positive")
+        steps = self._validated_count(steps, "step count", minimum=0)
+        synchronize_every = self._validated_count(
+            synchronize_every, "synchronize_every", minimum=1
+        )
         if faces.ndim != 2 or radial_weights.shape != faces.shape:
             raise ValueError("face indices and weights must have matching 2-D shapes")
         if edges.ndim != 2 or tangential_weights.shape != edges.shape:
@@ -706,6 +730,10 @@ class GeodesicFDTD:
             raise ValueError("radial H observation layer is out of range")
         if np.any(edge_layers < 0) or np.any(edge_layers >= self.ht.shape[1]):
             raise ValueError("tangential H observation layer is out of range")
+        if not np.all(np.isfinite(radial_weights)) or not np.all(
+            np.isfinite(tangential_weights)
+        ):
+            raise ValueError("observation weights must be finite")
 
         backend_faces = self.backend.index_array(faces)
         backend_face_layers = self.backend.index_array(face_layers)

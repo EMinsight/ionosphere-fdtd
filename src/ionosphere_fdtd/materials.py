@@ -357,6 +357,16 @@ class EarthIonosphereMaterial:
     anomalies: tuple[SphericalAnomaly, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
+        parameters = (
+            self.lithosphere_conductivity_s_m,
+            self.lithosphere_relative_permittivity,
+            self.atmosphere_relative_permittivity,
+            self.ionosphere_reference_height_m,
+            self.ionosphere_scale_height_m,
+            self.ionosphere_prefactor_hz,
+        )
+        if not all(np.isfinite(value) for value in parameters):
+            raise ValueError("material parameters must be finite")
         if self.lithosphere_conductivity_s_m < 0.0:
             raise ValueError("lithosphere conductivity cannot be negative")
         if self.lithosphere_relative_permittivity < 1.0:
@@ -365,6 +375,8 @@ class EarthIonosphereMaterial:
             raise ValueError("atmosphere relative permittivity must be >= 1")
         if self.ionosphere_scale_height_m <= 0.0:
             raise ValueError("ionosphere scale height must be positive")
+        if self.ionosphere_prefactor_hz < 0.0:
+            raise ValueError("ionosphere prefactor cannot be negative")
 
     def sample(
         self,
@@ -450,6 +462,24 @@ class SimpsonTaflove2004Material:
             raise ValueError(
                 "provide exactly one of land_classifier or surface_elevation_sampler"
             )
+        parameters = (
+            self.ocean_depth_m,
+            self.sea_water_resistivity_ohm_m,
+            self.upper_crust_resistivity_ohm_m,
+            self.asthenosphere_resistivity_ohm_m,
+            self.lower_mantle_resistivity_ohm_m,
+            self.asthenosphere_top_depth_m,
+            self.asthenosphere_bottom_depth_m,
+            self.lithosphere_relative_permittivity,
+            self.sea_water_relative_permittivity,
+            self.atmosphere_relative_permittivity,
+            self.ionosphere_reference_height_m,
+            self.ionosphere_scale_height_m,
+            self.ionosphere_prefactor_hz,
+            self.minimum_ocean_depth_m,
+        )
+        if not all(np.isfinite(value) for value in parameters):
+            raise ValueError("material parameters must be finite")
         positive = (
             self.ocean_depth_m,
             self.sea_water_resistivity_ohm_m,
@@ -464,6 +494,8 @@ class SimpsonTaflove2004Material:
             raise ValueError("material lengths and resistivities must be positive")
         if self.minimum_ocean_depth_m < 0.0:
             raise ValueError("minimum ocean depth cannot be negative")
+        if self.ionosphere_prefactor_hz < 0.0:
+            raise ValueError("ionosphere prefactor cannot be negative")
         if self.asthenosphere_top_depth_m >= self.asthenosphere_bottom_depth_m:
             raise ValueError("asthenosphere depth bounds are reversed")
         if min(

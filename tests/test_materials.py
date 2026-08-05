@@ -336,3 +336,40 @@ def test_simpson_material_rejects_unknown_interface_mode() -> None:
             ),
             tangential_interface_mode="unknown",
         )
+
+
+@pytest.mark.parametrize(
+    ("parameter", "value"),
+    (
+        ("lithosphere_conductivity_s_m", np.inf),
+        ("ionosphere_reference_height_m", -np.inf),
+        ("ionosphere_scale_height_m", np.inf),
+        ("ionosphere_prefactor_hz", np.nan),
+    ),
+)
+def test_default_material_rejects_nonfinite_parameters(
+    parameter: str, value: float
+) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        EarthIonosphereMaterial(**{parameter: value})
+
+
+@pytest.mark.parametrize(
+    "parameter",
+    (
+        "ocean_depth_m",
+        "sea_water_resistivity_ohm_m",
+        "ionosphere_reference_height_m",
+        "ionosphere_scale_height_m",
+        "ionosphere_prefactor_hz",
+        "minimum_ocean_depth_m",
+    ),
+)
+def test_simpson_material_rejects_nonfinite_parameters(parameter: str) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        SimpsonTaflove2004Material(
+            land_classifier=lambda directions: np.ones(
+                len(directions), dtype=np.bool_
+            ),
+            **{parameter: np.inf},
+        )

@@ -275,8 +275,11 @@ class TangentialGaussianCurrent(GaussianCurrent):
         if self.line_lengths_m is not None:
             if len(self.line_lengths_m) != len(self.azimuths_deg):
                 raise ValueError("line_lengths_m must match azimuths_deg")
-            if not all(value > 0.0 for value in self.line_lengths_m):
-                raise ValueError("ground-line lengths must be positive")
+            if not all(
+                np.isfinite(value) and value > 0.0
+                for value in self.line_lengths_m
+            ):
+                raise ValueError("ground-line lengths must be finite and positive")
         if self.edge_assignment not in {"projected", "nearest"}:
             raise ValueError("edge_assignment must be 'projected' or 'nearest'")
 

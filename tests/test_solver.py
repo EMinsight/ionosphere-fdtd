@@ -244,6 +244,8 @@ def test_sources_reject_nonfinite_or_invalid_waveforms() -> None:
         GaussianCurrent(one_over_e_half_width_s=0.0)
     with pytest.raises(ValueError, match="latitude"):
         TangentialGaussianCurrent(latitude_deg=91.0)
+    with pytest.raises(ValueError, match="finite"):
+        TangentialGaussianCurrent(line_lengths_m=(np.inf,))
 
 
 def test_nearest_edge_source_uses_at_most_one_edge_per_ground_line() -> None:
@@ -536,3 +538,49 @@ def test_backend_native_h_recording_includes_initial_state() -> None:
     assert simulation.steps == 5
     assert np.isfinite(hr).all()
     assert np.isfinite(ht).all()
+
+
+def test_step_and_observation_controls_require_integers() -> None:
+    simulation = GeodesicFDTD(config=small_config())
+
+    with pytest.raises(ValueError, match="integer"):
+        simulation.step(1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="integer"):
+        simulation.step(True)
+    with pytest.raises(ValueError, match="integers"):
+        simulation.record_er_observations(
+            np.asarray(((0.9,),)),
+            np.asarray((0,), dtype=np.int64),
+            np.asarray(((1.0,),)),
+            0,
+        )
+    with pytest.raises(ValueError, match="integer"):
+        simulation.record_er_observations(
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray((0,), dtype=np.int64),
+            np.asarray(((1.0,),)),
+            0,
+            synchronize_every=1.5,  # type: ignore[arg-type]
+        )
+
+
+def test_observation_recording_rejects_nonfinite_weights() -> None:
+    simulation = GeodesicFDTD(config=small_config())
+
+    with pytest.raises(ValueError, match="finite"):
+        simulation.record_er_observations(
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray((0,), dtype=np.int64),
+            np.asarray(((np.nan,),)),
+            0,
+        )
+    with pytest.raises(ValueError, match="finite"):
+        simulation.record_h_observations(
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray(((np.nan,),)),
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray(((1.0,),)),
+            0,
+        )

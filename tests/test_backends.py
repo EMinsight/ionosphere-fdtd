@@ -39,6 +39,17 @@ def test_numpy_backend_rejects_torch_threads() -> None:
         GeodesicFDTD(config=config(), backend="numpy", torch_threads=1)
 
 
+def test_torch_backend_rejects_fractional_thread_count() -> None:
+    pytest.importorskip("torch")
+    with pytest.raises(ValueError, match="positive integer"):
+        GeodesicFDTD(
+            config=config(),
+            backend="torch",
+            device="cpu",
+            torch_threads=1.5,  # type: ignore[arg-type]
+        )
+
+
 @pytest.mark.parametrize("trailing_shape", [(), (7,), (3, 4)])
 def test_numpy_incidence_circulation_matches_scatter(
     trailing_shape: tuple[int, ...],
@@ -135,6 +146,31 @@ def test_cuda_dual_cell_circulation_is_bitwise_repeatable() -> None:
     for _ in range(10):
         repeated = simulation.backend.dual_cell_circulation(values)
         assert torch.equal(first, repeated)
+
+
+def test_cuda_alias_is_pinned_to_construction_device() -> None:
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
+        pytest.skip("two CUDA devices are required")
+    previous = torch.cuda.current_device()
+    try:
+        torch.cuda.set_device(1)
+        simulation = GeodesicFDTD(
+            config=config(), backend="torch", device="cuda", dtype="float64"
+        )
+        assert simulation.backend.device == "cuda:1"
+        assert simulation.er.device == torch.device("cuda:1")
+
+        torch.cuda.set_device(0)
+        traces = simulation.record_er_observations(
+            np.asarray(((0,),), dtype=np.int64),
+            np.asarray((0,), dtype=np.int64),
+            np.asarray(((1.0,),)),
+            1,
+        )
+        assert traces.shape == (2, 1)
+    finally:
+        torch.cuda.set_device(previous)
 
 
 def test_torch_auto_float32_tracks_float64_reference() -> None:

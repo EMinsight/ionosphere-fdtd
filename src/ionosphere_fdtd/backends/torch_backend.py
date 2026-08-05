@@ -42,13 +42,17 @@ class TorchBackend(ArrayBackend):
                 "the MPS backend does not support float64; use dtype='float32'"
             )
         if threads is not None:
-            if isinstance(threads, bool) or threads < 1:
+            if (
+                isinstance(threads, bool)
+                or not isinstance(threads, (int, np.integer))
+                or threads < 1
+            ):
                 raise ValueError("torch_threads must be a positive integer")
             if self.torch_device.type != "cpu":
                 raise BackendUnavailableError(
                     "torch_threads is only valid for the PyTorch CPU backend"
                 )
-            torch.set_num_threads(threads)
+            torch.set_num_threads(int(threads))
         self.threads = (
             torch.get_num_threads() if self.torch_device.type == "cpu" else None
         )
@@ -140,6 +144,11 @@ class TorchBackend(ArrayBackend):
                 f"CUDA device index {device.index} is unavailable; "
                 f"found {torch.cuda.device_count()} device(s)"
             )
+        if device.type == "cuda" and device.index is None:
+            # An indexless CUDA device follows process-global current-device
+            # changes. Resolve it once so every field, source, and observation
+            # tensor created by this backend remains on the same accelerator.
+            device = torch.device("cuda", torch.cuda.current_device())
         return device
 
     def asarray(self, values: Any) -> Any:
