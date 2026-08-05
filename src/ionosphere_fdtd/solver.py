@@ -572,7 +572,12 @@ class GeodesicFDTD:
         *,
         synchronize_every: int = 128,
     ) -> tuple[NDArray[np.generic], NDArray[np.generic]]:
-        """Advance while recording weighted radial and tangential H samples."""
+        """Advance while recording weighted radial and tangential H samples.
+
+        The initial row is ``H**(-1/2)`` and row ``k`` is ``H**(k-1/2)``.
+        Callers must therefore associate these samples with half-step times,
+        independently of the integer-step electric-field clock.
+        """
 
         faces = np.asarray(face_indices, dtype=np.int64)
         face_layers = np.asarray(face_radial_layers, dtype=np.int64)

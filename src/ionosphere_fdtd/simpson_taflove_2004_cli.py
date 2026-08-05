@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .archive import save_npz_atomic
 from .backends import BackendUnavailableError
 from .mesquite import load_optimized_mesh
 from .simpson_taflove_2004 import (
@@ -192,9 +193,8 @@ def main(argv: list[str] | None = None) -> int:
         synchronize_every=args.synchronize_every,
     )
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    trace_data = args.output_dir / "simpson-taflove-2004-traces.npz"
-    np.savez_compressed(
-        trace_data,
+    trace_data = save_npz_atomic(
+        args.output_dir / "simpson-taflove-2004-traces.npz",
         time_steps=traces.time_steps,
         time_s=traces.time_s,
         er_v_m=traces.er_v_m,

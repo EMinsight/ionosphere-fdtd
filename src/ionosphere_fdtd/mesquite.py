@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 
+from .archive import save_npz_atomic
 from .mesh import (
     FloatArray,
     GeodesicMesh,
@@ -159,7 +160,6 @@ def save_optimized_mesh(
     """Store optimized vertices and enough metadata to audit their origin."""
 
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
     report = _optimizer_report(result.stdout)
     vertices = np.asarray(result.mesh.vertices, dtype=np.float64)
     metadata: dict[str, Any] = {
@@ -183,13 +183,12 @@ def save_optimized_mesh(
         "quality_before": quality_before,
         "quality_after": quality_after,
     }
-    np.savez_compressed(
+    return save_npz_atomic(
         destination,
         vertices=vertices,
         metadata=np.asarray(json.dumps(metadata, sort_keys=True)),
         optimizer_stdout=np.asarray(result.stdout),
     )
-    return destination
 
 
 def load_optimized_mesh(

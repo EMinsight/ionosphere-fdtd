@@ -109,6 +109,8 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert traces.hr_a_m.shape == (4,)
     assert traces.ht_east_a_m.shape == (4,)
     assert traces.ht_north_a_m.shape == (4,)
+    assert traces.time_s[0] == pytest.approx(-0.5 * simulation.time_step_s)
+    assert traces.time_s[1] == pytest.approx(0.5 * simulation.time_step_s)
 
 
 def test_radar_setup_can_retain_native_orientation() -> None:
@@ -326,3 +328,21 @@ def test_radar_trace_archive_preserves_run_signature(tmp_path) -> None:
     assert restored.run_signature == traces.run_signature
     assert restored.case == "reference"
     np.testing.assert_array_equal(restored.hr_a_m, traces.hr_a_m)
+
+
+def test_radar_trace_save_returns_normalized_npz_path(tmp_path) -> None:
+    values = np.zeros(2)
+    traces = RadarTraces(
+        np.asarray((-0.5, 0.5)),
+        values,
+        values,
+        values,
+        0.0,
+        "reference",
+        "test-signature",
+    )
+
+    output = save_radar_traces(traces, tmp_path / "trace")
+
+    assert output == tmp_path / "trace.npz"
+    assert output.is_file()

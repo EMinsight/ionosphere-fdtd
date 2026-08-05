@@ -123,3 +123,23 @@ def test_optimized_mesh_archive_rejects_coordinate_tampering(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="checksum"):
         load_optimized_mesh(archive)
+
+
+def test_optimized_mesh_save_returns_normalized_npz_path(tmp_path: Path) -> None:
+    base = build_geodesic_mesh(1)
+    executable = _copy_optimizer(tmp_path / "copy_optimizer")
+    result = optimize_with_mesquite(base, executable, timeout_s=10.0)
+
+    archive = save_optimized_mesh(
+        tmp_path / "mesh",
+        result,
+        orientation="polar",
+        fixed_vertices="poles",
+        movement_tolerance=1.0e-10,
+        max_iterations=200,
+        quality_before={},
+        quality_after={},
+    )
+
+    assert archive == tmp_path / "mesh.npz"
+    assert archive.is_file()

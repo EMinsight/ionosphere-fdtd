@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .archive import save_npz_atomic
 from .backends import BackendUnavailableError
 from .directional_dispersion import (
     compute_directional_phase_velocity,
@@ -93,9 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     elapsed_s = time.perf_counter() - started
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    trace_path = args.output_dir / "directional-traces.npz"
-    np.savez_compressed(
-        trace_path,
+    trace_path = save_npz_atomic(
+        args.output_dir / "directional-traces.npz",
         time_steps=traces.time_steps,
         time_s=traces.time_s,
         er_v_m=traces.er_v_m,

@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from .archive import save_npz_atomic
 from .materials import (
     ETOPO5_SHA256,
     ETOPO5Relief,
@@ -332,7 +333,9 @@ def record_radar_traces(
         steps,
         synchronize_every=synchronize_every,
     )
-    time_s = np.arange(steps + 1, dtype=np.float64) * simulation.time_step_s
+    time_s = (
+        np.arange(steps + 1, dtype=np.float64) - 0.5
+    ) * simulation.time_step_s
     source_center = (
         simulation.source.center_time_s
         if simulation.source is not None
@@ -353,10 +356,8 @@ def record_radar_traces(
 def save_radar_traces(traces: RadarTraces, path: str | Path) -> Path:
     """Save a compact, self-describing radar trace archive."""
 
-    output = Path(path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
-        output,
+    return save_npz_atomic(
+        path,
         format_version=np.asarray(2),
         time_s=traces.time_s,
         hr_a_m=traces.hr_a_m,
@@ -366,7 +367,6 @@ def save_radar_traces(traces: RadarTraces, path: str | Path) -> Path:
         case=np.asarray(traces.case),
         run_signature=np.asarray(traces.run_signature),
     )
-    return output
 
 
 def load_radar_traces(path: str | Path) -> RadarTraces:
