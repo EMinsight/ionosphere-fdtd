@@ -122,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
                 radial_cells=actual_radial_cells,
                 courant_factor=args.courant,
                 radial_altitudes_m=radial_altitudes,
+                radial_grid_policy=(
+                    "allow-abrupt" if radial_altitudes is not None else "smooth"
+                ),
             ),
             material=EarthIonosphereMaterial(anomalies=anomalies),
             source=GaussianCurrent(

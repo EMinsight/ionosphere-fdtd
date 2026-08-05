@@ -230,6 +230,7 @@ def create_radar_simulation(
             maximum_altitude_m=altitudes[-1],
             courant_factor=courant_factor,
             radial_altitudes_m=altitudes,
+            radial_grid_policy="allow-abrupt",
             mesh_orientation=mesh_orientation,
             tangential_material_support=tangential_material_support,
             horizontal_anomaly_mode=horizontal_anomaly_mode,

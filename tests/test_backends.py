@@ -287,6 +287,7 @@ def test_torch_compiled_nonuniform_stencil_matches_numpy() -> None:
         minimum_altitude_m=altitudes[0],
         maximum_altitude_m=altitudes[-1],
         radial_altitudes_m=altitudes,
+        radial_grid_policy="allow-abrupt",
         courant_factor=0.2,
     )
     reference = GeodesicFDTD(radial_config, backend="numpy", dtype="float64")

@@ -350,6 +350,7 @@ def test_nonuniform_radial_stencils_satisfy_weighted_adjoint_identity() -> None:
             minimum_altitude_m=altitudes[0],
             maximum_altitude_m=altitudes[-1],
             radial_altitudes_m=altitudes,
+            radial_grid_policy="allow-abrupt",
         ),
         material=VacuumMaterial(),
         dtype="float64",
@@ -372,6 +373,27 @@ def test_nonuniform_radial_stencils_satisfy_weighted_adjoint_identity() -> None:
     assert left + right == pytest.approx(0.0, abs=2.0e-11)
 
 
+def test_nonuniform_radial_derivative_annihilates_constant_ht() -> None:
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=len(altitudes) - 1,
+            minimum_altitude_m=altitudes[0],
+            maximum_altitude_m=altitudes[-1],
+            radial_altitudes_m=altitudes,
+            radial_grid_policy="allow-abrupt",
+        ),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    simulation.ht.fill(1.0)
+
+    derivative = simulation.to_numpy(simulation._radial_derivative_ht())
+
+    np.testing.assert_array_equal(derivative, 0.0)
+
+
 def test_graded_nonuniform_grid_remains_bounded_at_cfl_limit() -> None:
     altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
     simulation = GeodesicFDTD(
@@ -381,6 +403,7 @@ def test_graded_nonuniform_grid_remains_bounded_at_cfl_limit() -> None:
             minimum_altitude_m=altitudes[0],
             maximum_altitude_m=altitudes[-1],
             radial_altitudes_m=altitudes,
+            radial_grid_policy="allow-abrupt",
             courant_factor=1.0,
         ),
         material=VacuumMaterial(),

@@ -138,11 +138,12 @@ rejected.
 The default radial nodes are uniform.  `--surface-step 1250` adds a 1.25 km
 nonuniform subgrid within 5 km of sea level, matching the factor-four radial
 refinement used for the paper's shallow oil anomaly while retaining coarse
-cells elsewhere.  The Python API also accepts any strictly increasing custom
-node sequence through `SimulationConfig.radial_altitudes_m`, provided adjacent
-cell widths differ by no more than a factor of four. Nonuniform curls use a
-quadratic-exact three-point stencil and its weighted adjoint, retaining both
-second-order local consistency and the discrete energy identity at transitions.
+cells elsewhere. The Python API accepts smoothly graded increasing custom nodes
+through `SimulationConfig.radial_altitudes_m`; such grids retain second-order
+radial convergence and the discrete energy identity. Abrupt subgridding is a
+deliberate first-order transition and must be enabled with
+`radial_grid_policy="allow-abrupt"`, as done by the paper-specific factor-four
+radar grid.
 
 ## Material and source model
 

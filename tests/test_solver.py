@@ -223,6 +223,7 @@ def test_vertical_source_current_moment_is_preserved_on_nonuniform_grid() -> Non
             minimum_altitude_m=altitudes[0],
             maximum_altitude_m=altitudes[-1],
             radial_altitudes_m=altitudes,
+            radial_grid_policy="allow-abrupt",
             courant_factor=0.2,
         ),
         source=source,
@@ -317,10 +318,11 @@ def test_tangential_surface_source_preserves_exact_staggered_altitude() -> None:
                 5_000.0,
                 10_000.0,
             ),
-            radial_cells=6,
-            minimum_altitude_m=-5_000.0,
-            maximum_altitude_m=10_000.0,
-        ),
+                radial_cells=6,
+                minimum_altitude_m=-5_000.0,
+                maximum_altitude_m=10_000.0,
+                radial_grid_policy="allow-abrupt",
+            ),
         source=source,
     )
 
@@ -479,6 +481,7 @@ def test_nonuniform_radial_grid_advances() -> None:
         config=small_config(
             radial_altitudes_m=altitudes,
             radial_cells=len(altitudes) - 1,
+            radial_grid_policy="allow-abrupt",
         ),
         source=GaussianCurrent(),
     )
@@ -488,34 +491,39 @@ def test_nonuniform_radial_grid_advances() -> None:
 
 
 def test_custom_radial_grid_rejects_unsafe_spacing_jump() -> None:
-    with pytest.raises(ValueError, match="factor of 4"):
+    with pytest.raises(ValueError, match="smoothly graded"):
         small_config(
             radial_cells=4,
             radial_altitudes_m=(-100_000.0, -5_000.0, -1_250.0, 0.0, 100_000.0),
         )
 
 
-def test_nonuniform_radial_derivative_is_exact_for_quadratic_profile() -> None:
-    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
-    simulation = GeodesicFDTD(
-        config=small_config(
-            radial_cells=len(altitudes) - 1,
-            minimum_altitude_m=altitudes[0],
-            maximum_altitude_m=altitudes[-1],
-            radial_altitudes_m=altitudes,
+def test_simulation_config_rejects_unknown_radial_grid_policy() -> None:
+    with pytest.raises(ValueError, match="radial_grid_policy"):
+        small_config(radial_grid_policy="unchecked")
+
+
+def test_smooth_nonuniform_radial_derivative_converges_at_second_order() -> None:
+    errors = []
+    for radial_cells in (20, 40):
+        coordinate = np.linspace(0.0, 1.0, radial_cells + 1)
+        mapped = coordinate + 0.2 * coordinate * (1.0 - coordinate)
+        altitudes = -10_000.0 + 14_000.0 * mapped
+        simulation = GeodesicFDTD(
+            config=small_config(
+                radial_cells=radial_cells,
+                minimum_altitude_m=float(altitudes[0]),
+                maximum_altitude_m=float(altitudes[-1]),
+                radial_altitudes_m=tuple(altitudes),
+            )
         )
-    )
-    midpoints = simulation.radial_midpoint_altitudes_m
-    simulation.et[0] = midpoints**2
+        midpoints = simulation.radial_midpoint_altitudes_m
+        simulation.et[0] = midpoints**2
+        derivative = simulation.to_numpy(simulation._radial_derivative_et())[0]
+        exact = 2.0 * altitudes[1:-1]
+        errors.append(float(np.max(np.abs(derivative[1:-1] - exact))))
 
-    derivative = simulation.to_numpy(simulation._radial_derivative_et())[0]
-
-    np.testing.assert_allclose(
-        derivative[1:-1],
-        2.0 * np.asarray(altitudes[1:-1]),
-        rtol=0.0,
-        atol=2.0e-11,
-    )
+    assert errors[0] / errors[1] == pytest.approx(4.0, rel=2.0e-10)
 
 
 def test_solver_rejects_incompatible_provided_mesh_configuration() -> None:
