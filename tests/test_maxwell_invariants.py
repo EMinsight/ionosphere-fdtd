@@ -1,0 +1,228 @@
+import numpy as np
+import pytest
+
+from ionosphere_fdtd.constants import C_0
+from ionosphere_fdtd.mesh import build_geodesic_mesh
+from ionosphere_fdtd.mesh_quality import scalar_laplacian
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import (
+    TangentialGaussianCurrent,
+    geographic_tangent_basis,
+)
+
+
+class VacuumMaterial:
+    def sample(
+        self,
+        directions: np.ndarray,
+        altitudes_m: np.ndarray,
+        earth_radius_m: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        del earth_radius_m
+        shape = (len(directions), len(altitudes_m))
+        return np.zeros(shape), np.ones(shape)
+
+
+class UniformConductiveMaterial(VacuumMaterial):
+    def __init__(self, conductivity_s_m: float) -> None:
+        self.conductivity_s_m = conductivity_s_m
+
+    def sample(
+        self,
+        directions: np.ndarray,
+        altitudes_m: np.ndarray,
+        earth_radius_m: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        sigma, epsilon_r = super().sample(
+            directions, altitudes_m, earth_radius_m
+        )
+        sigma.fill(self.conductivity_s_m)
+        return sigma, epsilon_r
+
+
+def _surface_mode_config() -> SimulationConfig:
+    return SimulationConfig(
+        subdivision=1,
+        radial_cells=2,
+        minimum_altitude_m=-1.0e9,
+        maximum_altitude_m=1.0e9,
+        earth_radius_m=1.0e10,
+        courant_factor=0.8,
+    )
+
+
+def _operator_matrix(size: int, apply: object) -> np.ndarray:
+    identity = np.eye(size)
+    return np.column_stack([apply(identity[:, index]) for index in range(size)])
+
+
+def test_surface_incidence_pairs_satisfy_discrete_adjoint_identities() -> None:
+    mesh = build_geodesic_mesh(2)
+    generator = np.random.default_rng(20260805)
+    edge_values = generator.standard_normal(mesh.n_edges)
+    face_values = generator.standard_normal(mesh.n_faces)
+    vertex_values = generator.standard_normal(mesh.n_vertices)
+
+    primal_left = face_values @ mesh.face_circulation(edge_values)
+    primal_right = mesh.dual_edge_difference(face_values) @ edge_values
+    dual_left = vertex_values @ mesh.dual_cell_circulation(edge_values)
+    dual_right = -mesh.edge_difference(vertex_values) @ edge_values
+
+    assert primal_left == pytest.approx(primal_right, abs=2.0e-13)
+    assert dual_left == pytest.approx(dual_right, abs=2.0e-13)
+
+
+def test_tm_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
+    simulation = GeodesicFDTD(
+        _surface_mode_config(), material=VacuumMaterial(), dtype="float64"
+    )
+    mesh = simulation.mesh
+    operator = _operator_matrix(
+        mesh.n_vertices, lambda values: scalar_laplacian(mesh, values)
+    )
+    eigenvalues, eigenvectors = np.linalg.eig(operator)
+    selected = int(np.argmin(np.abs(eigenvalues.real + 2.0)))
+    eigenvalue = -float(eigenvalues[selected].real)
+    mode = eigenvectors[:, selected].real
+    layer = 1
+    simulation.er[:, layer] = mode
+    amplitudes = [1.0]
+
+    for _ in range(100):
+        simulation._update_magnetic_fields()
+        simulation._update_electric_fields()
+        simulation.et[:] = 0.0
+        simulation.hr[:] = 0.0
+        amplitudes.append(float(simulation.er[:, layer] @ mode / (mode @ mode)))
+
+    radius = simulation.radii_m[layer]
+    q = (C_0 * simulation.time_step_s) ** 2 * eigenvalue / radius**2
+    phase = np.arccos(1.0 - 0.5 * q)
+    steps = np.arange(len(amplitudes))
+    expected = np.cos((steps + 0.5) * phase) / np.cos(0.5 * phase)
+
+    np.testing.assert_allclose(amplitudes, expected, rtol=0.0, atol=8.0e-14)
+    assert not np.any(simulation.hr)
+
+
+def test_te_r_surface_eigenmode_matches_leapfrog_dispersion() -> None:
+    simulation = GeodesicFDTD(
+        _surface_mode_config(), material=VacuumMaterial(), dtype="float64"
+    )
+    mesh = simulation.mesh
+
+    def te_operator(values: np.ndarray) -> np.ndarray:
+        edge_gradient = (
+            mesh.primal_edge_angles
+            / mesh.dual_edge_angles
+            * mesh.dual_edge_difference(values)
+        )
+        return mesh.face_circulation(edge_gradient) / mesh.face_solid_angles
+
+    operator = _operator_matrix(mesh.n_faces, te_operator)
+    eigenvalues, eigenvectors = np.linalg.eig(operator)
+    selected = int(np.argmin(np.abs(eigenvalues.real - 2.0)))
+    eigenvalue = float(eigenvalues[selected].real)
+    mode = eigenvectors[:, selected].real
+    layer = 1
+    simulation.hr[:, layer] = mode
+    amplitudes = [1.0]
+
+    for _ in range(100):
+        simulation._update_magnetic_fields()
+        simulation.ht[:] = 0.0
+        simulation._update_electric_fields()
+        simulation.er[:] = 0.0
+        amplitudes.append(float(simulation.hr[:, layer] @ mode / (mode @ mode)))
+
+    radius = simulation.radial_midpoints_m[layer]
+    q = (C_0 * simulation.time_step_s) ** 2 * eigenvalue / radius**2
+    phase = np.arccos(1.0 - 0.5 * q)
+    steps = np.arange(len(amplitudes))
+    expected = np.cos((steps - 0.5) * phase) / np.cos(0.5 * phase)
+
+    np.testing.assert_allclose(amplitudes, expected, rtol=0.0, atol=8.0e-14)
+    assert not np.any(simulation.er)
+
+
+@pytest.mark.parametrize("orientation", ("polar", "native"))
+@pytest.mark.parametrize("subdivision", (1, 3))
+def test_tangential_source_covariant_samples_reconstruct_requested_moment(
+    subdivision: int,
+    orientation: str,
+) -> None:
+    line_length = 22_500.0
+    source = TangentialGaussianCurrent(
+        latitude_deg=46.5,
+        longitude_deg=-90.9,
+        altitude_m=0.0,
+        azimuths_deg=(0.0, 90.0),
+        line_lengths_m=(line_length, line_length),
+    )
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=subdivision,
+            radial_cells=2,
+            minimum_altitude_m=-5_000.0,
+            maximum_altitude_m=5_000.0,
+            mesh_orientation=orientation,
+        ),
+        source=source,
+        dtype="float64",
+    )
+    edges, _, weights = source.edge_distribution(simulation)
+    unique_edges = np.unique(edges)
+    endpoints = simulation.mesh.vertices[simulation.mesh.edges[unique_edges]]
+    directions = endpoints[:, 1] - endpoints[:, 0]
+    directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+    lengths = (
+        simulation.mesh.primal_edge_angles[unique_edges]
+        * simulation.config.earth_radius_m
+    )
+    covariant_samples = np.asarray(
+        [
+            weights[edges == edge].sum() * length
+            for edge, length in zip(unique_edges, lengths, strict=True)
+        ]
+    )
+    east, north = geographic_tangent_basis(
+        source.latitude_deg, source.longitude_deg
+    )
+    analysis = np.column_stack((directions @ east, directions @ north))
+    reconstructed = np.linalg.pinv(analysis) @ covariant_samples
+
+    np.testing.assert_allclose(
+        reconstructed,
+        (line_length, line_length),
+        rtol=0.0,
+        atol=2.0e-11,
+    )
+
+
+def test_conductive_update_is_passive_even_in_the_stiff_limit() -> None:
+    simulation = GeodesicFDTD(
+        SimulationConfig(subdivision=0, radial_cells=2, courant_factor=0.2),
+        material=UniformConductiveMaterial(1.0),
+        dtype="float64",
+    )
+    simulation.er.fill(1.0)
+    norms = [float(np.linalg.norm(simulation.er))]
+
+    for _ in range(20):
+        simulation.step()
+        norms.append(float(np.linalg.norm(simulation.er)))
+
+    assert np.all(np.diff(norms) <= 0.0)
+    assert np.max(np.abs(simulation._ca_er)) < 1.0
+
+
+def test_surface_laplacian_spectrum_is_rotation_invariant() -> None:
+    spectra = []
+    for orientation in ("native", "polar"):
+        mesh = build_geodesic_mesh(1, orientation=orientation)
+        operator = _operator_matrix(
+            mesh.n_vertices, lambda values: scalar_laplacian(mesh, values)
+        )
+        spectra.append(np.sort(np.linalg.eigvals(operator).real))
+
+    np.testing.assert_allclose(spectra[0], spectra[1], rtol=0.0, atol=2.0e-13)
