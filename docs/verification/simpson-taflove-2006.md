@@ -2,7 +2,7 @@
 
 > Final reproduction status: **FAIL**
 
-Verification performed on 2026-08-03–04 (Asia/Seoul).
+Production rerun performed on 2026-08-05 (Asia/Seoul).
 
 ## Executive summary
 
@@ -15,7 +15,7 @@ Figure 5 reproduces the published arrival ordering, timing, overshoot, and
 slow-tail morphology, but not all four relative amplitudes. A corrected
 geographic locator separates the previously collapsed B/B′ observations. The
 final level-7 polar ETOPO5 run uses Sandia Mesquite's uniform size-and-shape
-objective on the sphere and gives normalized far peaks of 0.31148/0.35580
+objective on the sphere and gives normalized far peaks of 0.31141/0.35571
 instead of approximately 0.39/0.39. This reduces the far-path relative RMS
 difference from 134.5% with the earlier one-step smoother to 18.5%, and the
 far tails now agree with one another, but their common magnitude remains about
@@ -25,16 +25,16 @@ while forcing every shallow ocean column to contain a 5-km seawater cell has
 negligible effect. The remaining mismatch is therefore associated with the
 complete relief/lithosphere voxelization and the paper's unpublished exact
 Mesquite configuration and coordinates, not shallow receiver bathymetry
-alone. The previously finalized Figure 6 run has east/west mean absolute
-errors of 2.064/0.277 dB/Mm and
-maximum absolute errors of 5.026/1.650 dB/Mm. Both paths fail the paper's
+alone. Figure 6 is now derived from the same audited polar Mesquite trace as
+Figure 5. Its east/west mean absolute errors are 0.921/0.284 dB/Mm and its
+maximum absolute errors are 3.020/2.125 dB/Mm. Both paths fail the paper's
 pointwise ±0.5 dB/Mm statement over 50–500 Hz.
 
 Figure 7 also retains only the direction of the claimed sensitivity after its
 transmitter is corrected from the opposite hemisphere to Clam Lake. Its
-`ΔHtan` median is −36.83 dB and 97.52% of nonsingular samples are below
-−25 dB, but `ΔHr` has a +97.94 dB median rather than a curve near +20 dB.
-The computed 136.94 dB median radial-over-tangential advantage is not the
+`ΔHtan` median is −43.25 dB and 92.47% of nonsingular samples are below
+−25 dB, but `ΔHr` has a +126.00 dB median rather than a curve near +20 dB.
+The computed 165.90 dB median radial-over-tangential advantage is not the
 paper's approximate 45 dB. Exact radial source staggering and geographic
 `Hr` interpolation correct the observation operators but do not repair this
 failure, which still comes from a nearly zero reference `Hr`. Consequently
@@ -65,6 +65,15 @@ figures, so the criteria are separated:
 | 6 | Both calculated paths remain within approximately ±0.5 dB/Mm of the Bannister daytime result over 50–500 Hz. |
 | 7 | `ΔHtan` is more than 25 dB below its reference at almost every nonsingular time, `ΔHr` reaches approximately +20 dB, and radial sensing offers about 45 dB more sensitivity. |
 
+| Verification target | Current result | Status |
+|---|---|---:|
+| Figure 5 morphology and arrival ordering | Reproduced | **PASS** |
+| Figure 5 relative amplitudes and path similarity | Far peaks 0.31141/0.35571; RMS 37.41%/18.47% | **FAIL** |
+| Figure 6 A–B pointwise attenuation | Maximum residual 3.020 dB/Mm | **FAIL** |
+| Figure 6 A′–B′ pointwise attenuation | Maximum residual 2.125 dB/Mm | **FAIL** |
+| Figure 7 complete radar sensitivity | Full audited rerun reported below | **FAIL** |
+| Complete Figures 5–7 reproduction | At least one criterion fails for every figure | **FAIL** |
+
 The Figure 7 body text and caption are internally inconsistent about
 normalization. The body says the difference is divided by the peak Model-A
 field, but the caption attributes the plotted spikes to zero crossings of the
@@ -77,6 +86,8 @@ The verification therefore follows the caption and the actual plot:
 
 Values within `1e-6` of the reference peak are excluded from scalar summaries,
 while the rendered curve retains the approach to the zero-crossing spikes.
+For a reproducible scalar interpretation of “almost every time,” this report
+requires at least 95% of nonsingular samples to be below −25 dB.
 
 ## Numerical model
 
@@ -99,18 +110,19 @@ while the rendered curve retains the approach to the zero-crossing spikes.
 | Backend | compiled PyTorch, CUDA, float64 |
 | Optimizer | `TShapeSizeB1`, `PMeanP(1)`, `TrustRegion` |
 | Mesquite source revision | `7ae51c8e8617c67e63018c8a7effc0f5455f58b4` |
-| Production implementation revision | `b4823c7` |
-| Mesh-coordinate SHA-256 | `5d5f5c531f03e8d9b7124d1cca81987f65e1b2a33d19a3d8d8265b151e03dccb` |
-| Trace SHA-256 | `89cc0d393454439a291333e4081105cd6b7516768b6af78f5efbdfe4e80de85c` |
-| Mesh optimization / FDTD wall time | 181.8 / 1,125.8 s |
+| Production implementation revision | `e916119` |
+| Mesh-coordinate SHA-256 | `221052c8a2bb109f4ee0142d19b4e181c31fd04e508074495f5ff7923cede75f` |
+| Vertex-coordinate SHA-256 | `c5736acfb24f1e9e7c97e5ade78c5f4c9ddeb30859aba6ead1502781091cac47` |
+| Trace SHA-256 | `34a8f94a329035cebdcd9b56aef8f14f23782754f888ead9bfdaba0e97c86372` |
+| Mesh optimization / FDTD wall time | 165.7 / 627.1 s |
 
 The source is barycentrically distributed in the horizontal plane and linearly
 staggered between the 0 and 5 km `Er` planes, preserving its exact 2.5 km
 centroid and total current.
 
-This configuration is authoritative for the current Figure 5 result. Figure 6
-was not rerun during this focused campaign; its section retains the previously
-reported corrected-location native-grid trace and verdict.
+This single configuration is authoritative for both the current Figure 5 and
+Figure 6 results. The v2 archive contains exactly the same vertex bytes as the
+previous v1 Mesquite archive; only its validated provenance metadata changed.
 
 ### Figure 7
 
@@ -130,17 +142,15 @@ reported corrected-location native-grid trace and verdict.
 | Oil-field depth | 1.25 km thick at median depth 1.2 km |
 | Conductivity contrast | 0.1 times surrounding strata |
 | Backend | compiled PyTorch, two CUDA GPUs, float64 |
-| Archived production revision | `e3987f4` |
-| Wall time | 2,201.428 s reference / 1,819.934 s anomaly |
-| Reference trace SHA-256 | `d5eeff7d45f307021d42b6a4cea150942dddc2d391b8859dc4888e6827c79eed` |
-| Anomaly trace SHA-256 | `56e5c481ae5eb46e3a01af34f35c69f331415ab5ffe1936b9484c58a7f8769b0` |
+| Production revision | `e916119` |
+| Wall time | 1,087.776 s reference / 1,302.219 s anomaly |
+| Reference trace SHA-256 | `227813f66db8c49e43680f37ddcfc12c3c3a533c19b7b74029f381d1a5b983d7` |
+| Anomaly trace SHA-256 | `ed25d2311a6a51de107b677a0e7eec37c6a282211d34ce5c1fbaa8d4fa763fc6` |
 
-The trace hashes and Figure 7 metrics in this report describe the archived
-production pair above. They predate the terrain-relative and conservative-area
-corrections described later in this report. Those corrections are required on
-physical and numerical grounds, but they do not by themselves upgrade the
-Figure 7 verdict: a new full-duration subdivision-7 pair is required before
-replacing the archived quantitative values.
+The trace hashes and Figure 7 metrics in this report describe the complete
+audited terrain-relative, conservative-area production pair above. The run
+signatures match exactly, including revision, mesh, material, source,
+observation operator, precision, and time grid.
 
 The corrected implementation passes the following production-configuration
 initialization gates:
@@ -178,24 +188,24 @@ the reference/anomaly difference but remains a reproducibility limitation.
 ![Published and reproduced Figure 5](images/simpson-taflove-2006-fig-5-comparison.png)
 
 All four receiver records are plotted individually with one common
-normalization. The corrected, Mesquite-optimized ETOPO5 run gives A/A′ peak
-times of 22.545/23.226 ms and B/B′ peak times of 44.406/44.028 ms. The
+normalization. The audited, Mesquite-optimized ETOPO5 run gives A/A′ peak
+times of 22.548/23.232 ms and B/B′ peak times of 44.415/44.037 ms. The
 calculated waveforms preserve the published arrival ordering, main pulse,
 opposite-sign overshoot, and subsequent slow tail. The raw pulse is negative;
 the comparison applies one common sign reversal to match the published panel.
 Their amplitudes, however, remain low: the normalized B/B′ peaks are
-0.31148/0.35580, versus approximately 0.39 for both published far records by
+0.31141/0.35571, versus approximately 0.39 for both published far records by
 visual reading.
 
 | Figure 5 criterion | Published behavior | Reproduction | Result |
 |---|---|---|---:|
-| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.545/23.226 ms; B/B′ at 44.406/44.028 ms | **PASS** |
+| Arrival ordering | Quarter-antipode response precedes half-antipode response | A/A′ at 22.548/23.232 ms; B/B′ at 44.415/44.037 ms | **PASS** |
 | Main-pulse timing | Peaks occur at the corresponding locations in the published panel | All four peaks visually align with the published traces | **PASS** |
 | Waveform morphology | Negative main pulse, opposite-sign overshoot, and slow tail | All three features are present | **PASS** |
-| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.4% | **FAIL** |
-| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 18.5% | **FAIL** |
-| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.31148/0.35580 | **FAIL** |
-| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.06093/0.05922 | **FAIL** |
+| A/A′ path similarity | Near records are similar but not identical | Relative RMS difference is 37.41% | **FAIL** |
+| B/B′ path similarity | Far records are similar but not identical | Relative RMS difference is 18.47% | **FAIL** |
+| Far peak magnitude | Both far peaks are approximately 0.39 | B/B′ are 0.31141/0.35571 | **FAIL** |
+| Far slow-tail magnitude at 0.12 s | Both far tails are approximately 0.10 | B/B′ are 0.06085/0.05911 | **FAIL** |
 | Overall qualitative morphology | Ordering and characteristic waveform shape | Required qualitative features are present | **PASS** |
 | Exact plot reproduction | Timing, relative amplitude, and path similarity agree | Timing agrees; amplitude and symmetry do not | **FAIL** |
 
@@ -203,6 +213,19 @@ Figure 5 is therefore a **morphological pass but quantitative fail**. No
 absolute-amplitude criterion is used because the paper labels the vertical
 scale as arbitrary and does not state the current amplitude. Every failed
 criterion above uses only relative quantities after one common normalization.
+
+### Change from the previous Figure 5 production trace
+
+| Metric | Previous | Audited rerun | Change |
+|---|---:|---:|---:|
+| A/A′ relative RMS | 37.435% | 37.408% | **0.027 percentage points better** |
+| B/B′ relative RMS | 18.484% | 18.474% | **0.010 percentage points better** |
+| B normalized peak | 0.31148 | 0.31141 | effectively unchanged |
+| B′ normalized peak | 0.35580 | 0.35571 | effectively unchanged |
+| B/B′ tail at 0.12 s | 0.06093 / 0.05922 | 0.06085 / 0.05911 | effectively unchanged |
+
+The tiny symmetry improvement is numerically measurable but too small to
+change any Figure 5 verdict.
 
 ### Follow-up diagnosis of the Figure 5 mismatch
 
@@ -427,7 +450,7 @@ the primal triangular cells, and the geodesic dual-grid implementation are
 unchanged. The objective contains no ETOPO5 elevations, source coordinates,
 receiver coordinates, or waveform metric.
 
-At subdivision 7 the optimizer converged in 181.8 s. The largest great-circle
+In the audited rerun at subdivision 7, the optimizer converged in 165.7 s. The largest great-circle
 vertex displacement was 0.015475 rad, or 98.6 km at the Earth radius. Every
 reported metric improved:
 
@@ -555,16 +578,16 @@ this alias substantially but does not eliminate it.
 ![Published and reproduced Figure 6](images/simpson-taflove-2006-fig-6-comparison.png)
 
 Each receiver record is truncated at its post-overshoot zero crossing, as
-specified by the paper. The corrected adaptive cutoffs are 23,454 samples for
-A, 22,643 for A′, 24,492 for B, and 24,532 for B′. A 32,768-point DFT provides
+specified by the paper. The audited adaptive cutoffs are 23,464 samples for
+A, 22,663 for A′, 24,508 for B, and 24,531 for B′. A 32,768-point DFT provides
 45 fixed bins from 50.862630 to 498.453776 Hz. The reference line evaluates Bannister's
 daytime attenuation equations with the same 70 km height and 3.33 km scale
 height rather than fitting pixels from the plot.
 
 | Path | Mean absolute error | Maximum absolute error | Worst frequency | ±0.5 dB/Mm result |
 |---|---:|---:|---:|---:|
-| A–B, east | 2.064 dB/Mm | 5.026 dB/Mm | 437.419 Hz | **FAIL** |
-| A′–B′, west | 0.277 dB/Mm | 1.650 dB/Mm | 467.936 Hz | **FAIL** |
+| A–B, east | 0.921 dB/Mm | 3.020 dB/Mm | 437.419 Hz | **FAIL** |
+| A′–B′, west | 0.284 dB/Mm | 2.125 dB/Mm | 498.454 Hz | **FAIL** |
 
 The west curve follows the published trend in mean, but still violates the
 pointwise tolerance at the upper end of the band. The east curve is
@@ -575,6 +598,15 @@ remain 2.933/4.370 dB/Mm. Thus bathymetry discretization explains the large
 east/west split, while the remaining upper-band oscillation is consistent
 with the high-frequency spatial-dispersion residual documented in the 2004
 verification.
+
+Compared with the previously documented native-grid Figure 6 result, the
+audited common-trace east MAE improves from 2.064 to 0.921 dB/Mm and its
+maximum improves from 5.026 to 3.020 dB/Mm. The west MAE changes from 0.277
+to 0.284 dB/Mm and its maximum worsens from 1.650 to 2.125 dB/Mm. This is a
+configuration-consistency improvement, not a clean solver-only comparison.
+Reanalyzing the previous Mesquite trace with the same adaptive procedure gives
+0.914/2.976 and 0.276/1.990 dB/Mm, so the audited solver changes do not improve
+Figure 6 accuracy at fixed mesh and analysis settings.
 
 ### Spectral-window sensitivity
 
@@ -604,47 +636,61 @@ The original production run placed the Clam Lake transmitter at its antipode,
 Alaska location. Those results are superseded. The panel and metrics below use
 a complete corrected-location reference/anomaly pair.
 
-The corrected tangential curve is approximately flat near −37 dB away from
-reference zero crossings. Its median is −36.829 dB, and 97.522% of
-nonsingular samples are below −25 dB. This satisfies the paper's stated
-tangential suppression criterion.
+The audited tangential curve remains well below −25 dB away from reference
+zero crossings. Its median is −43.253 dB, but only 92.469% of nonsingular
+samples are below −25 dB. It passes the median suppression criterion but falls
+short of the report's 95% operational interpretation of “almost every time.”
 
 The radial curve still does not reproduce the published scale or morphology.
 It is above the plot's +30 dB limit for almost the entire window, with a
-+97.941 dB median and +128.004 dB 95th percentile. The median
-radial-over-tangential advantage is 136.940 dB, not approximately 45 dB.
++126.000 dB median and +147.896 dB 95th percentile. The median
+radial-over-tangential advantage is 165.903 dB, not approximately 45 dB.
 
 | Metric | Paper behavior | Reproduction | Result |
 |---|---:|---:|---:|
-| Median pointwise `ΔHtan` | mostly below −25 dB | −36.829 dB | **PASS** |
-| Fraction of `ΔHtan < −25 dB` | almost every time | 97.522% | **PASS** |
-| Pointwise `ΔHr` scale | reaches about +20 dB | +97.941 dB median | **FAIL** |
-| Median `ΔHr−ΔHtan` | about 45 dB | 136.940 dB | **FAIL** |
+| Median pointwise `ΔHtan` | below −25 dB | −43.253 dB | **PASS** |
+| Fraction of `ΔHtan < −25 dB` | at least 95% | 92.469% | **FAIL** |
+| Pointwise `ΔHr` scale | reaches about +20 dB | +126.000 dB median | **FAIL** |
+| Median `ΔHr−ΔHtan` | about 45 dB | 165.903 dB | **FAIL** |
 
 The absolute fields identify the mechanism:
 
 | Quantity | Peak magnitude |
 |---|---:|
-| Reference `Htan` | `1.4417e-8 A/m` |
-| Oil-model `Htan` | `1.4196e-8 A/m` |
-| Absolute `Htan` difference | `2.2230e-10 A/m` |
-| Reference `Hr` | `7.2689e-17 A/m` |
-| Oil-model `Hr` | `2.9956e-11 A/m` |
-| Absolute `Hr` difference | `2.9956e-11 A/m` |
+| Reference `Htan` | `1.5553e-8 A/m` |
+| Oil-model `Htan` | `1.5478e-8 A/m` |
+| Absolute `Htan` difference | `1.2661e-10 A/m` |
+| Reference `Hr` | `1.0609e-16 A/m` |
+| Oil-model `Hr` | `3.1418e-10 A/m` |
+| Absolute `Hr` difference | `3.1418e-10 A/m` |
 
 The corrected short propagation path raises the reference tangential field by
 more than three orders of magnitude compared with the superseded antipodal
-run. Nevertheless, the tangential scattered field is still 17.41 dB stronger
-than the radial scattered field. The apparent radial advantage is caused by
-the reference `Hr` being more than five orders of magnitude smaller than the
-radial scattered field. Applying the body text's peak normalization instead
-of the caption's pointwise normalization gives −36.239 dB for `ΔHtan` and
-+112.300 dB for `ΔHr`; it therefore fails the published +20 dB scale under
+run. In the audited pair, the radial scattered-field peak is 7.90 dB stronger
+than the tangential scattered-field peak. The apparent radial advantage is
+dominated by the reference `Hr` being roughly six orders of magnitude smaller
+than the radial scattered field. Applying the body text's peak normalization
+instead of the caption's pointwise normalization gives −41.787 dB for `ΔHtan`
+and +129.430 dB for `ΔHr`; it therefore fails the published +20 dB scale under
 either reading.
 
 Figure 7 is a **quantitative fail**, although it qualitatively confirms that a
 buried conductivity anomaly can generate a radial magnetic component while
 only weakly perturbing the dominant tangential reference field.
+
+### Change from the previous Figure 7 production pair
+
+| Metric | Previous | Audited rerun | Change |
+|---|---:|---:|---:|
+| Median pointwise `ΔHtan` | −36.829 dB | −43.253 dB | **6.424 dB more suppression** |
+| Fraction `ΔHtan < −25 dB` | 97.522% | 92.469% | 5.053 percentage points worse |
+| Median pointwise `ΔHr` | +97.941 dB | +126.000 dB | 28.059 dB worse |
+| Median radial advantage | 136.940 dB | 165.903 dB | 28.963 dB worse |
+| Reference runtime | 2,201.4 s | 1,087.8 s | **50.6% faster** |
+| Anomaly runtime | 1,819.9 s | 1,302.2 s | **28.4% faster** |
+
+The tangential median and runtime improve, but the radial mismatch and the
+tangential coverage criterion worsen. No Figure 7 acceptance verdict improves.
 
 ### Correctness and uncertainty gates after the production run
 
@@ -666,9 +712,10 @@ At subdivision 5, replacing the containing-face `Hr` sample by a four-face
 local-linear reconstruction at the exact oil-field coordinate improves the
 normalized radial result by 24.5 dB. The reconstruction is promoted on
 correctness grounds because radial interpolation alone cannot correct a
-horizontal face-center offset. It is not, however, a fitted remedy: the final
-subdivision-7 run moves the pointwise median from +95.691 to +97.941 dB and
-the peak-normalized result from +103.991 to +112.300 dB. The opposite changes
+horizontal face-center offset. It is not, however, a fitted remedy: the
+previous subdivision-7 point-sampled run moved the pointwise median from
++95.691 to +97.941 dB and the peak-normalized result from +103.991 to
++112.300 dB. The opposite changes
 at the two resolutions expose strong horizontal sampling sensitivity rather
 than convergence toward the published result. Removing the approximate Shield
 changes the subdivision-5 normalized radial peak by only 0.07 dB; the
@@ -678,7 +725,8 @@ primary normalized-error cause.
 | Subdivision-7 `Hr` receiver | Peak-normalized `ΔHr` | Median pointwise `ΔHr` | Median advantage | Reference `Hr` peak |
 |---|---:|---:|---:|---:|
 | Containing face | +103.991 dB | +95.691 dB | 137.450 dB | `4.7439e-17 A/m` |
-| Exact local-linear | +112.300 dB | +97.941 dB | 136.940 dB | `7.2689e-17 A/m` |
+| Previous exact local-linear, point-sampled oil | +112.300 dB | +97.941 dB | 136.940 dB | `7.2689e-17 A/m` |
+| Audited exact local-linear, conservative oil | +129.430 dB | +126.000 dB | 165.903 dB | `1.0609e-16 A/m` |
 
 The paper specifies two orthogonal 300-A ground lines but not their relative
 polarity. Separate north and east basis simulations permit linear synthesis
@@ -780,9 +828,10 @@ but assigns fractional occupancy so each staggered grid integrates to exactly
 the recursively subdivided geodesic topology or tuning conductivity.
 
 The corrected Figure 7 absolute fields show that the solver does generate a
-radial scattered field, but not a radial absolute-field advantage: the
-tangential difference is 17.41 dB larger. The reported 136.94 dB advantage is
-created by dividing by an almost-zero reference `Hr`. The paper does not
+radial scattered field. In the audited conservative-area pair its peak is
+7.90 dB larger than the tangential scattered-field peak, but the reported
+165.90 dB normalized advantage is still dominated by division by an
+almost-zero reference `Hr`. The paper does not
 publish enough information to determine whether the discrepancy comes from
 its exact optimized cell positions, ground-line phase/deposition, Canadian
 Shield mask, conductivity realization, oil-body voxelization, or the
@@ -821,13 +870,13 @@ python tools/mesquite/build.py --build-dir build/mesquite
   --dtype float64 --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
   --ionosphere-scale-height-km 3.3333333333333335 --torch-compile \
-  --synchronize-every 128 \
-  --output-dir /tmp/fig5-mesquite-etopo5-l7
+  --synchronize-every 1024 \
+  --output-dir /tmp/ionosphere-verification-20260805/st2006-fig56-l7
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli \
   figures-5-6 \
-  --traces /tmp/fig5-mesquite-etopo5-l7/simpson-taflove-2004-traces.npz \
-  --output-dir /tmp/fig5-mesquite-etopo5-l7/figures-5-6
+  --traces /tmp/ionosphere-verification-20260805/st2006-fig56-l7/simpson-taflove-2004-traces.npz \
+  --output-dir /tmp/ionosphere-verification-20260805/st2006-fig56-l7/figures-5-6
 ```
 
 The fixed-depth isolation changes `--material etopo5` to
@@ -835,34 +884,33 @@ The fixed-depth isolation changes `--material etopo5` to
 shallow-ocean diagnostic changes only `--minimum-ocean-depth-km` from 0 to 5. The
 subdivision-5 ionosphere sensitivity cases keep the ETOPO5 material and change
 only the reference or scale height documented in the table above. Figure 6
-retains the earlier configuration and is not included in the current focused
-rerun.
+is generated from the same current trace as Figure 5.
 
 The paired Figure 7 runs were:
 
 ```bash
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case reference --subdivision 7 --material etopo5 \
-  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
-  --dtype float64 --torch-compile --courant 1.0 \
-  --source-basis both --vertical-reference terrain \
-  --horizontal-anomaly conservative-nearest \
-  --receiver-support local-linear --synchronize-every 1024 \
-  --output artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/reference.npz
-
-.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
-  --case anomaly --subdivision 7 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --torch-compile --courant 1.0 \
   --source-basis both --vertical-reference terrain \
   --horizontal-anomaly conservative-nearest \
   --receiver-support local-linear --synchronize-every 1024 \
-  --output artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/anomaly.npz
+  --output /tmp/ionosphere-verification-20260805/st2006-fig7-reference.npz
+
+.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
+  --case anomaly --subdivision 7 --material etopo5 \
+  --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
+  --dtype float64 --torch-compile --courant 1.0 \
+  --source-basis both --vertical-reference terrain \
+  --horizontal-anomaly conservative-nearest \
+  --receiver-support local-linear --synchronize-every 1024 \
+  --output /tmp/ionosphere-verification-20260805/st2006-fig7-anomaly.npz
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli analyze-radar \
-  --reference artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/reference.npz \
-  --anomaly artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/anomaly.npz \
-  --figure artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/figure-7.png
+  --reference /tmp/ionosphere-verification-20260805/st2006-fig7-reference.npz \
+  --anomaly /tmp/ionosphere-verification-20260805/st2006-fig7-anomaly.npz \
+  --figure /tmp/ionosphere-verification-20260805/st2006-figure-7.png
 ```
 
 ## Reproducibility limits
@@ -908,9 +956,8 @@ terrain-relative radar geometry, deterministic CUDA circulation, explicit
 PEC/CFL/loss invariants, and a reproducible Figure 5–7 analysis CLI. Precision,
 time-step stability, source moment, radial metric weighting, and
 ionosphere-profile sensitivity were tested. The geographic locator defect was
-corrected and all paper-scale production traces affected by that defect were
-recomputed; the later terrain/area audit still requires a new level-7 Figure 7
-pair before its archived numbers can be superseded.
+corrected, and all paper-scale production traces affected by the geographic,
+terrain-reference, and conservative-area corrections have now been recomputed.
 
 For Figure 5, fixed-depth geometry restores symmetry. The official Mesquite
 optimization materially improves the ETOPO5 result: it reduces the level-7

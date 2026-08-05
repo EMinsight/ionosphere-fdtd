@@ -2,25 +2,46 @@
 
 > Final quantitative status: **FAIL**
 
-Verification completed on 2026-08-03 (Asia/Seoul).
+Production rerun completed on 2026-08-05 (Asia/Seoul).
 
 ## Executive summary
 
 This study tested whether the geodesic FDTD implementation reproduces the
 time-domain receiver waveforms in Figure 7 and the frequency-dependent
-attenuation in Figure 8 of Simpson and Taflove (2004). The implementation
-reproduces the expected negative main pulse followed by an overshoot and slow
-tail, and its attenuation and phase-velocity errors decrease with spatial
-refinement. It does not, however, satisfy the paper's strict pointwise
-attenuation tolerances over the complete 50–500 Hz band.
+attenuation in Figure 8 of Simpson and Taflove (2004). The audited
+implementation reproduces the expected negative main pulse followed by an
+overshoot and slow tail. It does not, however, satisfy the paper's strict
+pointwise attenuation tolerances over the complete 50–500 Hz band.
 
 The authoritative comparison uses Bannister's source equations rather than a
-fit read from the published plot. At subdivision 8, the mean absolute
-attenuation errors are 0.274 dB/Mm on A–B and 0.275 dB/Mm on A′–B′. Their
-maximum absolute errors are 1.218 and 1.225 dB/Mm, respectively, both at
-478.109 Hz. The maxima exceed the paper's reported ±0.5 dB/Mm A–B and
-±1.0 dB/Mm A′–B′ agreement ranges. The remaining failure is concentrated in
-the oscillatory 400–500 Hz residual.
+fit read from the published plot. In the 2026-08-05 subdivision-8 polar-grid
+rerun, the mean absolute attenuation errors are 0.310 dB/Mm on A–B and
+0.286 dB/Mm on A′–B′. Their maximum absolute errors are 2.384 dB/Mm at
+488.281 Hz and 1.092 dB/Mm at 478.109 Hz. The maxima exceed the paper's
+reported ±0.5 dB/Mm A–B and ±1.0 dB/Mm A′–B′ agreement ranges. The remaining
+failure is concentrated in the oscillatory 400–500 Hz residual.
+
+| Verification target | Acceptance criterion | Current result | Status |
+|---|---|---|---:|
+| Figure 7 waveform morphology | Main negative pulse, positive overshoot, and slow tail | All three features reproduced | **PASS** |
+| Figure 7 arrival ordering | A/A′ precede B/B′ | 7,490/7,491 versus 14,449/14,450 steps | **PASS** |
+| Figure 8 A–B attenuation | Pointwise residual within ±0.5 dB/Mm | Maximum 2.384 dB/Mm | **FAIL** |
+| Figure 8 A′–B′ attenuation | Pointwise residual within ±1.0 dB/Mm | Maximum 1.092 dB/Mm | **FAIL** |
+| Complete Figures 7–8 reproduction | All applicable criteria pass | Qualitative pass; pointwise attenuation fail | **FAIL** |
+
+### Change from the previous production result
+
+| Metric | Previous | Audited rerun | Change |
+|---|---:|---:|---:|
+| A–B attenuation MAE | 0.274 dB/Mm | 0.310 dB/Mm | 13.1% worse |
+| A–B maximum error | 1.218 dB/Mm | 2.384 dB/Mm | 95.7% worse |
+| A′–B′ attenuation MAE | 0.275 dB/Mm | 0.286 dB/Mm | 4.0% worse |
+| A′–B′ maximum error | 1.225 dB/Mm | 1.092 dB/Mm | **10.9% better** |
+| Production wall time | 3,477.9 s | 2,002.5 s | **42.4% faster** |
+
+The west-path maximum and runtime improve, but no acceptance verdict changes.
+The A–B high-frequency residual is worse, so the audited result is not an
+overall accuracy improvement over the previous production trace.
 
 The investigation ruled out floating-point precision, FFT zero-padding, DFT
 cutoff selection, source-plane rounding, and missing relief as primary causes.
@@ -94,9 +115,14 @@ Phase velocity is compared with Bannister equation (4).
 | B / B′ distance | 90° east / west from the source |
 | Ionosphere reference height | 70 km |
 | Ionosphere scale height | 3.33 km |
+| Surface grid | subdivision 8, polar orientation, 655,362 cells |
+| Material | fixed-depth Natural Earth land/ocean model |
 | DFT window | adaptive post-overshoot zero crossing |
 | Production backend | PyTorch compiled update on CUDA |
 | Production precision | float64 |
+| Production implementation revision | `e916119` |
+| Trace SHA-256 | `81535bde5dfce1ebaa3052977c96356253d236414276001e86c5f5f7ba16a153` |
+| Wall time | 2,002.5 s |
 
 Surface cell counts are 40,962, 163,842, and 655,362 for subdivisions 6, 7,
 and 8. Subdivision 7 matches the paper's 163,842 cells per radial plane.
@@ -108,7 +134,7 @@ The left-hand panels below are cropped from page 450 of the
 The published panels are © 2004 IEEE and are excerpted here for
 source-attributed technical comparison.
 The right-hand panels were regenerated with the current analysis code from the
-archived subdivision-8 CUDA `float64` receiver trace. The Figure 8 reproduction
+2026-08-05 subdivision-8 CUDA `float64` receiver trace. The Figure 8 reproduction
 uses Bannister's source equations and the final fixed comparison frequencies,
 not the deprecated plot-fit reference.
 
@@ -117,7 +143,7 @@ not the deprecated plot-fit reference.
 The reproduced Figure 7 waveforms have the same primary sequence as the
 published plots: a quiet pre-arrival interval, a sharp negative main pulse, a
 positive overshoot, and a decaying slow tail. The level-8 negative peaks occur
-at steps 7,489 for A/A′ and 14,446 for B/B′, consistent with the locations
+at steps 7,490/7,491 for A/A′ and 14,449/14,450 for B/B′, consistent with the locations
 visible in the published panels. Absolute amplitudes are not an acceptance
 criterion because the paper does not state its source-current amplitude; the
 reproduction uses a 1 A normalization. The near-overlap of east and west
@@ -129,8 +155,8 @@ also reflects the unavailable detailed lithosphere model discussed below.
 The reproduced Figure 8 points follow the same overall attenuation trend and
 are close to the Bannister daytime curve through most of the valid 50–500 Hz
 window. The visual divergence and oscillation near the upper end of that
-window correspond to the final subdivision-8 maximum residuals of 1.218 and
-1.225 dB/Mm at 478.109 Hz. Thus the side-by-side plot supports the same mixed
+window correspond to the final subdivision-8 maximum residuals of 2.384 and
+1.092 dB/Mm. Thus the side-by-side plot supports the same mixed
 conclusion as the scalar metrics: qualitative and mean agreement are good, but
 the strict pointwise criterion fails at high frequency.
 
@@ -171,19 +197,20 @@ below uses Bannister's source equations and the same 45 fixed frequencies.
 |---:|---:|---:|---:|---:|---:|
 | 6 | 40,962 | 0.681 / 2.282 dB/Mm | 396.729 Hz | 0.696 / 2.420 dB/Mm | 447.591 Hz |
 | 7 | 163,842 | 0.387 / 2.708 dB/Mm | 488.281 Hz | 0.399 / 2.753 dB/Mm | 488.281 Hz |
-| 8 | 655,362 | 0.274 / 1.218 dB/Mm | 478.109 Hz | 0.275 / 1.225 dB/Mm | 478.109 Hz |
+| 8, previous | 655,362 | 0.274 / 1.218 dB/Mm | 478.109 Hz | 0.275 / 1.225 dB/Mm | 478.109 Hz |
+| 8, audited polar rerun | 655,362 | 0.310 / 2.384 dB/Mm | 488.281 Hz | 0.286 / 1.092 dB/Mm | 478.109 Hz |
 
-Subdivision 8 reduces the level-7 mean error by approximately 29% on A–B and
-31% on A′–B′. The level-7 A–B residual at 488.281 Hz falls from
-+2.708 dB/Mm to +0.731 dB/Mm at level 8. The worst error moves to 478.109 Hz,
-where it remains above both strict limits. Refinement therefore improves the
-overall result without producing a monotonic reduction at every high-frequency
-sample.
+The current subdivision-8 mean errors remain below the historical level-7
+values, but the A–B pointwise maximum is not monotone under refinement. Relative
+to the previous level-8 report, the A′–B′ maximum improves by about 10.9%, from
+1.225 to 1.092 dB/Mm, while the A–B maximum worsens by about 95.7%, from 1.218
+to 2.384 dB/Mm. Neither path changes verdict.
 
-The level-8 run used approximately 10.1 GB of peak allocated GPU memory during
-compiled preflight and completed 25,023 steps in 3,477.9 seconds on an NVIDIA
-GeForce RTX 3060. Its negative peaks were at steps 7,489 for A/A′ and 14,446
-for B/B′; adaptive cutoffs were 21,788, 21,722, 22,436, and 22,436 samples.
+The audited level-8 run completed 25,023 steps in 2,002.5 seconds on an NVIDIA
+GeForce RTX 3060, 42.4% faster than the previous 3,477.9-second run. The lower
+peak memory of the ordered dual-circulation kernel also avoided the previous
+10.1 GB compiled-preflight allocation. Its adaptive cutoffs were 21,862,
+21,774, 22,308, and 22,425 samples for A, A′, B, and B′.
 
 ## Uniform-model phase and arrival convergence
 
@@ -320,14 +347,14 @@ Run the corrected paper-scale natural-Earth case with CUDA `float64`:
 
 ```bash
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
-  --subdivision 7 --steps 25023 \
+  --subdivision 8 --mesh-orientation polar --steps 25023 \
   --material natural-earth \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
-  --ionosphere-scale-height-km 3.33 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
   --synchronize-every 1024 \
-  --output-dir artifacts/simpson-taflove-2004/level-7-reproduction
+  --output-dir /tmp/ionosphere-verification-20260805/st2004-l8
 ```
 
 Run the ETOPO5 material case after placing the verified source file at
@@ -382,7 +409,7 @@ The implementation passes structural and qualitative checks:
   order.
 
 It fails the final quantitative reproduction criterion because subdivision 8
-still has 1.218 and 1.225 dB/Mm maximum attenuation errors, exceeding the
+still has 2.384 and 1.092 dB/Mm maximum attenuation errors, exceeding the
 required 0.5 and 1.0 dB/Mm limits. The residual is dominated by 400–500 Hz.
 Likely contributors are isotropic high-frequency spatial dispersion, the
 finite 5 km radial discretization, unavailable local crustal structures from
