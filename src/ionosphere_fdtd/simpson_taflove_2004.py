@@ -215,6 +215,7 @@ def create_validation_simulation(
             mesh_orientation=mesh_orientation,
             mesh_optimization_steps=mesh_optimization_steps,
             tangential_material_support=tangential_material_support,
+            loss_integration="trapezoidal",
         ),
         material=material,
         source=source,

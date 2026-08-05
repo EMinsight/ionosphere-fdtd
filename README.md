@@ -11,8 +11,9 @@ The implementation follows three ideas from the project references:
   vertices onto the sphere.  The triangular primal mesh has a dual mesh with
   exactly 12 pentagons and otherwise hexagonal cells.
 - Taflove and Hagness, Chapter 3: use integral Ampere/Faraday contours and the
-  staggered Yee leapfrog update, including the trapezoidal loss coefficient
-  for conductive, nonmagnetic media.
+  staggered Yee leapfrog update for conductive, nonmagnetic media. The general
+  solver integrates conductive decay exponentially; paper reproduction helpers
+  retain the references' trapezoidal coefficient.
 - Simpson et al. (2006): alternate radial TM planes (`Er`, tangential `Ht`) and
   TE planes (`Hr`, tangential `Et`) and couple them with regular radial Yee
   differences.
@@ -114,12 +115,18 @@ Er  = Ca * Er + Cb * (curl_surface Ht - Jr)
 Et  = Ca * Et + Cb * (d_dual Hr - d_radial Ht)
 ```
 
-For every electric component,
+For every electric component the default exponential midpoint update uses
 
 ```text
-Ca = (1 - sigma*dt/(2*epsilon)) / (1 + sigma*dt/(2*epsilon))
-Cb = dt/epsilon / (1 + sigma*dt/(2*epsilon))
+q  = sigma*dt/epsilon
+Ca = exp(-q)
+Cb = dt/epsilon * (1 - exp(-q))/q
 ```
+
+with the continuous limit `Cb = dt/epsilon` at `q = 0`. This is second-order
+for midpoint Maxwell forcing, exactly resolves unforced conductive decay, and
+does not retain the sign-alternating stiff mode of trapezoidal integration.
+Set `loss_integration="trapezoidal"` when reproducing legacy coefficients.
 
 All surface derivatives use actual primal/dual arc lengths and spherical cell
 areas at the relevant radius.  The two radial ends impose zero tangential

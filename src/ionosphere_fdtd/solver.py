@@ -41,6 +41,7 @@ class SimulationConfig:
     tangential_material_support: str = "point"
     horizontal_anomaly_mode: str = "point"
     radial_boundary_condition: str = "pec"
+    loss_integration: str = "exponential"
 
     def __post_init__(self) -> None:
         integer_controls = {
@@ -74,6 +75,10 @@ class SimulationConfig:
             )
         if self.radial_boundary_condition != "pec":
             raise ValueError("radial_boundary_condition must be 'pec'")
+        if self.loss_integration not in {"exponential", "trapezoidal"}:
+            raise ValueError(
+                "loss_integration must be 'exponential' or 'trapezoidal'"
+            )
         finite_geometry = (
             self.minimum_altitude_m,
             self.maximum_altitude_m,
@@ -580,16 +585,37 @@ class GeodesicFDTD:
         epsilon_et = EPSILON_0 * self.epsilon_r_et
         sigma_er = self.sigma_er
         sigma_et = self.sigma_et
-        loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
-        loss_et = sigma_et * self.time_step_s / (2.0 * epsilon_et)
-        self._ca_er = self.backend.asarray((1.0 - loss_er) / (1.0 + loss_er))
-        self._cb_er = self.backend.asarray(
-            self.time_step_s / (epsilon_er * (1.0 + loss_er))
-        )
-        self._ca_et = self.backend.asarray((1.0 - loss_et) / (1.0 + loss_et))
-        self._cb_et = self.backend.asarray(
-            self.time_step_s / (epsilon_et * (1.0 + loss_et))
-        )
+        if self.config.loss_integration == "trapezoidal":
+            loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
+            loss_et = sigma_et * self.time_step_s / (2.0 * epsilon_et)
+            ca_er = (1.0 - loss_er) / (1.0 + loss_er)
+            cb_er = self.time_step_s / (epsilon_er * (1.0 + loss_er))
+            ca_et = (1.0 - loss_et) / (1.0 + loss_et)
+            cb_et = self.time_step_s / (epsilon_et * (1.0 + loss_et))
+        else:
+            ca_er, cb_er = self._exponential_loss_coefficients(
+                sigma_er, epsilon_er
+            )
+            ca_et, cb_et = self._exponential_loss_coefficients(
+                sigma_et, epsilon_et
+            )
+        self._ca_er = self.backend.asarray(ca_er)
+        self._cb_er = self.backend.asarray(cb_er)
+        self._ca_et = self.backend.asarray(ca_et)
+        self._cb_et = self.backend.asarray(cb_et)
+
+    def _exponential_loss_coefficients(
+        self, sigma: NDArray[np.float64], epsilon: NDArray[np.float64]
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Integrate conductive decay exactly with midpoint Maxwell forcing."""
+
+        rate = sigma * self.time_step_s / epsilon
+        decay = np.exp(-rate)
+        phi1 = np.ones_like(rate)
+        nonzero = rate != 0.0
+        phi1[nonzero] = -np.expm1(-rate[nonzero]) / rate[nonzero]
+        drive = self.time_step_s / epsilon * phi1
+        return decay, drive
 
     @staticmethod
     def _validated_material_sample(
@@ -742,6 +768,7 @@ class GeodesicFDTD:
             "dtype": self.backend.dtype_name,
             "compiled": self.compiled,
             "radial_boundary_condition": self.config.radial_boundary_condition,
+            "loss_integration": self.config.loss_integration,
             "cfl_time_step_limit_s": self.cfl_time_step_limit_s,
             "courant_factor": self.config.courant_factor,
             "field_memory_bytes": self.memory_bytes,

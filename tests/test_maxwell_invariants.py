@@ -230,10 +230,11 @@ def test_conductive_update_is_passive_even_in_the_stiff_limit() -> None:
         norms.append(float(np.linalg.norm(simulation.er)))
 
     assert np.all(np.diff(norms) <= 0.0)
-    assert np.max(np.abs(simulation._ca_er)) < 1.0
+    assert np.max(simulation._ca_er) < 1.0
+    assert np.min(simulation._ca_er) >= 0.0
 
 
-def test_conductive_update_converges_at_second_order() -> None:
+def test_exponential_conductive_forcing_converges_at_second_order() -> None:
     base = GeodesicFDTD(
         SimulationConfig(subdivision=0, radial_cells=2, courant_factor=1.0),
         material=VacuumMaterial(),
@@ -257,11 +258,60 @@ def test_conductive_update_converges_at_second_order() -> None:
             material=UniformConductiveMaterial(conductivity),
             dtype="float64",
         )
-        simulation.er.fill(1.0)
-        simulation.step(coarse_steps * refinement)
-        errors.append(abs(float(simulation.er[0, 0]) - np.exp(-0.5)))
+        coefficient_a = float(simulation._ca_er[0, 0])
+        coefficient_b = float(simulation._cb_er[0, 0])
+        field = 0.0
+        for step in range(coarse_steps * refinement):
+            midpoint_time = (step + 0.5) * time_step
+            field = coefficient_a * field + coefficient_b * midpoint_time
+        exact = (
+            duration / conductivity
+            - EPSILON_0
+            / conductivity**2
+            * (1.0 - np.exp(-conductivity * duration / EPSILON_0))
+        )
+        errors.append(abs(field - exact))
 
-    assert errors[0] / errors[1] == pytest.approx(4.0, rel=2.0e-3)
+    assert errors[0] / errors[1] == pytest.approx(4.0, rel=3.0e-3)
+
+
+def test_exponential_loss_matches_exact_stiff_decay_without_sign_flip() -> None:
+    conductivity = 1.0
+    simulation = GeodesicFDTD(
+        SimulationConfig(subdivision=0, radial_cells=2, courant_factor=0.2),
+        material=UniformConductiveMaterial(conductivity),
+        dtype="float64",
+    )
+    simulation.er.fill(1.0)
+    exact = np.exp(-conductivity * simulation.time_step_s / EPSILON_0)
+
+    simulation.step()
+
+    np.testing.assert_allclose(simulation.er, exact, rtol=0.0, atol=1.0e-300)
+    assert np.all(simulation.er >= 0.0)
+
+
+def test_trapezoidal_loss_mode_retains_legacy_coefficients() -> None:
+    conductivity = 1.0
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=2,
+            courant_factor=0.2,
+            loss_integration="trapezoidal",
+        ),
+        material=UniformConductiveMaterial(conductivity),
+        dtype="float64",
+    )
+    loss = conductivity * simulation.time_step_s / (2.0 * EPSILON_0)
+
+    np.testing.assert_allclose(
+        simulation._ca_er,
+        (1.0 - loss) / (1.0 + loss),
+        rtol=0.0,
+        atol=0.0,
+    )
+    assert np.all(simulation._ca_er < 0.0)
 
 
 def test_material_aware_cfl_keeps_subvacuum_permittivity_bounded() -> None:

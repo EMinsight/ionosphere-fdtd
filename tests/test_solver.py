@@ -401,6 +401,11 @@ def test_simulation_config_rejects_unknown_radial_boundary() -> None:
         small_config(radial_boundary_condition="absorbing")
 
 
+def test_simulation_config_rejects_unknown_loss_integration() -> None:
+    with pytest.raises(ValueError, match="loss_integration"):
+        small_config(loss_integration="forward-euler")
+
+
 def test_courant_factor_scales_the_unfactored_cfl_limit() -> None:
     simulation = GeodesicFDTD(config=small_config(courant_factor=0.25))
 
