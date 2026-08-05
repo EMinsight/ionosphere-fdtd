@@ -113,6 +113,7 @@ class SphericalAnomaly:
     conductivity_factor: float
     relative_permittivity: float | None = None
     maximum_background_conductivity_s_m: float | None = None
+    target_area_m2: float | None = None
 
     def __post_init__(self) -> None:
         finite = (
@@ -148,6 +149,10 @@ class SphericalAnomaly:
             raise ValueError(
                 "maximum background conductivity must be finite and positive"
             )
+        if self.target_area_m2 is not None and (
+            not np.isfinite(self.target_area_m2) or self.target_area_m2 <= 0.0
+        ):
+            raise ValueError("target anomaly area must be finite and positive")
 
     @property
     def center(self) -> FloatArray:
@@ -223,6 +228,97 @@ def _apply_cell_averaged_spherical_anomalies(
         if anomaly.relative_permittivity is not None:
             epsilon_r *= 1.0 - fraction
             epsilon_r += fraction * anomaly.relative_permittivity
+
+
+def conservative_anomaly_fractions(
+    directions: FloatArray,
+    support_solid_angles: FloatArray,
+    anomaly: SphericalAnomaly,
+    earth_radius_m: float,
+) -> FloatArray:
+    """Rasterize a circular anomaly while preserving its configured area."""
+
+    points = np.asarray(directions, dtype=np.float64)
+    areas = np.asarray(support_solid_angles, dtype=np.float64)
+    if points.shape != (len(areas), 3) or np.any(areas <= 0.0):
+        raise ValueError("anomaly supports must have positive areas and directions")
+    target = (
+        anomaly.target_area_m2 / earth_radius_m**2
+        if anomaly.target_area_m2 is not None
+        else 2.0 * np.pi * (1.0 - np.cos(anomaly.radius_m / earth_radius_m))
+    )
+    if target > float(np.sum(areas)):
+        raise ValueError("anomaly area exceeds the available spherical supports")
+    distance = np.arccos(np.clip(points @ anomaly.center, -1.0, 1.0))
+    order = np.argsort(distance, kind="stable")
+    fractions = np.zeros(len(areas), dtype=np.float64)
+    remaining = target
+    for index in order:
+        if remaining <= 0.0:
+            break
+        covered = min(float(areas[index]), remaining)
+        fractions[index] = covered / areas[index]
+        remaining -= covered
+    if remaining > 64.0 * np.finfo(np.float64).eps * target:
+        raise RuntimeError("conservative anomaly rasterization did not close")
+    return fractions
+
+
+def apply_fractional_point_anomalies(
+    sigma: FloatArray,
+    epsilon_r: FloatArray,
+    altitudes_m: FloatArray,
+    anomalies: tuple[SphericalAnomaly, ...],
+    horizontal_fractions: tuple[FloatArray, ...],
+) -> None:
+    """Apply support-area fractions to point-sampled radial electric fields."""
+
+    for anomaly, horizontal in zip(anomalies, horizontal_fractions, strict=True):
+        inside_vertical = (altitudes_m >= anomaly.altitude_min_m) & (
+            altitudes_m <= anomaly.altitude_max_m
+        )
+        fraction = horizontal[:, None] * inside_vertical[None, :]
+        _mix_anomaly_fraction(sigma, epsilon_r, fraction, anomaly)
+
+
+def apply_fractional_cell_anomalies(
+    sigma: FloatArray,
+    epsilon_r: FloatArray,
+    lower_altitudes_m: FloatArray,
+    upper_altitudes_m: FloatArray,
+    anomalies: tuple[SphericalAnomaly, ...],
+    horizontal_fractions: tuple[FloatArray, ...],
+) -> None:
+    """Apply horizontal area and radial overlap fractions to Et cells."""
+
+    widths = upper_altitudes_m - lower_altitudes_m
+    for anomaly, horizontal in zip(anomalies, horizontal_fractions, strict=True):
+        overlap = np.clip(
+            np.minimum(upper_altitudes_m, anomaly.altitude_max_m)
+            - np.maximum(lower_altitudes_m, anomaly.altitude_min_m),
+            0.0,
+            widths,
+        )
+        fraction = horizontal[:, None] * (overlap / widths)[None, :]
+        _mix_anomaly_fraction(sigma, epsilon_r, fraction, anomaly)
+
+
+def _mix_anomaly_fraction(
+    sigma: FloatArray,
+    epsilon_r: FloatArray,
+    fraction: FloatArray,
+    anomaly: SphericalAnomaly,
+) -> None:
+    if anomaly.maximum_background_conductivity_s_m is not None:
+        fraction = np.where(
+            sigma <= anomaly.maximum_background_conductivity_s_m,
+            fraction,
+            0.0,
+        )
+    sigma *= 1.0 + fraction * (anomaly.conductivity_factor - 1.0)
+    if anomaly.relative_permittivity is not None:
+        epsilon_r *= 1.0 - fraction
+        epsilon_r += fraction * anomaly.relative_permittivity
 
 
 @dataclass(frozen=True, slots=True)

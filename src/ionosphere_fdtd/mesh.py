@@ -51,6 +51,17 @@ class GeodesicMesh:
         points = self.vertices[self.edges].sum(axis=1)
         return _normalize(points)
 
+    def edge_diamond_solid_angles(self) -> FloatArray:
+        """Return the disjoint primal-face area associated with each edge."""
+
+        tail = self.vertices[self.edges[:, 0]]
+        head = self.vertices[self.edges[:, 1]]
+        left = self.face_centers[self.edge_left_faces]
+        right = self.face_centers[self.edge_right_faces]
+        return _spherical_triangle_area(tail, head, left) + _spherical_triangle_area(
+            tail, head, right
+        )
+
     def face_circulation(self, edge_values: FloatArray) -> FloatArray:
         """Counter-clockwise circulation around every primal triangle."""
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import numpy as np
@@ -10,7 +10,13 @@ from numpy.typing import NDArray
 
 from .backends import ArrayBackend, create_backend
 from .constants import C_0, EARTH_RADIUS_M, EPSILON_0, MU_0
-from .materials import EarthIonosphereMaterial
+from .materials import (
+    EarthIonosphereMaterial,
+    SimpsonTaflove2004Material,
+    apply_fractional_cell_anomalies,
+    apply_fractional_point_anomalies,
+    conservative_anomaly_fractions,
+)
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 
@@ -31,6 +37,7 @@ class SimulationConfig:
     mesh_orientation: str = "polar"
     radial_altitudes_m: tuple[float, ...] | None = None
     tangential_material_support: str = "point"
+    horizontal_anomaly_mode: str = "point"
 
     def __post_init__(self) -> None:
         integer_controls = {
@@ -57,6 +64,10 @@ class SimulationConfig:
         if self.tangential_material_support not in {"point", "edge-diamond"}:
             raise ValueError(
                 "tangential_material_support must be 'point' or 'edge-diamond'"
+            )
+        if self.horizontal_anomaly_mode not in {"point", "conservative-nearest"}:
+            raise ValueError(
+                "horizontal_anomaly_mode must be 'point' or 'conservative-nearest'"
             )
         finite_geometry = (
             self.minimum_altitude_m,
@@ -265,20 +276,49 @@ class GeodesicFDTD:
         )
 
     def _prepare_material_coefficients(self) -> None:
+        conservative_anomalies = (
+            self.config.horizontal_anomaly_mode == "conservative-nearest"
+            and isinstance(self.material, SimpsonTaflove2004Material)
+            and bool(self.material.anomalies)
+        )
+        sampling_material = (
+            replace(self.material, anomalies=())
+            if conservative_anomalies
+            else self.material
+        )
         sigma_er, epsilon_r_er = self._validated_material_sample(
-            self.material.sample(
+            sampling_material.sample(
                 self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
             ),
             (self.mesh.n_vertices, len(self.altitudes_m)),
             "radial",
         )
+        if conservative_anomalies:
+            anomalies = self.material.anomalies
+            fractions_er = tuple(
+                conservative_anomaly_fractions(
+                    self.mesh.vertices,
+                    self.mesh.dual_cell_solid_angles,
+                    anomaly,
+                    self.config.earth_radius_m,
+                )
+                for anomaly in anomalies
+            )
+            apply_fractional_point_anomalies(
+                sigma_er,
+                epsilon_r_er,
+                self.altitudes_m,
+                anomalies,
+                fractions_er,
+            )
+            self.anomaly_horizontal_fractions_er = fractions_er
 
         def sample_tangential(
             directions: NDArray[np.float64],
         ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-            sample_cells = getattr(self.material, "sample_tangential_cells", None)
+            sample_cells = getattr(sampling_material, "sample_tangential_cells", None)
             if sample_cells is None:
-                values = self.material.sample(
+                values = sampling_material.sample(
                     directions,
                     self.radial_midpoint_altitudes_m,
                     self.config.earth_radius_m,
@@ -319,6 +359,25 @@ class GeodesicFDTD:
                 support_sigma, support_epsilon = sample_tangential(directions)
                 sigma_et += 0.25 * support_sigma
                 epsilon_r_et += 0.25 * support_epsilon
+        if conservative_anomalies:
+            fractions_et = tuple(
+                conservative_anomaly_fractions(
+                    edge_midpoints,
+                    self.mesh.edge_diamond_solid_angles(),
+                    anomaly,
+                    self.config.earth_radius_m,
+                )
+                for anomaly in anomalies
+            )
+            apply_fractional_cell_anomalies(
+                sigma_et,
+                epsilon_r_et,
+                self.altitudes_m[:-1],
+                self.altitudes_m[1:],
+                anomalies,
+                fractions_et,
+            )
+            self.anomaly_horizontal_fractions_et = fractions_et
         epsilon_er = EPSILON_0 * epsilon_r_er
         epsilon_et = EPSILON_0 * epsilon_r_et
         loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)

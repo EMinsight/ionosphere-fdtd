@@ -33,6 +33,14 @@ def test_dual_edge_circulations_cancel_globally() -> None:
     assert np.isclose(mesh.dual_cell_circulation(edge_values).sum(), 0.0)
 
 
+def test_edge_diamonds_partition_the_sphere() -> None:
+    mesh = build_geodesic_mesh(3)
+    areas = mesh.edge_diamond_solid_angles()
+
+    assert np.all(areas > 0.0)
+    assert np.sum(areas) == pytest.approx(4.0 * np.pi, rel=1.0e-12)
+
+
 def test_default_orientation_places_pentagons_at_geographic_poles() -> None:
     native = build_geodesic_mesh(2, orientation="native")
     polar = build_geodesic_mesh(2)

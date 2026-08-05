@@ -8,7 +8,33 @@ from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
     SphericalAnomaly,
+    conservative_anomaly_fractions,
 )
+
+
+def test_conservative_anomaly_fractions_preserve_configured_area() -> None:
+    anomaly = SphericalAnomaly(
+        latitude_deg=0.0,
+        longitude_deg=0.0,
+        radius_m=40_000.0,
+        altitude_min_m=-2_000.0,
+        altitude_max_m=-500.0,
+        conductivity_factor=0.1,
+        target_area_m2=np.pi * 40_000.0**2,
+    )
+    directions = np.asarray(
+        ((1.0, 0.0, 0.0), (0.999, 0.0447, 0.0), (0.0, 1.0, 0.0))
+    )
+    directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+    areas = np.asarray((0.01, 0.02, 4.0 * np.pi - 0.03))
+
+    fractions = conservative_anomaly_fractions(
+        directions, areas, anomaly, 6_371_000.0
+    )
+
+    represented_area = fractions @ areas * 6_371_000.0**2
+    assert np.all((fractions >= 0.0) & (fractions <= 1.0))
+    assert represented_area == pytest.approx(np.pi * anomaly.radius_m**2)
 
 
 def test_profile_is_lithosphere_below_and_exponential_above() -> None:

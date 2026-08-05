@@ -133,6 +133,7 @@ def paper_anomalies(
         - (PAPER_OIL_MEDIAN_DEPTH_M - half_thickness),
         conductivity_factor=PAPER_OIL_CONDUCTIVITY_FACTOR,
         maximum_background_conductivity_s_m=0.01,
+        target_area_m2=PAPER_OIL_AREA_KM2 * 1.0e6,
     )
     anomalies.append(oil)
     return tuple(anomalies)
@@ -159,6 +160,7 @@ def create_radar_simulation(
     shield_radius_m: float = 2_500_000.0,
     mesh_orientation: str = "polar",
     vertical_reference: str = "terrain",
+    horizontal_anomaly_mode: str = "conservative-nearest",
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -230,6 +232,7 @@ def create_radar_simulation(
             radial_altitudes_m=altitudes,
             mesh_orientation=mesh_orientation,
             tangential_material_support=tangential_material_support,
+            horizontal_anomaly_mode=horizontal_anomaly_mode,
         ),
         material=material,
         source=source,

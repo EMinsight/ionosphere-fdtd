@@ -63,6 +63,35 @@ def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:
     )
     assert oil.conductivity_factor == PAPER_OIL_CONDUCTIVITY_FACTOR
     assert oil.maximum_background_conductivity_s_m == 0.01
+    assert oil.target_area_m2 == PAPER_OIL_AREA_KM2 * 1.0e6
+
+
+def test_conservative_radar_anomaly_preserves_oil_area_on_both_grids() -> None:
+    simulation = create_radar_simulation(
+        include_oil=True,
+        subdivision=3,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+    oil_index = len(simulation.material.anomalies) - 1
+    er_fraction = simulation.anomaly_horizontal_fractions_er[oil_index]
+    et_fraction = simulation.anomaly_horizontal_fractions_et[oil_index]
+    radius_squared = simulation.config.earth_radius_m**2
+    represented_er_km2 = (
+        er_fraction @ simulation.mesh.dual_cell_solid_angles * radius_squared / 1.0e6
+    )
+    represented_et_km2 = (
+        et_fraction @ simulation.mesh.edge_diamond_solid_angles()
+        * radius_squared
+        / 1.0e6
+    )
+
+    assert represented_er_km2 == pytest.approx(PAPER_OIL_AREA_KM2)
+    assert represented_et_km2 == pytest.approx(PAPER_OIL_AREA_KM2)
+    assert np.count_nonzero(er_fraction) >= 1
+    assert np.count_nonzero(et_fraction) >= 1
 
 
 def test_paper_anomalies_can_omit_or_resize_shield() -> None:

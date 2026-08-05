@@ -95,6 +95,11 @@ def _parser() -> argparse.ArgumentParser:
         "--shield", action=argparse.BooleanOptionalAction, default=True
     )
     radar.add_argument("--shield-radius-km", type=float, default=2_500.0)
+    radar.add_argument(
+        "--horizontal-anomaly",
+        choices=("conservative-nearest", "point"),
+        default="conservative-nearest",
+    )
 
     analyze = commands.add_parser("analyze-radar")
     analyze.add_argument("--reference", type=Path, required=True)
@@ -154,6 +159,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         shield_radius_m=1_000.0 * args.shield_radius_km,
         mesh_orientation=args.mesh_orientation,
         vertical_reference=args.vertical_reference,
+        horizontal_anomaly_mode=args.horizontal_anomaly,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -168,6 +174,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"source={args.source_basis}@{simulation.source.altitude_m:g}m "
         f"receiver={args.receiver_support} "
         f"vertical_reference={args.vertical_reference} "
+        f"horizontal_anomaly={args.horizontal_anomaly} "
         f"shield={args.shield_radius_km:g}km/{args.shield} "
         f"dt={simulation.time_step_s:.9e}s steps={steps:,}",
         flush=True,
