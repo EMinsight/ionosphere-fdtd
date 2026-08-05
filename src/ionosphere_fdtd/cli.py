@@ -48,6 +48,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--courant", type=float, default=0.35)
     parser.add_argument("--report-every", type=int, default=20)
     parser.add_argument("--source-current", type=float, default=1.0e6)
+    parser.add_argument(
+        "--source-length",
+        type=float,
+        default=5_000.0,
+        help="vertical current-element length in metres",
+    )
     parser.add_argument("--source-frequency", type=float, default=0.0)
     parser.add_argument("--source-center", type=float)
     parser.add_argument(
@@ -80,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--surface-step must be positive")
     if args.anomaly_radius_km <= 0.0:
         raise SystemExit("--anomaly-radius-km must be positive")
+    if not np.isfinite(args.source_length) or args.source_length <= 0.0:
+        raise SystemExit("--source-length must be finite and positive")
     if args.torch_threads is not None and args.torch_threads < 1:
         raise SystemExit("--torch-threads must be positive")
 
@@ -120,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
                 latitude_deg=args.source_latitude,
                 longitude_deg=args.source_longitude,
                 peak_current_a=args.source_current,
+                vertical_element_length_m=args.source_length,
                 carrier_frequency_hz=args.source_frequency,
                 center_time_s=args.source_center,
                 one_over_e_half_width_s=args.source_width,

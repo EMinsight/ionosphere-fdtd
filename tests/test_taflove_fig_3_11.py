@@ -32,6 +32,7 @@ def test_figure_3_11_setup_preserves_paper_timing_at_gwangju() -> None:
     assert simulation.source.peak_current_a == pytest.approx(
         FIGURE_3_11_SOURCE_CURRENT_A
     )
+    assert simulation.source.vertical_element_length_m == pytest.approx(5_000.0)
     assert simulation.source.center_time_s == pytest.approx(
         FIGURE_3_11_SOURCE_CENTER_STEPS * FIGURE_3_11_TIME_STEP_S
     )

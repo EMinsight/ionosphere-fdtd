@@ -202,6 +202,14 @@ class GeodesicFDTD:
             self.radial_midpoints_m - self.config.earth_radius_m
         )
         self.radial_steps_m = np.diff(self.radii_m)
+        self.radial_node_control_lengths_m = np.empty(
+            len(self.radii_m), dtype=np.float64
+        )
+        self.radial_node_control_lengths_m[0] = 0.5 * self.radial_steps_m[0]
+        self.radial_node_control_lengths_m[-1] = 0.5 * self.radial_steps_m[-1]
+        self.radial_node_control_lengths_m[1:-1] = np.diff(
+            self.radial_midpoints_m
+        )
         self._build_radial_derivative_stencils()
 
         # Material permittivity controls the fastest supported wave speed, so it
@@ -305,6 +313,9 @@ class GeodesicFDTD:
             1.0 / self.radial_midpoints_m[None, :]
         )
         self._radial_steps = self.backend.asarray(self.radial_steps_m)
+        self._radial_node_control_lengths = self.backend.asarray(
+            self.radial_node_control_lengths_m
+        )
         self._radial_center_distances = self.backend.asarray(
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
@@ -386,10 +397,7 @@ class GeodesicFDTD:
         # Ht control-volume widths are the radial Hodge weights. Construct the
         # Ht-to-Et derivative as the negative weighted transpose so the wider
         # nonuniform stencil retains the discrete integration-by-parts identity.
-        ht_weights = np.empty(cell_count + 1, dtype=np.float64)
-        ht_weights[0] = 0.5 * self.radial_steps_m[0]
-        ht_weights[-1] = 0.5 * self.radial_steps_m[-1]
-        ht_weights[1:-1] = np.diff(self.radial_midpoints_m)
+        ht_weights = self.radial_node_control_lengths_m
         transpose_rows: list[list[tuple[int, float]]] = [
             [] for _ in range(cell_count)
         ]
@@ -688,8 +696,10 @@ class GeodesicFDTD:
             current_density = (
                 weights
                 * current_a
+                * self.source.vertical_element_length_m
                 * self._inverse_dual_cell_solid_angles[vertices, 0]
                 / self._radii[layers] ** 2
+                / self._radial_node_control_lengths[layers]
             )
 
         self.er *= self._ca_er
@@ -953,6 +963,7 @@ class GeodesicFDTD:
             "_radial_midpoints",
             "_inverse_radial_midpoints",
             "_radial_steps",
+            "_radial_node_control_lengths",
             "_radial_center_distances",
             "_radial_et_derivative_indices",
             "_radial_et_derivative_coefficients",

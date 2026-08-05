@@ -141,10 +141,125 @@ def test_source_distribution_preserves_exact_staggered_altitude() -> None:
     assert len(np.unique(layers)) == 2
 
 
-def test_staggered_source_update_preserves_total_current() -> None:
+def test_staggered_source_update_preserves_current_moment() -> None:
     source = GaussianCurrent(altitude_m=2_500.0)
     simulation = GeodesicFDTD(config=small_config(), source=source)
     vertices, layers, expected_weights = source.staggered_distribution(simulation)
+
+    simulation._update_electric_fields(1.0)
+    dual_areas = (
+        simulation.mesh.dual_cell_solid_angles[vertices]
+        * simulation.radii_m[layers] ** 2
+    )
+    represented_current_density = (
+        -simulation.er[vertices, layers]
+        / simulation._cb_er[vertices, layers]
+    )
+    represented_moments = (
+        represented_current_density
+        * dual_areas
+        * simulation.radial_node_control_lengths_m[layers]
+    )
+
+    np.testing.assert_allclose(
+        represented_moments,
+        source.vertical_element_length_m * expected_weights,
+    )
+    assert represented_moments.sum() == pytest.approx(
+        source.vertical_element_length_m
+    )
+
+
+@pytest.mark.parametrize("radial_cells", (24, 40, 80))
+def test_vertical_source_current_moment_is_radial_grid_independent(
+    radial_cells: int,
+) -> None:
+    source = GaussianCurrent(
+        altitude_m=2_500.0,
+        peak_current_a=3.0,
+        vertical_element_length_m=7_500.0,
+    )
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=radial_cells,
+            courant_factor=0.2,
+        ),
+        source=source,
+    )
+    vertices, layers, _ = source.staggered_distribution(simulation)
+
+    simulation._update_electric_fields(source.peak_current_a)
+    dual_areas = (
+        simulation.mesh.dual_cell_solid_angles[vertices]
+        * simulation.radii_m[layers] ** 2
+    )
+    current_density = (
+        -simulation.er[vertices, layers]
+        / simulation._cb_er[vertices, layers]
+    )
+    represented_moment = np.sum(
+        current_density
+        * dual_areas
+        * simulation.radial_node_control_lengths_m[layers]
+    )
+
+    assert represented_moment == pytest.approx(
+        source.peak_current_a * source.vertical_element_length_m
+    )
+
+
+def test_vertical_source_current_moment_is_preserved_on_nonuniform_grid() -> None:
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    source = GaussianCurrent(
+        altitude_m=-500.0,
+        peak_current_a=3.0,
+        vertical_element_length_m=7_500.0,
+    )
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=len(altitudes) - 1,
+            minimum_altitude_m=altitudes[0],
+            maximum_altitude_m=altitudes[-1],
+            radial_altitudes_m=altitudes,
+            courant_factor=0.2,
+        ),
+        source=source,
+    )
+    vertices, layers, _ = source.staggered_distribution(simulation)
+
+    simulation._update_electric_fields(source.peak_current_a)
+    dual_areas = (
+        simulation.mesh.dual_cell_solid_angles[vertices]
+        * simulation.radii_m[layers] ** 2
+    )
+    current_density = (
+        -simulation.er[vertices, layers]
+        / simulation._cb_er[vertices, layers]
+    )
+    represented_moment = np.sum(
+        current_density
+        * dual_areas
+        * simulation.radial_node_control_lengths_m[layers]
+    )
+
+    assert represented_moment == pytest.approx(
+        source.peak_current_a * source.vertical_element_length_m
+    )
+
+
+def test_five_kilometre_source_retains_uniform_grid_deposition() -> None:
+    source = GaussianCurrent(
+        altitude_m=2_500.0,
+        peak_current_a=1.0,
+        vertical_element_length_m=5_000.0,
+    )
+    simulation = GeodesicFDTD(
+        SimulationConfig(subdivision=0, radial_cells=40, courant_factor=0.2),
+        source=source,
+    )
+    vertices, layers, weights = source.staggered_distribution(simulation)
 
     simulation._update_electric_fields(1.0)
     dual_areas = (
@@ -157,8 +272,7 @@ def test_staggered_source_update_preserves_total_current() -> None:
         / simulation._cb_er[vertices, layers]
     )
 
-    np.testing.assert_allclose(represented_currents, expected_weights)
-    assert represented_currents.sum() == pytest.approx(1.0)
+    np.testing.assert_allclose(represented_currents, weights, rtol=2.0e-16)
 
 
 def test_tangential_source_update_uses_dual_face_current_density() -> None:
@@ -246,6 +360,10 @@ def test_sources_reject_nonfinite_or_invalid_waveforms() -> None:
         TangentialGaussianCurrent(latitude_deg=91.0)
     with pytest.raises(ValueError, match="finite"):
         TangentialGaussianCurrent(line_lengths_m=(np.inf,))
+    with pytest.raises(ValueError, match="finite"):
+        GaussianCurrent(vertical_element_length_m=np.inf)
+    with pytest.raises(ValueError, match="positive"):
+        GaussianCurrent(vertical_element_length_m=0.0)
 
 
 def test_nearest_edge_source_uses_at_most_one_edge_per_ground_line() -> None:

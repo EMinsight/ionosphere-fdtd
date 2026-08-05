@@ -153,11 +153,12 @@ be supplied without changing the field-update equations.
 
 `GaussianCurrent` defaults to Gwangju, Republic of Korea (`35.1595° N`,
 `126.8526° E`).  It distributes vertical current among the three dual cells of
-the containing primal triangle using barycentric weights, preserving both the
-requested geographic direction and total current on a coarse grid.  The radial
-coordinate uses linear cloud-in-cell weights on adjacent staggered `Er` planes,
-preserving both the requested altitude and total current. Location, amplitude,
-Gaussian width/center, and optional carrier frequency are configurable. With a
+the containing primal triangle using barycentric weights. The radial coordinate
+uses linear cloud-in-cell weights on adjacent staggered `Er` planes. Deposition
+is normalized by each radial control length, preserving the configured current
+moment `peak_current_a * vertical_element_length_m` under radial refinement; the
+default element is 5 km long. Location, amplitude, element length, Gaussian
+width/center, and optional carrier frequency are configurable. With a
 carrier and no
 explicit width, the 1/e half-width is `0.5 / frequency` (25 ms at 20 Hz, close
 to the paper's 42.5 ms FWHM envelope).  Use `--source-width` and

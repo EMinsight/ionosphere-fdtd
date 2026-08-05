@@ -162,6 +162,7 @@ class GaussianCurrent:
     longitude_deg: float = GWANGJU_LONGITUDE_DEG
     altitude_m: float = 2_500.0
     peak_current_a: float = 1.0e6
+    vertical_element_length_m: float = 5_000.0
     center_time_s: float | None = None
     one_over_e_half_width_s: float | None = None
     carrier_frequency_hz: float = 0.0
@@ -172,12 +173,15 @@ class GaussianCurrent:
             self.longitude_deg,
             self.altitude_m,
             self.peak_current_a,
+            self.vertical_element_length_m,
             self.carrier_frequency_hz,
         )
         if not all(np.isfinite(value) for value in finite):
             raise ValueError("source coordinates and waveform values must be finite")
         if not -90.0 <= self.latitude_deg <= 90.0:
             raise ValueError("source latitude must be in [-90, 90]")
+        if self.vertical_element_length_m <= 0.0:
+            raise ValueError("vertical source element length must be positive")
         if self.center_time_s is not None and not np.isfinite(self.center_time_s):
             raise ValueError("source center time must be finite")
         if self.one_over_e_half_width_s is not None and (

@@ -198,6 +198,7 @@ def create_validation_simulation(
         longitude_deg=PAPER_SOURCE_LONGITUDE_DEG,
         altitude_m=PAPER_SOURCE_ALTITUDE_M,
         peak_current_a=PAPER_SOURCE_PEAK_CURRENT_A,
+        vertical_element_length_m=5_000.0,
         center_time_s=PAPER_SOURCE_CENTER_STEPS * PAPER_TIME_STEP_S,
         one_over_e_half_width_s=(
             0.5 * PAPER_SOURCE_FULL_WIDTH_STEPS * PAPER_TIME_STEP_S

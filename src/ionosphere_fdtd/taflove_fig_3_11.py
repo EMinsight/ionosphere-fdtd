@@ -75,6 +75,7 @@ def create_figure_3_11_simulation(
             longitude_deg=GWANGJU_LONGITUDE_DEG,
             altitude_m=2_500.0,
             peak_current_a=source_current_a,
+            vertical_element_length_m=5_000.0,
             center_time_s=(
                 FIGURE_3_11_SOURCE_CENTER_STEPS * FIGURE_3_11_TIME_STEP_S
             ),
