@@ -278,6 +278,45 @@ def test_torch_compiled_cpu_matches_eager_with_source() -> None:
         )
 
 
+def test_torch_compiled_nonuniform_stencil_matches_numpy() -> None:
+    pytest.importorskip("torch")
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    radial_config = SimulationConfig(
+        subdivision=0,
+        radial_cells=len(altitudes) - 1,
+        minimum_altitude_m=altitudes[0],
+        maximum_altitude_m=altitudes[-1],
+        radial_altitudes_m=altitudes,
+        courant_factor=0.2,
+    )
+    reference = GeodesicFDTD(radial_config, backend="numpy", dtype="float64")
+    compiled = GeodesicFDTD(
+        radial_config,
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+        compile_step=True,
+    )
+    generator = np.random.default_rng(20260805)
+    for field in ("er", "et", "hr", "ht"):
+        values = 1.0e-6 * generator.standard_normal(
+            getattr(reference, field).shape
+        )
+        getattr(reference, field)[:] = values
+        getattr(compiled, field).copy_(compiled.backend.asarray(values))
+
+    reference.step(5)
+    compiled.step(5)
+
+    for field in ("er", "et", "hr", "ht"):
+        np.testing.assert_allclose(
+            compiled.to_numpy(getattr(compiled, field)),
+            getattr(reference, field),
+            rtol=2.0e-13,
+            atol=1.0e-18,
+        )
+
+
 def test_torch_cpu_thread_count_is_configurable() -> None:
     torch = pytest.importorskip("torch")
     previous_threads = torch.get_num_threads()

@@ -20,6 +20,8 @@ from .materials import (
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 
+MAXIMUM_ADJACENT_RADIAL_STEP_RATIO = 4.0
+
 
 @dataclass(frozen=True, slots=True)
 class SimulationConfig:
@@ -113,6 +115,19 @@ class SimulationConfig:
                 raise ValueError(
                     "custom radial altitudes must include the configured altitude bounds"
                 )
+            radial_steps = np.diff(altitudes)
+            adjacent_ratios = np.maximum(
+                radial_steps[1:] / radial_steps[:-1],
+                radial_steps[:-1] / radial_steps[1:],
+            )
+            if np.any(
+                adjacent_ratios
+                > MAXIMUM_ADJACENT_RADIAL_STEP_RATIO * (1.0 + 1.0e-12)
+            ):
+                raise ValueError(
+                    "adjacent radial cell widths may differ by at most a factor of "
+                    f"{MAXIMUM_ADJACENT_RADIAL_STEP_RATIO:g}"
+                )
 
 
 class GeodesicFDTD:
@@ -187,6 +202,7 @@ class GeodesicFDTD:
             self.radial_midpoints_m - self.config.earth_radius_m
         )
         self.radial_steps_m = np.diff(self.radii_m)
+        self._build_radial_derivative_stencils()
 
         # Material permittivity controls the fastest supported wave speed, so it
         # must be known before an automatic or user-supplied time step is
@@ -291,6 +307,152 @@ class GeodesicFDTD:
         self._radial_steps = self.backend.asarray(self.radial_steps_m)
         self._radial_center_distances = self.backend.asarray(
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
+        )
+        self._radial_et_derivative_indices = self.backend.index_array(
+            self._radial_et_derivative_indices_host
+        )
+        self._radial_et_derivative_coefficients = self.backend.asarray(
+            self._radial_et_derivative_coefficients_host
+        )
+        self._radial_ht_derivative_indices = self.backend.index_array(
+            self._radial_ht_derivative_indices_host
+        )
+        self._radial_ht_derivative_coefficients = self.backend.asarray(
+            self._radial_ht_derivative_coefficients_host
+        )
+
+    def _build_radial_derivative_stencils(self) -> None:
+        """Build a second-order nonuniform stencil and its energy adjoint."""
+
+        cell_count = len(self.radial_midpoints_m)
+        self._uniform_radial_grid = bool(
+            np.allclose(
+                self.radial_steps_m,
+                self.radial_steps_m[0],
+                rtol=1.0e-12,
+                atol=1.0e-9,
+            )
+        )
+        et_indices = np.zeros((cell_count + 1, 3), dtype=np.int64)
+        et_coefficients = np.zeros((cell_count + 1, 3), dtype=np.float64)
+        et_indices[0, 0] = 0
+        et_coefficients[0, 0] = 2.0 / self.radial_steps_m[0]
+        et_indices[-1, 0] = cell_count - 1
+        et_coefficients[-1, 0] = -2.0 / self.radial_steps_m[-1]
+
+        for node in range(1, cell_count):
+            left_step = self.radial_steps_m[node - 1]
+            right_step = self.radial_steps_m[node]
+            if np.isclose(left_step, right_step, rtol=1.0e-12, atol=1.0e-9):
+                distance = (
+                    self.radial_midpoints_m[node]
+                    - self.radial_midpoints_m[node - 1]
+                )
+                et_indices[node, :2] = (node - 1, node)
+                et_coefficients[node, :2] = (-1.0 / distance, 1.0 / distance)
+                continue
+
+            left_candidate = (node - 2, node - 1, node) if node >= 2 else None
+            right_candidate = (
+                (node - 1, node, node + 1)
+                if node + 1 < cell_count
+                else None
+            )
+            if left_candidate is None:
+                selected = right_candidate
+            elif right_candidate is None:
+                selected = left_candidate
+            else:
+                node_radius = self.radii_m[node]
+                left_span = node_radius - self.radial_midpoints_m[left_candidate[0]]
+                right_span = self.radial_midpoints_m[right_candidate[-1]] - node_radius
+                selected = (
+                    left_candidate if left_span <= right_span else right_candidate
+                )
+            assert selected is not None
+            points = self.radial_midpoints_m[np.asarray(selected)] - self.radii_m[node]
+            coefficients = np.empty(3, dtype=np.float64)
+            for index in range(3):
+                others = [other for other in range(3) if other != index]
+                coefficients[index] = -(
+                    points[others[0]] + points[others[1]]
+                ) / (
+                    (points[index] - points[others[0]])
+                    * (points[index] - points[others[1]])
+                )
+            et_indices[node] = selected
+            et_coefficients[node] = coefficients
+
+        # Ht control-volume widths are the radial Hodge weights. Construct the
+        # Ht-to-Et derivative as the negative weighted transpose so the wider
+        # nonuniform stencil retains the discrete integration-by-parts identity.
+        ht_weights = np.empty(cell_count + 1, dtype=np.float64)
+        ht_weights[0] = 0.5 * self.radial_steps_m[0]
+        ht_weights[-1] = 0.5 * self.radial_steps_m[-1]
+        ht_weights[1:-1] = np.diff(self.radial_midpoints_m)
+        transpose_rows: list[list[tuple[int, float]]] = [
+            [] for _ in range(cell_count)
+        ]
+        for ht_node, (indices, coefficients) in enumerate(
+            zip(et_indices, et_coefficients, strict=True)
+        ):
+            for et_cell, coefficient in zip(indices, coefficients, strict=True):
+                if coefficient != 0.0:
+                    transpose_rows[int(et_cell)].append(
+                        (
+                            ht_node,
+                            -coefficient
+                            * ht_weights[ht_node]
+                            / self.radial_steps_m[et_cell],
+                        )
+                    )
+        maximum_terms = max(len(row) for row in transpose_rows)
+        if maximum_terms > 3:
+            raise RuntimeError("radial derivative stencil exceeds three terms")
+        ht_indices = np.zeros((cell_count, 3), dtype=np.int64)
+        ht_coefficients = np.zeros((cell_count, 3), dtype=np.float64)
+        for et_cell, row in enumerate(transpose_rows):
+            for slot, (ht_node, coefficient) in enumerate(row):
+                ht_indices[et_cell, slot] = ht_node
+                ht_coefficients[et_cell, slot] = coefficient
+
+        self._radial_et_derivative_indices_host = et_indices
+        self._radial_et_derivative_coefficients_host = et_coefficients
+        self._radial_ht_derivative_indices_host = ht_indices
+        self._radial_ht_derivative_coefficients_host = ht_coefficients
+
+    @staticmethod
+    def _apply_radial_stencil(values: Any, indices: Any, coefficients: Any) -> Any:
+        result = values[:, indices[:, 0]] * coefficients[None, :, 0]
+        for slot in (1, 2):
+            result += values[:, indices[:, slot]] * coefficients[None, :, slot]
+        return result
+
+    def _radial_derivative_et(self) -> Any:
+        if self._uniform_radial_grid:
+            result = self.backend.empty_like(self.ht)
+            result[:, 0] = 2.0 * self.et[:, 0] / self._radial_steps[0]
+            result[:, -1] = -2.0 * self.et[:, -1] / self._radial_steps[-1]
+            if self.ht.shape[1] > 2:
+                result[:, 1:-1] = self.backend.diff(
+                    self.et, axis=1
+                ) / self._radial_center_distances
+            return result
+        return self._apply_radial_stencil(
+            self.et,
+            self._radial_et_derivative_indices,
+            self._radial_et_derivative_coefficients,
+        )
+
+    def _radial_derivative_ht(self) -> Any:
+        if self._uniform_radial_grid:
+            return self.backend.diff(
+                self.ht, axis=1
+            ) / self._radial_steps[None, :]
+        return self._apply_radial_stencil(
+            self.ht,
+            self._radial_ht_derivative_indices,
+            self._radial_ht_derivative_coefficients,
         )
 
     def _sample_material_properties(self) -> None:
@@ -498,13 +660,7 @@ class GeodesicFDTD:
 
         # Et is odd across each radial boundary. This ghost-cell construction
         # places zero tangential electric field on the boundary (PEC).
-        radial_derivative_et = self.backend.empty_like(self.ht)
-        radial_derivative_et[:, 0] = 2.0 * self.et[:, 0] / self._radial_steps[0]
-        radial_derivative_et[:, -1] = -2.0 * self.et[:, -1] / self._radial_steps[-1]
-        if self.ht.shape[1] > 2:
-            radial_derivative_et[:, 1:-1] = self.backend.diff(
-                self.et, axis=1
-            ) / self._radial_center_distances
+        radial_derivative_et = self._radial_derivative_et()
 
         surface_gradient_er -= radial_derivative_et
         surface_gradient_er *= self.time_step_s / MU_0
@@ -548,9 +704,7 @@ class GeodesicFDTD:
         surface_gradient_hr = self.backend.dual_edge_difference(self.hr)
         surface_gradient_hr *= self._inverse_dual_edge_angles
         surface_gradient_hr *= self._inverse_radial_midpoints
-        radial_derivative_ht = self.backend.diff(
-            self.ht, axis=1
-        ) / self._radial_steps[None, :]
+        radial_derivative_ht = self._radial_derivative_ht()
         surface_gradient_hr -= radial_derivative_ht
         del radial_derivative_ht
         self.et *= self._ca_et
@@ -800,6 +954,10 @@ class GeodesicFDTD:
             "_inverse_radial_midpoints",
             "_radial_steps",
             "_radial_center_distances",
+            "_radial_et_derivative_indices",
+            "_radial_et_derivative_coefficients",
+            "_radial_ht_derivative_indices",
+            "_radial_ht_derivative_coefficients",
         )
         backend_names = (
             "edges",

@@ -341,20 +341,58 @@ def test_time_step_unsafe_for_custom_permittivity_is_rejected() -> None:
 def test_nonuniform_radial_grid_advances() -> None:
     altitudes = (
         -100_000.0,
+        -60_000.0,
+        -20_000.0,
         -5_000.0,
         -1_250.0,
         0.0,
         1_250.0,
         5_000.0,
+        20_000.0,
+        60_000.0,
         100_000.0,
     )
     simulation = GeodesicFDTD(
-        config=small_config(radial_altitudes_m=altitudes),
+        config=small_config(
+            radial_altitudes_m=altitudes,
+            radial_cells=len(altitudes) - 1,
+        ),
         source=GaussianCurrent(),
     )
     simulation.step(5)
     assert np.allclose(simulation.altitudes_m, altitudes)
     assert np.isfinite(simulation.er).all()
+
+
+def test_custom_radial_grid_rejects_unsafe_spacing_jump() -> None:
+    with pytest.raises(ValueError, match="factor of 4"):
+        small_config(
+            radial_cells=4,
+            radial_altitudes_m=(-100_000.0, -5_000.0, -1_250.0, 0.0, 100_000.0),
+        )
+
+
+def test_nonuniform_radial_derivative_is_exact_for_quadratic_profile() -> None:
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    simulation = GeodesicFDTD(
+        config=small_config(
+            radial_cells=len(altitudes) - 1,
+            minimum_altitude_m=altitudes[0],
+            maximum_altitude_m=altitudes[-1],
+            radial_altitudes_m=altitudes,
+        )
+    )
+    midpoints = simulation.radial_midpoint_altitudes_m
+    simulation.et[0] = midpoints**2
+
+    derivative = simulation.to_numpy(simulation._radial_derivative_et())[0]
+
+    np.testing.assert_allclose(
+        derivative[1:-1],
+        2.0 * np.asarray(altitudes[1:-1]),
+        rtol=0.0,
+        atol=2.0e-11,
+    )
 
 
 def test_solver_rejects_incompatible_provided_mesh_configuration() -> None:

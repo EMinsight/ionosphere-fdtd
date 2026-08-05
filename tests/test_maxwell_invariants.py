@@ -291,6 +291,72 @@ def test_material_aware_cfl_keeps_subvacuum_permittivity_bounded() -> None:
     assert maximum < 2.0 * initial_maximum
 
 
+def test_nonuniform_radial_stencils_satisfy_weighted_adjoint_identity() -> None:
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=len(altitudes) - 1,
+            minimum_altitude_m=altitudes[0],
+            maximum_altitude_m=altitudes[-1],
+            radial_altitudes_m=altitudes,
+        ),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    generator = np.random.default_rng(20260805)
+    simulation.et[:] = generator.standard_normal(simulation.et.shape)
+    simulation.ht[:] = generator.standard_normal(simulation.ht.shape)
+    derivative_et = simulation.to_numpy(simulation._radial_derivative_et())
+    derivative_ht = simulation.to_numpy(simulation._radial_derivative_ht())
+    ht_weights = np.empty(len(altitudes))
+    ht_weights[0] = 0.5 * simulation.radial_steps_m[0]
+    ht_weights[-1] = 0.5 * simulation.radial_steps_m[-1]
+    ht_weights[1:-1] = np.diff(simulation.radial_midpoints_m)
+
+    left = np.sum(simulation.ht * derivative_et * ht_weights[None, :])
+    right = np.sum(
+        simulation.et * derivative_ht * simulation.radial_steps_m[None, :]
+    )
+
+    assert left + right == pytest.approx(0.0, abs=2.0e-11)
+
+
+def test_graded_nonuniform_grid_remains_bounded_at_cfl_limit() -> None:
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=len(altitudes) - 1,
+            minimum_altitude_m=altitudes[0],
+            maximum_altitude_m=altitudes[-1],
+            radial_altitudes_m=altitudes,
+            courant_factor=1.0,
+        ),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    generator = np.random.default_rng(20260805)
+    simulation.er[:] = generator.standard_normal(simulation.er.shape)
+    simulation.et[:] = generator.standard_normal(simulation.et.shape)
+    initial_maximum = max(
+        float(np.max(np.abs(simulation.er))),
+        float(np.max(np.abs(simulation.et))),
+    )
+    maximum = initial_maximum
+
+    for _ in range(1_000):
+        simulation.step()
+        maximum = max(
+            maximum,
+            float(np.max(np.abs(simulation.er))),
+            float(np.max(np.abs(simulation.et))),
+        )
+
+    assert np.isfinite(maximum)
+    assert maximum < 2.0 * initial_maximum
+
+
 @pytest.mark.parametrize("orientation", ("native", "polar"))
 def test_surface_spectra_remain_inside_the_cfl_limit(orientation: str) -> None:
     config = _surface_mode_config()
