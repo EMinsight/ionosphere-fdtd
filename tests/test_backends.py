@@ -99,6 +99,44 @@ def test_torch_face_circulation_matches_mesh(
     np.testing.assert_allclose(actual, expected, rtol=1.0e-13, atol=1.0e-13)
 
 
+@pytest.mark.parametrize("trailing_shape", [(), (7,), (3, 4)])
+def test_torch_dual_cell_circulation_matches_mesh(
+    trailing_shape: tuple[int, ...],
+) -> None:
+    pytest.importorskip("torch")
+    mesh = build_geodesic_mesh(1)
+    values = np.random.default_rng(42).standard_normal(
+        (mesh.n_edges,) + trailing_shape
+    )
+    backend = GeodesicFDTD(
+        config=config(), backend="torch", device="cpu", dtype="float64"
+    ).backend
+
+    actual = backend.to_numpy(
+        backend.dual_cell_circulation(backend.asarray(values))
+    )
+    expected = mesh.dual_cell_circulation(values)
+    np.testing.assert_allclose(actual, expected, rtol=1.0e-13, atol=1.0e-13)
+
+
+def test_cuda_dual_cell_circulation_is_bitwise_repeatable() -> None:
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+    mesh = build_geodesic_mesh(3)
+    simulation = GeodesicFDTD(
+        config=config(), backend="torch", device="cuda", dtype="float64"
+    )
+    values = simulation.backend.asarray(
+        np.random.default_rng(20260805).standard_normal((mesh.n_edges, 7))
+    )
+
+    first = simulation.backend.dual_cell_circulation(values)
+    for _ in range(10):
+        repeated = simulation.backend.dual_cell_circulation(values)
+        assert torch.equal(first, repeated)
+
+
 def test_torch_auto_float32_tracks_float64_reference() -> None:
     torch = pytest.importorskip("torch")
     reference = GeodesicFDTD(

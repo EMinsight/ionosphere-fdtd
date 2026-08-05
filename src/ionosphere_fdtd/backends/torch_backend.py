@@ -60,6 +60,32 @@ class TorchBackend(ArrayBackend):
         self.edge_left_faces = self.index_array(mesh.edge_left_faces)
         self.edge_right_faces = self.index_array(mesh.edge_right_faces)
         self.n_vertices = mesh.n_vertices
+        self.vertex_edges, self.vertex_edge_signs = self._vertex_incidence(mesh)
+
+    def _vertex_incidence(self, mesh: Any) -> tuple[Any, Any]:
+        """Build a deterministic padded degree-six dual incidence table."""
+
+        edge_indices = np.arange(len(mesh.edges), dtype=np.int64)
+        vertices = np.concatenate((mesh.edges[:, 0], mesh.edges[:, 1]))
+        incident_edges = np.concatenate((edge_indices, edge_indices))
+        incident_signs = np.concatenate(
+            (np.ones(len(mesh.edges)), -np.ones(len(mesh.edges)))
+        )
+        order = np.argsort(vertices, kind="stable")
+        vertices = vertices[order]
+        incident_edges = incident_edges[order]
+        incident_signs = incident_signs[order]
+        counts = np.bincount(vertices, minlength=self.n_vertices)
+        if not np.array_equal(counts, mesh.vertex_degree):
+            raise RuntimeError("mesh vertex degree does not match edge incidence")
+        offsets = np.cumsum(np.concatenate(([0], counts[:-1])))
+        slots = np.arange(len(vertices)) - np.repeat(offsets, counts)
+        maximum_degree = int(counts.max())
+        vertex_edges = np.zeros((self.n_vertices, maximum_degree), dtype=np.int64)
+        vertex_signs = np.zeros((self.n_vertices, maximum_degree))
+        vertex_edges[vertices, slots] = incident_edges
+        vertex_signs[vertices, slots] = incident_signs
+        return self.index_array(vertex_edges), self.asarray(vertex_signs)
 
     def compile_step(
         self, step: Callable[[Array], None]
@@ -156,13 +182,13 @@ class TorchBackend(ArrayBackend):
         return result
 
     def dual_cell_circulation(self, edge_values: Any) -> Any:
-        output_shape = (self.n_vertices,) + tuple(edge_values.shape[1:])
-        result = self.torch.zeros(
-            output_shape, dtype=edge_values.dtype, device=self.torch_device
+        selected = edge_values[self.vertex_edges]
+        sign_shape = self.vertex_edge_signs.shape + (1,) * (
+            edge_values.ndim - 1
         )
-        result.index_add_(0, self.edges[:, 0], edge_values)
-        result.index_add_(0, self.edges[:, 1], edge_values, alpha=-1.0)
-        return result
+        return self.torch.sum(
+            selected * self.vertex_edge_signs.reshape(sign_shape), dim=1
+        )
 
     def to_numpy(self, values: Array) -> np.ndarray:
         if not self.torch.is_tensor(values):
