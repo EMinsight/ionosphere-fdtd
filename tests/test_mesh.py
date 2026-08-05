@@ -41,6 +41,41 @@ def test_edge_diamonds_partition_the_sphere() -> None:
     assert np.sum(areas) == pytest.approx(4.0 * np.pi, rel=1.0e-12)
 
 
+def test_dual_areas_equal_explicit_ordered_polygon_fans() -> None:
+    mesh = build_geodesic_mesh(3)
+    expected = np.empty(mesh.n_vertices)
+
+    for vertex_index in range(mesh.n_vertices):
+        incident = np.flatnonzero(np.any(mesh.faces == vertex_index, axis=1))
+        vertex = mesh.vertices[vertex_index]
+        reference = np.array((1.0, 0.0, 0.0))
+        if abs(float(vertex @ reference)) > 0.9:
+            reference = np.array((0.0, 1.0, 0.0))
+        tangent_x = reference - (reference @ vertex) * vertex
+        tangent_x /= np.linalg.norm(tangent_x)
+        tangent_y = np.cross(vertex, tangent_x)
+        centers = mesh.face_centers[incident]
+        tangent = centers - (centers @ vertex)[:, None] * vertex
+        angles = np.arctan2(tangent @ tangent_y, tangent @ tangent_x)
+        ordered = centers[np.argsort(angles)]
+        following = np.roll(ordered, -1, axis=0)
+        numerator = np.abs(np.cross(ordered, following) @ vertex)
+        denominator = (
+            1.0
+            + ordered @ vertex
+            + np.einsum("ij,ij->i", ordered, following)
+            + following @ vertex
+        )
+        expected[vertex_index] = np.sum(2.0 * np.arctan2(numerator, denominator))
+
+    np.testing.assert_allclose(
+        mesh.dual_cell_solid_angles,
+        expected,
+        rtol=0.0,
+        atol=8.0 * np.finfo(np.float64).eps,
+    )
+
+
 def test_default_orientation_places_pentagons_at_geographic_poles() -> None:
     native = build_geodesic_mesh(2, orientation="native")
     polar = build_geodesic_mesh(2)

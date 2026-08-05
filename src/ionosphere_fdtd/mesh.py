@@ -202,7 +202,13 @@ def _assemble_geodesic_mesh(
     face_areas = _spherical_triangle_area(
         vertices[faces[:, 0]], vertices[faces[:, 1]], vertices[faces[:, 2]]
     )
-    dual_areas, degree = _dual_geometry(vertices, face_centers, faces)
+    dual_areas, degree = _dual_geometry(
+        vertices,
+        face_centers,
+        edges,
+        left_faces,
+        right_faces,
+    )
 
     if not np.all(degree >= 5):
         raise RuntimeError("invalid closed geodesic topology")
@@ -531,28 +537,22 @@ def _spherical_triangle_area(a: FloatArray, b: FloatArray, c: FloatArray) -> Flo
 
 
 def _dual_geometry(
-    vertices: FloatArray, face_centers: FloatArray, faces: IntArray
+    vertices: FloatArray,
+    face_centers: FloatArray,
+    edges: IntArray,
+    left_faces: IntArray,
+    right_faces: IntArray,
 ) -> tuple[FloatArray, IntArray]:
-    incident: list[list[int]] = [[] for _ in range(vertices.shape[0])]
-    for face_index, face in enumerate(faces):
-        for vertex_index in face:
-            incident[int(vertex_index)].append(face_index)
+    """Compute circumcentric dual areas from edge-local spherical wedges."""
 
-    dual_area = np.empty(vertices.shape[0], dtype=np.float64)
-    degree = np.asarray([len(items) for items in incident], dtype=np.int64)
-    for vertex_index, face_indices in enumerate(incident):
-        vertex = vertices[vertex_index]
-        reference = np.array((1.0, 0.0, 0.0))
-        if abs(float(vertex @ reference)) > 0.9:
-            reference = np.array((0.0, 1.0, 0.0))
-        tangent_x = _normalize((reference - (reference @ vertex) * vertex)[None, :])[0]
-        tangent_y = np.cross(vertex, tangent_x)
-        centers = face_centers[face_indices]
-        tangent = centers - (centers @ vertex)[:, None] * vertex
-        angles = np.arctan2(tangent @ tangent_y, tangent @ tangent_x)
-        ordered = centers[np.argsort(angles)]
-        repeated_vertex = np.repeat(vertex[None, :], len(ordered), axis=0)
-        dual_area[vertex_index] = _spherical_triangle_area(
-            repeated_vertex, ordered, np.roll(ordered, -1, axis=0)
-        ).sum()
+    left_centers = face_centers[left_faces]
+    right_centers = face_centers[right_faces]
+    dual_area = np.zeros(vertices.shape[0], dtype=np.float64)
+    for endpoint in range(2):
+        vertex_indices = edges[:, endpoint]
+        wedges = _spherical_triangle_area(
+            vertices[vertex_indices], left_centers, right_centers
+        )
+        np.add.at(dual_area, vertex_indices, wedges)
+    degree = np.bincount(edges.ravel(), minlength=len(vertices))
     return dual_area, degree
