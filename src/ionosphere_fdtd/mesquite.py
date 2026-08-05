@@ -49,7 +49,7 @@ def _optimizer_report(stdout: str) -> dict[str, str]:
     }
     required = {
         "mesquite_version": None,
-        "objective": MESQUITE_OBJECTIVE.removeprefix("uniform-shape-size:"),
+        "objective": MESQUITE_OBJECTIVE,
         "vertex_mover": MESQUITE_VERTEX_MOVER,
     }
     for key, expected in required.items():
@@ -210,9 +210,7 @@ def load_optimized_mesh(
         raise ValueError("unsupported optimized mesh format")
     if metadata.get("vertices_sha256") != _array_sha256(vertices):
         raise ValueError("optimized mesh coordinate checksum mismatch")
-    if metadata.get("optimizer_reported_objective") != MESQUITE_OBJECTIVE.removeprefix(
-        "uniform-shape-size:"
-    ):
+    if metadata.get("optimizer_reported_objective") != MESQUITE_OBJECTIVE:
         raise ValueError("optimized mesh objective does not match the supported policy")
     if metadata.get("optimizer_reported_vertex_mover") != MESQUITE_VERTEX_MOVER:
         raise ValueError("optimized mesh vertex mover does not match the supported policy")

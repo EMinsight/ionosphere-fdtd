@@ -25,7 +25,7 @@ def _copy_optimizer(path: Path) -> Path:
         "import shutil, sys\n"
         "shutil.copyfile(sys.argv[1], sys.argv[2])\n"
         "print('mesquite_version=Mesquite test')\n"
-        f"print('objective={MESQUITE_OBJECTIVE.removeprefix('uniform-shape-size:')}')\n"
+        f"print('objective={MESQUITE_OBJECTIVE}')\n"
         f"print('vertex_mover={MESQUITE_VERTEX_MOVER}')\n"
     )
     path.chmod(0o755)
