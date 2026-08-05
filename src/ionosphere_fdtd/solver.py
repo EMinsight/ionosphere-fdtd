@@ -33,6 +33,17 @@ class SimulationConfig:
     tangential_material_support: str = "point"
 
     def __post_init__(self) -> None:
+        integer_controls = {
+            "subdivision": self.subdivision,
+            "radial_cells": self.radial_cells,
+            "mesh_relaxations": self.mesh_relaxations,
+            "mesh_optimization_steps": self.mesh_optimization_steps,
+        }
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, np.integer))
+            for value in integer_controls.values()
+        ):
+            raise ValueError("mesh and radial cell controls must be integers")
         if self.subdivision < 0:
             raise ValueError("subdivision must be non-negative")
         if self.radial_cells < 2:
@@ -47,19 +58,39 @@ class SimulationConfig:
             raise ValueError(
                 "tangential_material_support must be 'point' or 'edge-diamond'"
             )
+        finite_geometry = (
+            self.minimum_altitude_m,
+            self.maximum_altitude_m,
+            self.earth_radius_m,
+            self.courant_factor,
+        )
+        if not all(np.isfinite(value) for value in finite_geometry):
+            raise ValueError("geometry and Courant controls must be finite")
         if self.minimum_altitude_m >= self.maximum_altitude_m:
             raise ValueError("altitude bounds are reversed")
         if self.earth_radius_m + self.minimum_altitude_m <= 0.0:
             raise ValueError("minimum radius must be positive")
         if not 0.0 < self.courant_factor <= 1.0:
             raise ValueError("courant_factor must be in (0, 1]")
-        if self.time_step_s is not None and self.time_step_s <= 0.0:
-            raise ValueError("time_step_s must be positive")
+        if self.time_step_s is not None and (
+            not np.isfinite(self.time_step_s) or self.time_step_s <= 0.0
+        ):
+            raise ValueError("time_step_s must be finite and positive")
         if self.radial_altitudes_m is not None:
             altitudes = np.asarray(self.radial_altitudes_m, dtype=np.float64)
-            if len(altitudes) < 3 or not np.all(np.diff(altitudes) > 0.0):
+            if (
+                altitudes.ndim != 1
+                or len(altitudes) < 3
+                or not np.all(np.isfinite(altitudes))
+                or not np.all(np.diff(altitudes) > 0.0)
+            ):
                 raise ValueError(
-                    "radial_altitudes_m must contain at least three increasing values"
+                    "radial_altitudes_m must contain at least three finite, "
+                    "increasing values"
+                )
+            if len(altitudes) != self.radial_cells + 1:
+                raise ValueError(
+                    "radial_cells must equal len(radial_altitudes_m) - 1"
                 )
             if (
                 altitudes[0] != self.minimum_altitude_m
@@ -91,12 +122,29 @@ class GeodesicFDTD:
         torch_threads: int | None = None,
     ) -> None:
         self.config = config or SimulationConfig()
-        self.mesh = mesh or build_geodesic_mesh(
-            subdivision=self.config.subdivision,
-            relaxations=self.config.mesh_relaxations,
-            orientation=self.config.mesh_orientation,
-            optimization_steps=self.config.mesh_optimization_steps,
-        )
+        if mesh is None:
+            self.mesh = build_geodesic_mesh(
+                subdivision=self.config.subdivision,
+                relaxations=self.config.mesh_relaxations,
+                orientation=self.config.mesh_orientation,
+                optimization_steps=self.config.mesh_optimization_steps,
+            )
+        else:
+            if self.config.mesh_relaxations or self.config.mesh_optimization_steps:
+                raise ValueError(
+                    "mesh relaxation and optimization controls cannot accompany "
+                    "a provided mesh"
+                )
+            polar_pentagons = np.count_nonzero(
+                (mesh.vertex_degree == 5)
+                & np.isclose(np.abs(mesh.vertices[:, 2]), 1.0, rtol=0.0, atol=1.0e-13)
+            )
+            expected_polar_pentagons = (
+                2 if self.config.mesh_orientation == "polar" else 0
+            )
+            if polar_pentagons != expected_polar_pentagons:
+                raise ValueError("provided mesh orientation does not match config")
+            self.mesh = mesh
         if self.mesh.subdivision != self.config.subdivision:
             raise ValueError("provided mesh subdivision does not match config")
         self.backend: ArrayBackend = create_backend(
@@ -217,24 +265,35 @@ class GeodesicFDTD:
         )
 
     def _prepare_material_coefficients(self) -> None:
-        sigma_er, epsilon_r_er = self.material.sample(
-            self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
+        sigma_er, epsilon_r_er = self._validated_material_sample(
+            self.material.sample(
+                self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
+            ),
+            (self.mesh.n_vertices, len(self.altitudes_m)),
+            "radial",
         )
+
         def sample_tangential(
             directions: NDArray[np.float64],
         ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
             sample_cells = getattr(self.material, "sample_tangential_cells", None)
             if sample_cells is None:
-                return self.material.sample(
+                values = self.material.sample(
                     directions,
                     self.radial_midpoint_altitudes_m,
                     self.config.earth_radius_m,
                 )
-            return sample_cells(
-                directions,
-                self.altitudes_m[:-1],
-                self.altitudes_m[1:],
-                self.config.earth_radius_m,
+            else:
+                values = sample_cells(
+                    directions,
+                    self.altitudes_m[:-1],
+                    self.altitudes_m[1:],
+                    self.config.earth_radius_m,
+                )
+            return self._validated_material_sample(
+                values,
+                (len(directions), len(self.radial_midpoint_altitudes_m)),
+                "tangential",
             )
 
         edge_midpoints = self.mesh.edge_midpoints()
@@ -276,6 +335,32 @@ class GeodesicFDTD:
         self.sigma_et = self.backend.asarray(sigma_et)
         self.epsilon_r_er = self.backend.asarray(epsilon_r_er)
         self.epsilon_r_et = self.backend.asarray(epsilon_r_et)
+
+    @staticmethod
+    def _validated_material_sample(
+        values: tuple[NDArray[np.float64], NDArray[np.float64]],
+        expected_shape: tuple[int, int],
+        label: str,
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        try:
+            sigma_values, epsilon_values = values
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"{label} material sampler must return conductivity and permittivity"
+            ) from error
+        sigma = np.asarray(sigma_values, dtype=np.float64)
+        epsilon_r = np.asarray(epsilon_values, dtype=np.float64)
+        if sigma.shape != expected_shape or epsilon_r.shape != expected_shape:
+            raise ValueError(
+                f"{label} material arrays must have shape {expected_shape}"
+            )
+        if not np.all(np.isfinite(sigma)) or not np.all(np.isfinite(epsilon_r)):
+            raise ValueError(f"{label} material arrays must be finite")
+        if np.any(sigma < 0.0):
+            raise ValueError(f"{label} conductivity cannot be negative")
+        if np.any(epsilon_r <= 0.0):
+            raise ValueError(f"{label} relative permittivity must be positive")
+        return sigma, epsilon_r
 
     def step(self, count: int = 1) -> None:
         """Advance the fields by ``count`` complete leapfrog time steps."""

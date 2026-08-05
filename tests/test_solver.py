@@ -5,6 +5,7 @@ from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
 )
+from ionosphere_fdtd.mesh import build_geodesic_mesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import (
     GaussianCurrent,
@@ -26,6 +27,15 @@ def test_simulation_config_rejects_negative_mesh_steps() -> None:
         small_config(mesh_relaxations=-1)
     with pytest.raises(ValueError, match="mesh_optimization_steps"):
         small_config(mesh_optimization_steps=-1)
+
+
+def test_simulation_config_rejects_nonfinite_and_inconsistent_geometry() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        small_config(time_step_s=np.nan)
+    with pytest.raises(ValueError, match="finite"):
+        small_config(earth_radius_m=np.nan)
+    with pytest.raises(ValueError, match="radial_cells"):
+        small_config(radial_altitudes_m=(-100_000.0, 0.0, 100_000.0))
 
 
 def test_zero_fields_are_stationary() -> None:
@@ -206,6 +216,15 @@ def test_tangential_source_rejects_mismatched_ground_lines() -> None:
         )
 
 
+def test_sources_reject_nonfinite_or_invalid_waveforms() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        GaussianCurrent(one_over_e_half_width_s=np.nan)
+    with pytest.raises(ValueError, match="positive"):
+        GaussianCurrent(one_over_e_half_width_s=0.0)
+    with pytest.raises(ValueError, match="latitude"):
+        TangentialGaussianCurrent(latitude_deg=91.0)
+
+
 def test_nearest_edge_source_uses_at_most_one_edge_per_ground_line() -> None:
     source = TangentialGaussianCurrent(
         azimuths_deg=(0.0, 90.0),
@@ -253,6 +272,46 @@ def test_nonuniform_radial_grid_advances() -> None:
     simulation.step(5)
     assert np.allclose(simulation.altitudes_m, altitudes)
     assert np.isfinite(simulation.er).all()
+
+
+def test_solver_rejects_incompatible_provided_mesh_configuration() -> None:
+    native = build_geodesic_mesh(1, orientation="native")
+    with pytest.raises(ValueError, match="orientation"):
+        GeodesicFDTD(config=small_config(), mesh=native)
+    polar = build_geodesic_mesh(1, orientation="polar")
+    with pytest.raises(ValueError, match="cannot accompany"):
+        GeodesicFDTD(
+            config=small_config(mesh_optimization_steps=1),
+            mesh=polar,
+        )
+
+
+@pytest.mark.parametrize(
+    ("kind", "pattern"),
+    (("shape", "shape"), ("nan", "finite"), ("gain", "negative")),
+)
+def test_solver_validates_custom_material_outputs(kind: str, pattern: str) -> None:
+    class InvalidMaterial(EarthIonosphereMaterial):
+        def sample(
+            self,
+            directions: np.ndarray,
+            altitudes_m: np.ndarray,
+            earth_radius_m: float,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            del earth_radius_m
+            shape = (len(directions), len(altitudes_m))
+            sigma = np.ones(shape)
+            epsilon_r = np.ones(shape)
+            if kind == "shape":
+                sigma = sigma[:1]
+            elif kind == "nan":
+                epsilon_r[0, 0] = np.nan
+            else:
+                sigma[0, 0] = -1.0
+            return sigma, epsilon_r
+
+    with pytest.raises(ValueError, match=pattern):
+        GeodesicFDTD(config=small_config(), material=InvalidMaterial())
 
 
 def test_solver_uses_fractional_tangential_material_cells() -> None:

@@ -166,6 +166,28 @@ class GaussianCurrent:
     one_over_e_half_width_s: float | None = None
     carrier_frequency_hz: float = 0.0
 
+    def __post_init__(self) -> None:
+        finite = (
+            self.latitude_deg,
+            self.longitude_deg,
+            self.altitude_m,
+            self.peak_current_a,
+            self.carrier_frequency_hz,
+        )
+        if not all(np.isfinite(value) for value in finite):
+            raise ValueError("source coordinates and waveform values must be finite")
+        if not -90.0 <= self.latitude_deg <= 90.0:
+            raise ValueError("source latitude must be in [-90, 90]")
+        if self.center_time_s is not None and not np.isfinite(self.center_time_s):
+            raise ValueError("source center time must be finite")
+        if self.one_over_e_half_width_s is not None and (
+            not np.isfinite(self.one_over_e_half_width_s)
+            or self.one_over_e_half_width_s <= 0.0
+        ):
+            raise ValueError("source half width must be finite and positive")
+        if self.carrier_frequency_hz < 0.0:
+            raise ValueError("source carrier frequency cannot be negative")
+
     def direction(self) -> NDArray[np.float64]:
         """Return the exact geographic source direction."""
 
@@ -245,6 +267,7 @@ class TangentialGaussianCurrent(GaussianCurrent):
     edge_assignment: str = "projected"
 
     def __post_init__(self) -> None:
+        GaussianCurrent.__post_init__(self)
         if not self.azimuths_deg:
             raise ValueError("azimuths_deg must contain at least one direction")
         if not all(np.isfinite(value) for value in self.azimuths_deg):

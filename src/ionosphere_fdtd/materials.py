@@ -115,17 +115,39 @@ class SphericalAnomaly:
     maximum_background_conductivity_s_m: float | None = None
 
     def __post_init__(self) -> None:
+        finite = (
+            self.latitude_deg,
+            self.longitude_deg,
+            self.radius_m,
+            self.altitude_min_m,
+            self.altitude_max_m,
+            self.conductivity_factor,
+        )
+        if not all(np.isfinite(value) for value in finite):
+            raise ValueError("anomaly geometry and conductivity must be finite")
+        if not -90.0 <= self.latitude_deg <= 90.0:
+            raise ValueError("anomaly latitude must be in [-90, 90]")
         if self.radius_m <= 0.0:
             raise ValueError("anomaly radius_m must be positive")
         if self.altitude_min_m > self.altitude_max_m:
             raise ValueError("anomaly altitude bounds are reversed")
         if self.conductivity_factor <= 0.0:
             raise ValueError("conductivity_factor must be positive")
+        if self.relative_permittivity is not None and (
+            not np.isfinite(self.relative_permittivity)
+            or self.relative_permittivity <= 0.0
+        ):
+            raise ValueError("relative permittivity must be finite and positive")
         if (
             self.maximum_background_conductivity_s_m is not None
-            and self.maximum_background_conductivity_s_m <= 0.0
+            and (
+                not np.isfinite(self.maximum_background_conductivity_s_m)
+                or self.maximum_background_conductivity_s_m <= 0.0
+            )
         ):
-            raise ValueError("maximum background conductivity must be positive")
+            raise ValueError(
+                "maximum background conductivity must be finite and positive"
+            )
 
     @property
     def center(self) -> FloatArray:

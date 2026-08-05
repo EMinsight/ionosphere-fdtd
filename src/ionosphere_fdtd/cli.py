@@ -89,6 +89,11 @@ def main(argv: list[str] | None = None) -> int:
         refined = np.arange(-5_000.0, 5_000.0, args.surface_step)
         refined = np.append(refined, 5_000.0)
         radial_altitudes = tuple(np.unique(np.concatenate((coarse, refined))))
+    actual_radial_cells = (
+        len(radial_altitudes) - 1
+        if radial_altitudes is not None
+        else args.radial_cells
+    )
 
     anomalies: tuple[SphericalAnomaly, ...] = ()
     if args.oil_anomaly:
@@ -106,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         simulation = GeodesicFDTD(
             config=SimulationConfig(
                 subdivision=args.subdivision,
-                radial_cells=args.radial_cells,
+                radial_cells=actual_radial_cells,
                 courant_factor=args.courant,
                 radial_altitudes_m=radial_altitudes,
             ),
