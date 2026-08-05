@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ionosphere_fdtd.constants import C_0
+from ionosphere_fdtd.constants import C_0, EPSILON_0
 from ionosphere_fdtd.mesh import build_geodesic_mesh
 from ionosphere_fdtd.mesh_quality import scalar_laplacian
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
@@ -214,6 +214,77 @@ def test_conductive_update_is_passive_even_in_the_stiff_limit() -> None:
 
     assert np.all(np.diff(norms) <= 0.0)
     assert np.max(np.abs(simulation._ca_er)) < 1.0
+
+
+def test_conductive_update_converges_at_second_order() -> None:
+    base = GeodesicFDTD(
+        SimulationConfig(subdivision=0, radial_cells=2, courant_factor=1.0),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    coarse_dt = 0.4 * base.cfl_time_step_limit_s
+    coarse_steps = 20
+    duration = coarse_steps * coarse_dt
+    conductivity = 0.5 * EPSILON_0 / duration
+    errors = []
+
+    for refinement in (1, 2):
+        time_step = coarse_dt / refinement
+        simulation = GeodesicFDTD(
+            SimulationConfig(
+                subdivision=0,
+                radial_cells=2,
+                courant_factor=1.0,
+                time_step_s=time_step,
+            ),
+            material=UniformConductiveMaterial(conductivity),
+            dtype="float64",
+        )
+        simulation.er.fill(1.0)
+        simulation.step(coarse_steps * refinement)
+        errors.append(abs(float(simulation.er[0, 0]) - np.exp(-0.5)))
+
+    assert errors[0] / errors[1] == pytest.approx(4.0, rel=2.0e-3)
+
+
+@pytest.mark.parametrize("orientation", ("native", "polar"))
+def test_surface_spectra_remain_inside_the_cfl_limit(orientation: str) -> None:
+    config = _surface_mode_config()
+    config = SimulationConfig(
+        subdivision=config.subdivision,
+        radial_cells=config.radial_cells,
+        minimum_altitude_m=config.minimum_altitude_m,
+        maximum_altitude_m=config.maximum_altitude_m,
+        earth_radius_m=config.earth_radius_m,
+        courant_factor=1.0,
+        mesh_orientation=orientation,
+    )
+    simulation = GeodesicFDTD(config, material=VacuumMaterial(), dtype="float64")
+    mesh = simulation.mesh
+    tm_operator = _operator_matrix(
+        mesh.n_vertices, lambda values: scalar_laplacian(mesh, values)
+    )
+
+    def apply_te(values: np.ndarray) -> np.ndarray:
+        gradient = (
+            mesh.primal_edge_angles
+            / mesh.dual_edge_angles
+            * mesh.dual_edge_difference(values)
+        )
+        return mesh.face_circulation(gradient) / mesh.face_solid_angles
+
+    te_operator = _operator_matrix(mesh.n_faces, apply_te)
+    tm_eigenvalue = -float(np.linalg.eigvals(tm_operator).real.min())
+    te_eigenvalue = float(np.linalg.eigvals(te_operator).real.max())
+    tm_q = (
+        C_0 * simulation.time_step_s / float(simulation.radii_m.min())
+    ) ** 2 * tm_eigenvalue
+    te_q = (
+        C_0 * simulation.time_step_s / float(simulation.radial_midpoints_m.min())
+    ) ** 2 * te_eigenvalue
+
+    assert 0.0 < tm_q < 4.0
+    assert 0.0 < te_q < 4.0
 
 
 def test_surface_laplacian_spectrum_is_rotation_invariant() -> None:

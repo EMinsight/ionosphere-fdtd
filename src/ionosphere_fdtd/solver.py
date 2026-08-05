@@ -38,6 +38,7 @@ class SimulationConfig:
     radial_altitudes_m: tuple[float, ...] | None = None
     tangential_material_support: str = "point"
     horizontal_anomaly_mode: str = "point"
+    radial_boundary_condition: str = "pec"
 
     def __post_init__(self) -> None:
         integer_controls = {
@@ -69,6 +70,8 @@ class SimulationConfig:
             raise ValueError(
                 "horizontal_anomaly_mode must be 'point' or 'conservative-nearest'"
             )
+        if self.radial_boundary_condition != "pec":
+            raise ValueError("radial_boundary_condition must be 'pec'")
         finite_geometry = (
             self.minimum_altitude_m,
             self.maximum_altitude_m,
@@ -185,7 +188,10 @@ class GeodesicFDTD:
         )
         self.radial_steps_m = np.diff(self.radii_m)
 
-        self.maximum_stable_time_step_s = self._estimate_stable_time_step()
+        self.cfl_time_step_limit_s = self._estimate_cfl_time_step_limit()
+        self.maximum_stable_time_step_s = (
+            self.config.courant_factor * self.cfl_time_step_limit_s
+        )
         self.time_step_s = (
             self.config.time_step_s
             if self.config.time_step_s is not None
@@ -233,13 +239,15 @@ class GeodesicFDTD:
             else self._advance_fields
         )
 
-    def _estimate_stable_time_step(self) -> float:
+    def _estimate_cfl_time_step_limit(self) -> float:
+        """Return the conservative lossless CFL limit before the safety factor."""
+
         smallest_radius = float(self.radii_m.min())
         primal = smallest_radius * float(self.mesh.primal_edge_angles.min())
         dual = smallest_radius * float(self.mesh.dual_edge_angles.min())
         radial = float(self.radial_steps_m.min())
         inverse_length_squared = primal**-2 + dual**-2 + (2.0 / radial) ** 2
-        return self.config.courant_factor / (C_0 * np.sqrt(inverse_length_squared))
+        return 1.0 / (C_0 * np.sqrt(inverse_length_squared))
 
     def _prepare_geometry(self) -> None:
         primal_lengths_tm = (
@@ -471,6 +479,8 @@ class GeodesicFDTD:
             self.er
         ) / self._primal_lengths_tm
 
+        # Et is odd across each radial boundary. This ghost-cell construction
+        # places zero tangential electric field on the boundary (PEC).
         radial_derivative_et = self.backend.empty_like(self.ht)
         radial_derivative_et[:, 0] = 2.0 * self.et[:, 0] / self._radial_steps[0]
         radial_derivative_et[:, -1] = -2.0 * self.et[:, -1] / self._radial_steps[-1]
@@ -541,6 +551,9 @@ class GeodesicFDTD:
             "device": self.backend.device,
             "dtype": self.backend.dtype_name,
             "compiled": self.compiled,
+            "radial_boundary_condition": self.config.radial_boundary_condition,
+            "cfl_time_step_limit_s": self.cfl_time_step_limit_s,
+            "courant_factor": self.config.courant_factor,
             "max_abs_er_v_m": self.backend.max_abs(self.er),
             "max_abs_et_v_m": self.backend.max_abs(self.et),
             "max_abs_hr_a_m": self.backend.max_abs(self.hr),

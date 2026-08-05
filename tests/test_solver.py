@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from ionosphere_fdtd.constants import MU_0
 from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
@@ -255,6 +256,19 @@ def test_simulation_config_rejects_unknown_material_support() -> None:
         small_config(tangential_material_support="unknown")
 
 
+def test_simulation_config_rejects_unknown_radial_boundary() -> None:
+    with pytest.raises(ValueError, match="radial_boundary_condition"):
+        small_config(radial_boundary_condition="absorbing")
+
+
+def test_courant_factor_scales_the_unfactored_cfl_limit() -> None:
+    simulation = GeodesicFDTD(config=small_config(courant_factor=0.25))
+
+    assert simulation.maximum_stable_time_step_s == pytest.approx(
+        0.25 * simulation.cfl_time_step_limit_s
+    )
+
+
 def test_nonuniform_radial_grid_advances() -> None:
     altitudes = (
         -100_000.0,
@@ -392,6 +406,27 @@ def test_loss_coefficient_damps_uncoupled_radial_field() -> None:
     expected = simulation._ca_er[:, 0].copy()
     simulation.step()
     assert np.allclose(simulation.er[:, 0], expected)
+
+
+def test_radial_pec_ghost_cells_give_the_expected_one_sided_curl() -> None:
+    simulation = GeodesicFDTD(config=small_config())
+    profile = np.arange(1, simulation.et.shape[1] + 1, dtype=np.float64)
+    simulation.et[0] = profile
+
+    expected_derivative = np.empty(simulation.ht.shape[1])
+    expected_derivative[0] = 2.0 * profile[0] / simulation.radial_steps_m[0]
+    expected_derivative[-1] = -2.0 * profile[-1] / simulation.radial_steps_m[-1]
+    expected_derivative[1:-1] = np.diff(profile) / np.diff(
+        simulation.radial_midpoints_m
+    )
+    simulation._update_magnetic_fields()
+
+    np.testing.assert_allclose(
+        simulation.ht[0],
+        -simulation.time_step_s / MU_0 * expected_derivative,
+        rtol=2.0e-16,
+        atol=0.0,
+    )
 
 
 def test_backend_native_observation_recording_includes_initial_state() -> None:
