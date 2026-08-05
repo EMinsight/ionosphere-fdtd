@@ -130,10 +130,30 @@ reported corrected-location native-grid trace and verdict.
 | Oil-field depth | 1.25 km thick at median depth 1.2 km |
 | Conductivity contrast | 0.1 times surrounding strata |
 | Backend | compiled PyTorch, two CUDA GPUs, float64 |
-| Production revision | `e3987f4` |
+| Archived production revision | `e3987f4` |
 | Wall time | 2,201.428 s reference / 1,819.934 s anomaly |
 | Reference trace SHA-256 | `d5eeff7d45f307021d42b6a4cea150942dddc2d391b8859dc4888e6827c79eed` |
 | Anomaly trace SHA-256 | `56e5c481ae5eb46e3a01af34f35c69f331415ab5ffe1936b9484c58a7f8769b0` |
+
+The trace hashes and Figure 7 metrics in this report describe the archived
+production pair above. They predate the terrain-relative and conservative-area
+corrections described later in this report. Those corrections are required on
+physical and numerical grounds, but they do not by themselves upgrade the
+Figure 7 verdict: a new full-duration subdivision-7 pair is required before
+replacing the archived quantitative values.
+
+The corrected implementation passes the following production-configuration
+initialization gates:
+
+| Gate | Current subdivision-7 result | Status |
+|---|---:|---:|
+| Clam Lake source vertical reference | ETOPO5 terrain, +236.8 m | **PASS** |
+| Alaska receiver vertical reference | ETOPO5 terrain, +305.0 m | **PASS** |
+| Oil-body vertical interval | −1,520 to −270 m MSL | **PASS** |
+| TM dual-cell oil area | 4,800.0 km² | **PASS** |
+| TE edge-diamond oil area | 4,800.0 km² | **PASS** |
+| CUDA float64 compiled smoke | 10 finite steps at Courant 1.0 | **PASS** |
+| Persistent / peak compiled GPU memory | 985 MiB / 1.59 GiB | **PASS** |
 
 The ground-line source is projected onto all three oriented primal edges of
 the containing face. Each contribution is scaled by `L/Δl`, which preserves
@@ -718,6 +738,32 @@ production results were accepted:
    the two polar pentagons. It uses no ETOPO5, source, receiver, or waveform
    information. The optimized coordinate archive is validated before every
    FDTD run, and all geometry is rebuilt without changing grid topology.
+8. Figure 7 formerly referenced its source, receiver, and buried body to sea
+   level even when ETOPO5 relief was active. The default now references all
+   three consistently to local terrain; explicit sea-level placement remains
+   available as a controlled comparison.
+9. Binary point sampling represented the nominal 4,800 km² oil body as
+   7,013.6 km² at level 7 and made it disappear entirely at coarser levels.
+   The default conservative rasterizer now preserves 4,800 km² independently
+   on the TM dual cells and TE edge diamonds, then applies radial cell-overlap
+   fractions. Point sampling remains an explicit control mode.
+10. The radial boundary is now explicitly identified as PEC, and regression
+    tests independently verify its ghost-cell curl, second-order conductive
+    decay, stiff-loss passivity, and native/polar TM and TE CFL spectra.
+11. Magnetic timestamps now carry their half-step offset, archives are written
+    atomically, and reference/anomaly comparisons require matching canonical
+    run signatures including mesh coordinates, material, source, backend,
+    dtype, and configuration.
+12. CUDA dual-cell circulation now uses a fixed degree-five/six incidence sum
+    instead of atomic scatter accumulation. Repeated compiled float64 runs are
+    bitwise identical in the four field arrays.
+13. Separable spherical metric factors replace dense edge-by-layer metric
+    tensors. At subdivision 5 with 24 radial cells, persistent RTX 3060
+    allocation falls from 89.4 to 38.0 MB without changing the equations; a
+    120-step float64 comparison differs only at roundoff scale.
+14. Exact ETOPO5 pole samples now average the corresponding latitude row,
+    removing an undefined-longitude dependency at the polar pentagons. The
+    official south-pole row average is 2,810.375 m.
 
 Coarse source-deposition and resolution diagnostics performed before the
 geographic correction are retained in git history as implementation tests, but
@@ -725,11 +771,13 @@ their numerical radar metrics are excluded from this report because they used
 the antipodal transmitter. The final Figure 7 verdict is based only on the new
 paper-scale corrected-location pair.
 
-At level 7 the two selected dual cells have a combined area of 7,013.6 km²,
-larger than the disk's geometric 4,800 km² because material sampling is binary
-at geodesic electric-field points. The five selected edge samples and both
-selected vertices are over land in ETOPO5 (elevations 250–450 m). This removes
-water contamination but leaves a disclosed horizontal voxelization error.
+The archived level-7 production pair used binary point sampling: its two
+selected dual cells had a combined area of 7,013.6 km² rather than the
+geometric 4,800 km². The current default replaces that discretization with
+fractional area support. It selects the same two TM cells and five TE supports
+but assigns fractional occupancy so each staggered grid integrates to exactly
+4,800 km². This resolves the disclosed horizontal area error without changing
+the recursively subdivided geodesic topology or tuning conductivity.
 
 The corrected Figure 7 absolute fields show that the solver does generate a
 radial scattered field, but not a radial absolute-field advantage: the
@@ -797,7 +845,8 @@ The paired Figure 7 runs were:
   --case reference --subdivision 7 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --torch-compile --courant 1.0 \
-  --source-basis both --source-altitude-m 0 \
+  --source-basis both --vertical-reference terrain \
+  --horizontal-anomaly conservative-nearest \
   --receiver-support local-linear --synchronize-every 1024 \
   --output artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/reference.npz
 
@@ -805,7 +854,8 @@ The paired Figure 7 runs were:
   --case anomaly --subdivision 7 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --torch-compile --courant 1.0 \
-  --source-basis both --source-altitude-m 0 \
+  --source-basis both --vertical-reference terrain \
+  --horizontal-anomaly conservative-nearest \
   --receiver-support local-linear --synchronize-every 1024 \
   --output artifacts/simpson-taflove-2006/level-7-local-linear-float64-cuda/anomaly.npz
 
@@ -822,9 +872,9 @@ The paired Figure 7 runs were:
   Hermance conductivity mapping is not available.
 - The exact Canadian Shield boundary and the oil-field footprint shape are not
   published. The implementation uses a disclosed cap for the former and a
-  circular equal-area footprint for the latter. Point sampling maps that disk
-  to 7,013.6 km² of dual-cell area at level 7; no undocumented conductivity
-  retuning is used to force an effective 4,800 km² voxel area.
+  circular equal-area footprint for the latter. Conservative fractional
+  rasterization preserves the disclosed 4,800 km² area on both electric-field
+  grids; it cannot recover the unpublished footprint shape.
 - The paper uses an optimized geodesic grid. This project retains its existing
   recursively subdivided geodesic dual-grid topology, as required. Its rigid
   polar orientation places pentagonal cell centers at both geographic poles.
@@ -853,11 +903,14 @@ scaled horizontal ground-line sources, CUDA-native radial/tangential magnetic
 recording, buried anomalies in the ETOPO5 layered material, protected water
 layers, polar pentagon alignment, a pinned Sandia Mesquite build and spherical
 size-and-shape optimization pipeline, Laplace-consistency metrics,
-conservative ocean-column diagnostics, and a reproducible Figure 5–7 analysis
-CLI. Precision, time-step stability, source moment, radial metric weighting,
-and ionosphere-profile sensitivity were tested. The geographic locator defect
-was corrected and all paper-scale production traces affected by it were
-recomputed.
+conservative ocean-column diagnostics, conservative buried-body support,
+terrain-relative radar geometry, deterministic CUDA circulation, explicit
+PEC/CFL/loss invariants, and a reproducible Figure 5–7 analysis CLI. Precision,
+time-step stability, source moment, radial metric weighting, and
+ionosphere-profile sensitivity were tested. The geographic locator defect was
+corrected and all paper-scale production traces affected by that defect were
+recomputed; the later terrain/area audit still requires a new level-7 Figure 7
+pair before its archived numbers can be superseded.
 
 For Figure 5, fixed-depth geometry restores symmetry. The official Mesquite
 optimization materially improves the ETOPO5 result: it reduces the level-7
@@ -875,9 +928,9 @@ required geodesic grid, but it would no longer be the paper's published
 bulk-cell algorithm. Figure 6 additionally retains the known
 high-frequency spatial-dispersion residual. Figure 7 remains limited by inputs
 that cannot be reconstructed from the paper: optimized cell positions, exact
-three-dimensional lithosphere conductivity, Canadian Shield mask, horizontal
-subcell treatment of the 4,800 km² body, source phase/deposition, and a
-consistent normalization definition. The corrected geographic `Hr` receiver
+three-dimensional lithosphere conductivity, Canadian Shield mask, exact
+oil-field footprint shape, source phase/deposition, and a consistent
+normalization definition. The corrected geographic `Hr` receiver
 also changes in opposite directions at subdivisions 5 and 7, confirming that
 the residual is not a removable face-center observation artifact. Forcing the
 published Figure 7 values by undocumented tuning would not be a valid
