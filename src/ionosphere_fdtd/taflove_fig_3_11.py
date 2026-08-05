@@ -70,6 +70,7 @@ def create_figure_3_11_simulation(
             courant_factor=FIGURE_3_11_COURANT_FACTOR,
             time_step_s=FIGURE_3_11_TIME_STEP_S,
             loss_integration="trapezoidal",
+            geometry_mode="thin-shell",
         ),
         source=GaussianCurrent(
             latitude_deg=GWANGJU_LATITUDE_DEG,

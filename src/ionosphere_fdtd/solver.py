@@ -41,6 +41,7 @@ class SimulationConfig:
     radial_boundary_condition: str = "pec"
     loss_integration: str = "exponential"
     radial_grid_policy: str = "smooth"
+    geometry_mode: str = "full-spherical"
 
     def __post_init__(self) -> None:
         integer_controls = {
@@ -81,6 +82,10 @@ class SimulationConfig:
         if self.radial_grid_policy not in {"smooth", "allow-abrupt"}:
             raise ValueError(
                 "radial_grid_policy must be 'smooth' or 'allow-abrupt'"
+            )
+        if self.geometry_mode not in {"full-spherical", "thin-shell"}:
+            raise ValueError(
+                "geometry_mode must be 'full-spherical' or 'thin-shell'"
             )
         finite_geometry = (
             self.minimum_altitude_m,
@@ -141,7 +146,9 @@ class GeodesicFDTD:
 
     ``er`` and ``ht`` live on integer radial planes (TM-r), while ``hr`` and
     ``et`` live halfway between them (TE-r).  Magnetic fields are staggered by
-    half a time step from electric fields, as in the Yee algorithm.
+    half a time step from electric fields, as in the Yee algorithm. The default
+    radial curls retain the full spherical metric; paper reproduction helpers
+    explicitly select the legacy thin-shell approximation.
     """
 
     def __init__(
@@ -325,19 +332,28 @@ class GeodesicFDTD:
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
     def _radial_derivative_et(self) -> Any:
+        values = self.et
+        if self.config.geometry_mode == "full-spherical":
+            values = values * self._radial_midpoints[None, :]
         result = self.backend.empty_like(self.ht)
-        result[:, 0] = 2.0 * self.et[:, 0] / self._radial_steps[0]
-        result[:, -1] = -2.0 * self.et[:, -1] / self._radial_steps[-1]
+        result[:, 0] = 2.0 * values[:, 0] / self._radial_steps[0]
+        result[:, -1] = -2.0 * values[:, -1] / self._radial_steps[-1]
         if self.ht.shape[1] > 2:
             result[:, 1:-1] = self.backend.diff(
-                self.et, axis=1
+                values, axis=1
             ) / self._radial_center_distances
+        if self.config.geometry_mode == "full-spherical":
+            result *= self._inverse_radii
         return result
 
     def _radial_derivative_ht(self) -> Any:
-        return self.backend.diff(
-            self.ht, axis=1
-        ) / self._radial_steps[None, :]
+        values = self.ht
+        if self.config.geometry_mode == "full-spherical":
+            values = values * self._radii[None, :]
+        result = self.backend.diff(values, axis=1) / self._radial_steps[None, :]
+        if self.config.geometry_mode == "full-spherical":
+            result *= self._inverse_radial_midpoints
+        return result
 
     def _sample_material_properties(self) -> None:
         """Sample validated host-side material properties before choosing dt."""
@@ -640,6 +656,7 @@ class GeodesicFDTD:
             "compiled": self.compiled,
             "radial_boundary_condition": self.config.radial_boundary_condition,
             "loss_integration": self.config.loss_integration,
+            "geometry_mode": self.config.geometry_mode,
             "cfl_time_step_limit_s": self.cfl_time_step_limit_s,
             "courant_factor": self.config.courant_factor,
             "field_memory_bytes": self.memory_bytes,

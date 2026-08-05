@@ -503,6 +503,11 @@ def test_simulation_config_rejects_unknown_radial_grid_policy() -> None:
         small_config(radial_grid_policy="unchecked")
 
 
+def test_simulation_config_rejects_unknown_geometry_mode() -> None:
+    with pytest.raises(ValueError, match="geometry_mode"):
+        small_config(geometry_mode="cylindrical")
+
+
 def test_smooth_nonuniform_radial_derivative_converges_at_second_order() -> None:
     errors = []
     for radial_cells in (20, 40):
@@ -515,6 +520,7 @@ def test_smooth_nonuniform_radial_derivative_converges_at_second_order() -> None
                 minimum_altitude_m=float(altitudes[0]),
                 maximum_altitude_m=float(altitudes[-1]),
                 radial_altitudes_m=tuple(altitudes),
+                geometry_mode="thin-shell",
             )
         )
         midpoints = simulation.radial_midpoint_altitudes_m
@@ -647,7 +653,7 @@ def test_loss_coefficient_damps_uncoupled_radial_field() -> None:
 
 
 def test_radial_pec_ghost_cells_give_the_expected_one_sided_curl() -> None:
-    simulation = GeodesicFDTD(config=small_config())
+    simulation = GeodesicFDTD(config=small_config(geometry_mode="thin-shell"))
     profile = np.arange(1, simulation.et.shape[1] + 1, dtype=np.float64)
     simulation.et[0] = profile
 

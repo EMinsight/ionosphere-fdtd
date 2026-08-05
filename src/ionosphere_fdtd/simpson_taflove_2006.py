@@ -235,6 +235,7 @@ def create_radar_simulation(
             tangential_material_support=tangential_material_support,
             horizontal_anomaly_mode=horizontal_anomaly_mode,
             loss_integration="trapezoidal",
+            geometry_mode="thin-shell",
         ),
         material=material,
         source=source,

@@ -351,6 +351,7 @@ def test_nonuniform_radial_stencils_satisfy_weighted_adjoint_identity() -> None:
             maximum_altitude_m=altitudes[-1],
             radial_altitudes_m=altitudes,
             radial_grid_policy="allow-abrupt",
+            geometry_mode="thin-shell",
         ),
         material=VacuumMaterial(),
         dtype="float64",
@@ -383,6 +384,7 @@ def test_nonuniform_radial_derivative_annihilates_constant_ht() -> None:
             maximum_altitude_m=altitudes[-1],
             radial_altitudes_m=altitudes,
             radial_grid_policy="allow-abrupt",
+            geometry_mode="thin-shell",
         ),
         material=VacuumMaterial(),
         dtype="float64",
@@ -392,6 +394,70 @@ def test_nonuniform_radial_derivative_annihilates_constant_ht() -> None:
     derivative = simulation.to_numpy(simulation._radial_derivative_ht())
 
     np.testing.assert_array_equal(derivative, 0.0)
+
+
+def test_full_spherical_radial_stencils_satisfy_physical_adjoint_identity() -> None:
+    altitudes = (-10_000.0, -6_000.0, -2_000.0, -1_000.0, 0.0, 4_000.0)
+    simulation = GeodesicFDTD(
+        SimulationConfig(
+            subdivision=0,
+            radial_cells=len(altitudes) - 1,
+            minimum_altitude_m=altitudes[0],
+            maximum_altitude_m=altitudes[-1],
+            radial_altitudes_m=altitudes,
+            radial_grid_policy="allow-abrupt",
+            geometry_mode="full-spherical",
+        ),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    generator = np.random.default_rng(20260805)
+    simulation.et[:] = generator.standard_normal(simulation.et.shape)
+    simulation.ht[:] = generator.standard_normal(simulation.ht.shape)
+    derivative_et = simulation.to_numpy(simulation._radial_derivative_et())
+    derivative_ht = simulation.to_numpy(simulation._radial_derivative_ht())
+    ht_weights = (
+        simulation.radial_node_control_lengths_m * simulation.radii_m**2
+    )
+    et_weights = (
+        simulation.radial_steps_m * simulation.radial_midpoints_m**2
+    )
+
+    left = np.sum(simulation.ht * derivative_et * ht_weights[None, :])
+    right = np.sum(simulation.et * derivative_ht * et_weights[None, :])
+
+    assert abs(left + right) <= 2.0e-15 * max(abs(left), abs(right))
+
+
+def test_full_spherical_metric_annihilates_inverse_radius_profiles() -> None:
+    base = dict(
+        subdivision=0,
+        radial_cells=8,
+        minimum_altitude_m=-100_000.0,
+        maximum_altitude_m=100_000.0,
+    )
+    simulation = GeodesicFDTD(
+        SimulationConfig(**base, geometry_mode="full-spherical"),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    simulation.et[:] = 1.0 / simulation.radial_midpoints_m[None, :]
+    simulation.ht[:] = 1.0 / simulation.radii_m[None, :]
+
+    derivative_et = simulation.to_numpy(simulation._radial_derivative_et())
+    derivative_ht = simulation.to_numpy(simulation._radial_derivative_ht())
+
+    np.testing.assert_allclose(derivative_et[:, 1:-1], 0.0, atol=1.0e-27)
+    np.testing.assert_allclose(derivative_ht, 0.0, atol=1.0e-27)
+
+    thin_shell = GeodesicFDTD(
+        SimulationConfig(**base, geometry_mode="thin-shell"),
+        material=VacuumMaterial(),
+        dtype="float64",
+    )
+    thin_shell.et[:] = 1.0 / thin_shell.radial_midpoints_m[None, :]
+    thin_derivative = thin_shell.to_numpy(thin_shell._radial_derivative_et())
+    assert np.max(np.abs(thin_derivative[:, 1:-1])) > 2.0e-14
 
 
 def test_graded_nonuniform_grid_remains_bounded_at_cfl_limit() -> None:

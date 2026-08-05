@@ -132,6 +132,7 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert simulation.source.azimuths_deg == (0.0, 90.0)
     assert simulation.source.line_lengths_m == (22_500.0, 22_500.0)
     assert simulation.config.loss_integration == "trapezoidal"
+    assert simulation.config.geometry_mode == "thin-shell"
     assert simulation.config.mesh_orientation == "polar"
     pentagons = simulation.mesh.vertices[simulation.mesh.vertex_degree == 5]
     assert np.max(pentagons[:, 2]) == pytest.approx(1.0)

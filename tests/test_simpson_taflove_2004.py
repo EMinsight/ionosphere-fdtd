@@ -55,6 +55,7 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     )
     assert simulation.source.vertical_element_length_m == pytest.approx(5_000.0)
     assert simulation.config.loss_integration == "trapezoidal"
+    assert simulation.config.geometry_mode == "thin-shell"
     assert simulation.source.one_over_e_half_width_s == pytest.approx(
         0.5 * PAPER_SOURCE_FULL_WIDTH_STEPS * PAPER_TIME_STEP_S
     )

@@ -115,6 +115,12 @@ Er  = Ca * Er + Cb * (curl_surface Ht - Jr)
 Et  = Ca * Et + Cb * (d_dual Hr - d_radial Ht)
 ```
 
+The general solver defaults to full spherical radial curls,
+`d_radial Et = (1/r) d(r Et)/dr` and likewise for `Ht`. Set
+`geometry_mode="thin-shell"` to use the radius-independent radial differences
+of the paper implementations; all bundled paper reproduction helpers pin that
+compatibility mode explicitly.
+
 For every electric component the default exponential midpoint update uses
 
 ```text

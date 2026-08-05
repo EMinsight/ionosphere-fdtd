@@ -216,6 +216,7 @@ def create_validation_simulation(
             mesh_optimization_steps=mesh_optimization_steps,
             tangential_material_support=tangential_material_support,
             loss_integration="trapezoidal",
+            geometry_mode="thin-shell",
         ),
         material=material,
         source=source,
