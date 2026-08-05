@@ -289,6 +289,53 @@ def test_courant_factor_scales_the_unfactored_cfl_limit() -> None:
     )
 
 
+def test_cfl_limit_tracks_fastest_custom_material_wave_speed() -> None:
+    class UniformPermittivity(EarthIonosphereMaterial):
+        def sample(
+            self,
+            directions: np.ndarray,
+            altitudes_m: np.ndarray,
+            earth_radius_m: float,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            del earth_radius_m
+            shape = (len(directions), len(altitudes_m))
+            return np.zeros(shape), np.full(shape, 0.25)
+
+    vacuum = GeodesicFDTD(config=small_config(courant_factor=1.0))
+    fast = GeodesicFDTD(
+        config=small_config(courant_factor=1.0),
+        material=UniformPermittivity(),
+    )
+
+    assert fast.cfl_time_step_limit_s == pytest.approx(
+        0.5 * vacuum.cfl_time_step_limit_s
+    )
+    assert fast.time_step_s == pytest.approx(fast.cfl_time_step_limit_s)
+
+
+def test_time_step_unsafe_for_custom_permittivity_is_rejected() -> None:
+    class UniformPermittivity(EarthIonosphereMaterial):
+        def sample(
+            self,
+            directions: np.ndarray,
+            altitudes_m: np.ndarray,
+            earth_radius_m: float,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            del earth_radius_m
+            shape = (len(directions), len(altitudes_m))
+            return np.zeros(shape), np.full(shape, 0.25)
+
+    vacuum = GeodesicFDTD(config=small_config(courant_factor=1.0))
+    with pytest.raises(ValueError, match="exceeds conservative limit"):
+        GeodesicFDTD(
+            config=small_config(
+                courant_factor=1.0,
+                time_step_s=vacuum.cfl_time_step_limit_s,
+            ),
+            material=UniformPermittivity(),
+        )
+
+
 def test_nonuniform_radial_grid_advances() -> None:
     altitudes = (
         -100_000.0,

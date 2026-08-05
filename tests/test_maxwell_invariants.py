@@ -40,6 +40,23 @@ class UniformConductiveMaterial(VacuumMaterial):
         return sigma, epsilon_r
 
 
+class UniformPermittivityMaterial(VacuumMaterial):
+    def __init__(self, relative_permittivity: float) -> None:
+        self.relative_permittivity = relative_permittivity
+
+    def sample(
+        self,
+        directions: np.ndarray,
+        altitudes_m: np.ndarray,
+        earth_radius_m: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        sigma, epsilon_r = super().sample(
+            directions, altitudes_m, earth_radius_m
+        )
+        epsilon_r.fill(self.relative_permittivity)
+        return sigma, epsilon_r
+
+
 def _surface_mode_config() -> SimulationConfig:
     return SimulationConfig(
         subdivision=1,
@@ -245,6 +262,33 @@ def test_conductive_update_converges_at_second_order() -> None:
         errors.append(abs(float(simulation.er[0, 0]) - np.exp(-0.5)))
 
     assert errors[0] / errors[1] == pytest.approx(4.0, rel=2.0e-3)
+
+
+def test_material_aware_cfl_keeps_subvacuum_permittivity_bounded() -> None:
+    simulation = GeodesicFDTD(
+        SimulationConfig(subdivision=0, radial_cells=2, courant_factor=1.0),
+        material=UniformPermittivityMaterial(0.01),
+        dtype="float64",
+    )
+    generator = np.random.default_rng(20260805)
+    simulation.er[:] = generator.standard_normal(simulation.er.shape)
+    simulation.et[:] = generator.standard_normal(simulation.et.shape)
+    initial_maximum = max(
+        float(np.max(np.abs(simulation.er))),
+        float(np.max(np.abs(simulation.et))),
+    )
+    maximum = initial_maximum
+
+    for _ in range(400):
+        simulation.step()
+        maximum = max(
+            maximum,
+            float(np.max(np.abs(simulation.er))),
+            float(np.max(np.abs(simulation.et))),
+        )
+
+    assert np.isfinite(maximum)
+    assert maximum < 2.0 * initial_maximum
 
 
 @pytest.mark.parametrize("orientation", ("native", "polar"))

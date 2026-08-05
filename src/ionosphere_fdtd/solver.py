@@ -188,6 +188,11 @@ class GeodesicFDTD:
         )
         self.radial_steps_m = np.diff(self.radii_m)
 
+        # Material permittivity controls the fastest supported wave speed, so it
+        # must be known before an automatic or user-supplied time step is
+        # validated.  Keep sampling separate from coefficient construction:
+        # the latter depends on dt, while the former does not.
+        self._sample_material_properties()
         self.cfl_time_step_limit_s = self._estimate_cfl_time_step_limit()
         self.maximum_stable_time_step_s = (
             self.config.courant_factor * self.cfl_time_step_limit_s
@@ -247,7 +252,13 @@ class GeodesicFDTD:
         dual = smallest_radius * float(self.mesh.dual_edge_angles.min())
         radial = float(self.radial_steps_m.min())
         inverse_length_squared = primal**-2 + dual**-2 + (2.0 / radial) ** 2
-        return 1.0 / (C_0 * np.sqrt(inverse_length_squared))
+        minimum_epsilon_r = min(
+            float(np.min(self.epsilon_r_er)),
+            float(np.min(self.epsilon_r_et)),
+        )
+        return np.sqrt(minimum_epsilon_r) / (
+            C_0 * np.sqrt(inverse_length_squared)
+        )
 
     def _prepare_geometry(self) -> None:
         # Spherical metric tensors are separable into horizontal angles and
@@ -282,7 +293,9 @@ class GeodesicFDTD:
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
 
-    def _prepare_material_coefficients(self) -> None:
+    def _sample_material_properties(self) -> None:
+        """Sample validated host-side material properties before choosing dt."""
+
         conservative_anomalies = (
             self.config.horizontal_anomaly_mode == "conservative-nearest"
             and isinstance(self.material, SimpsonTaflove2004Material)
@@ -385,8 +398,18 @@ class GeodesicFDTD:
                 fractions_et,
             )
             self.anomaly_horizontal_fractions_et = fractions_et
-        epsilon_er = EPSILON_0 * epsilon_r_er
-        epsilon_et = EPSILON_0 * epsilon_r_et
+        self.sigma_er = sigma_er
+        self.sigma_et = sigma_et
+        self.epsilon_r_er = epsilon_r_er
+        self.epsilon_r_et = epsilon_r_et
+
+    def _prepare_material_coefficients(self) -> None:
+        """Build lossy electric-field update coefficients at the selected dt."""
+
+        epsilon_er = EPSILON_0 * self.epsilon_r_er
+        epsilon_et = EPSILON_0 * self.epsilon_r_et
+        sigma_er = self.sigma_er
+        sigma_et = self.sigma_et
         loss_er = sigma_er * self.time_step_s / (2.0 * epsilon_er)
         loss_et = sigma_et * self.time_step_s / (2.0 * epsilon_et)
         self._ca_er = self.backend.asarray((1.0 - loss_er) / (1.0 + loss_er))
@@ -397,12 +420,6 @@ class GeodesicFDTD:
         self._cb_et = self.backend.asarray(
             self.time_step_s / (epsilon_et * (1.0 + loss_et))
         )
-        # These arrays are diagnostics only after the update coefficients are
-        # formed. Retain them on the host instead of duplicating them on a GPU.
-        self.sigma_er = sigma_er
-        self.sigma_et = sigma_et
-        self.epsilon_r_er = epsilon_r_er
-        self.epsilon_r_et = epsilon_r_et
 
     @staticmethod
     def _validated_material_sample(
