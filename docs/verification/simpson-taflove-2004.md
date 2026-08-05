@@ -2,7 +2,7 @@
 
 > Final quantitative status: **FAIL**
 
-Production rerun completed on 2026-08-05 (Asia/Seoul).
+Production rerun completed on 2026-08-06 (Asia/Seoul).
 
 ## Executive summary
 
@@ -13,38 +13,51 @@ implementation reproduces the expected negative main pulse followed by an
 overshoot and slow tail. It does not, however, satisfy the paper's strict
 pointwise attenuation tolerances over the complete 50–500 Hz band.
 
-The authoritative comparison uses Bannister's source equations rather than a
-fit read from the published plot. In the 2026-08-05 subdivision-8 polar-grid
-rerun, the mean absolute attenuation errors are 0.310 dB/Mm on A–B and
-0.286 dB/Mm on A′–B′. Their maximum absolute errors are 2.384 dB/Mm at
-488.281 Hz and 1.092 dB/Mm at 478.109 Hz. The maxima exceed the paper's
-reported ±0.5 dB/Mm A–B and ±1.0 dB/Mm A′–B′ agreement ranges. The remaining
-failure is concentrated in the oscillatory 400–500 Hz residual.
+The authoritative comparison uses a complete 35,000-step receiver trace and
+the period-appropriate ETOPO5 reconstruction of the paper's unspecified
+NOAA-NGDC Global Relief CD-ROM input. ETOPO5 is not claimed to be the exact
+source selected by the authors. The rerun restores clearly visible east–west
+asymmetry and follows the published time extent. It reproduces the negative
+main pulse, positive overshoot, and persistent slow tail, but the relative
+east/west peak ordering and separation do not reproduce the published panel.
+
+For Figure 8, the same trace gives mean absolute attenuation errors of 1.104
+dB/Mm on A–B and 0.242 dB/Mm on A′–B′. Their maximum absolute errors are 2.538
+dB/Mm at 457.764 Hz and 3.258 dB/Mm at 488.281 Hz. The maxima exceed the
+paper's reported ±0.5 dB/Mm A–B and ±1.0 dB/Mm A′–B′ agreement ranges.
 
 | Verification target | Acceptance criterion | Current result | Status |
 |---|---|---|---:|
+| Figure 7 full time extent | Published plot extends to about 35,000 steps | Samples 0–35,000 | **PASS** |
 | Figure 7 waveform morphology | Main negative pulse, positive overshoot, and slow tail | All three features reproduced | **PASS** |
-| Figure 7 arrival ordering | A/A′ precede B/B′ | 7,490/7,491 versus 14,449/14,450 steps | **PASS** |
-| Figure 8 A–B attenuation | Pointwise residual within ±0.5 dB/Mm | Maximum 2.384 dB/Mm | **FAIL** |
-| Figure 8 A′–B′ attenuation | Pointwise residual within ±1.0 dB/Mm | Maximum 1.092 dB/Mm | **FAIL** |
-| Complete Figures 7–8 reproduction | All applicable criteria pass | Qualitative pass; pointwise attenuation fail | **FAIL** |
+| Figure 7 arrival ordering | A/A′ precede B/B′ | 7,491/7,721 versus 14,803/14,667 steps | **PASS** |
+| Figure 7 east–west nonidentity | Both receiver pairs visibly differ | Relative RMS is 37.90%/30.46% | **PASS** |
+| Figure 7 relative pair amplitudes | East/west peak ordering and visual separation match | Both peak orderings reverse; B′ is 32.4% larger than B | **FAIL** |
+| Figure 7 exact plot reproduction | Time extent, morphology, and relative traces agree | Morphology agrees; relative traces do not | **FAIL** |
+| Figure 8 A–B attenuation | Pointwise residual within ±0.5 dB/Mm | Maximum 2.538 dB/Mm | **FAIL** |
+| Figure 8 A′–B′ attenuation | Pointwise residual within ±1.0 dB/Mm | Maximum 3.258 dB/Mm | **FAIL** |
+| Complete Figures 7–8 reproduction | All applicable criteria pass | Morphological pass; quantitative fail | **FAIL** |
 
-### Change from the previous production result
+### Change from the previous fixed-depth production result
 
-| Metric | Previous | Audited rerun | Change |
+| Metric | Fixed-depth, 25,023 steps | ETOPO5, 35,000 steps | Change |
 |---|---:|---:|---:|
-| A–B attenuation MAE | 0.274 dB/Mm | 0.310 dB/Mm | 13.1% worse |
-| A–B maximum error | 1.218 dB/Mm | 2.384 dB/Mm | 95.7% worse |
-| A′–B′ attenuation MAE | 0.275 dB/Mm | 0.286 dB/Mm | 4.0% worse |
-| A′–B′ maximum error | 1.225 dB/Mm | 1.092 dB/Mm | **10.9% better** |
-| Production wall time | 3,477.9 s | 2,002.5 s | **42.4% faster** |
+| A/A′ relative RMS | 0.545% | 37.895% | required asymmetry restored, but excessive |
+| B/B′ relative RMS | 0.463% | 30.458% | required asymmetry restored, but excessive |
+| A / A′ peak step | 7,490 / 7,491 | 7,491 / 7,721 | 230-step split replaces near overlap |
+| B / B′ peak step | 14,449 / 14,450 | 14,803 / 14,667 | 136-step split replaces near overlap |
+| A–B attenuation MAE / maximum | 0.310 / 2.384 dB/Mm | 1.104 / 2.538 dB/Mm | worse |
+| A′–B′ attenuation MAE / maximum | 0.286 / 1.092 dB/Mm | 0.242 / 3.258 dB/Mm | mean better; maximum worse |
+| Production wall time | 2,002.5 s | 2,696.7 s | 40% more steps in 34.7% more time |
 
-The west-path maximum and runtime improve, but no acceptance verdict changes.
-The A–B high-frequency residual is worse, so the audited result is not an
-overall accuracy improvement over the previous production trace.
+The complete time axis and visible material-driven asymmetry are substantive
+Figure 7 improvements. They also reveal that the reconstructed relief and
+representative conductivity profile over-separate the receiver pairs and
+reverse the published peak ordering. Figure 8 retains the same overall fail:
+the west mean improves, but both pointwise maxima remain outside tolerance.
 
 The investigation ruled out floating-point precision, FFT zero-padding, DFT
-cutoff selection, source-plane rounding, and missing relief as primary causes.
+cutoff selection, and source-plane rounding as primary causes.
 Uniform-model and azimuthal studies show that spatial dispersion is real and
 convergent. At the paper-scale subdivision-7 geodesic grid, directional
 anisotropy is already small—no more than 0.295% over the evaluated band—so the
@@ -105,7 +118,7 @@ Phase velocity is compared with Bannister equation (4).
 | Radial domain | −100 to +100 km relative to sea level |
 | Radial cells | 40 at 5 km spacing |
 | Time step | 3.0 μs |
-| Production steps | 25,023 |
+| Production steps / samples | 35,000 / 35,001 |
 | Source position | equator, 47° W |
 | Source extent | 5 km vertical current element |
 | Source centroid | 2.5 km, linearly staggered between 0 and 5 km `Er` planes |
@@ -116,13 +129,14 @@ Phase velocity is compared with Bannister equation (4).
 | Ionosphere reference height | 70 km |
 | Ionosphere scale height | 3.33 km |
 | Surface grid | subdivision 8, polar orientation, 655,362 cells |
-| Material | fixed-depth Natural Earth land/ocean model |
+| Material | ETOPO5 relief reconstruction + Figure 6 oceanic/continental profiles |
 | DFT window | adaptive post-overshoot zero crossing |
 | Production backend | PyTorch compiled update on CUDA |
 | Production precision | float64 |
-| Production implementation revision | `e916119` |
-| Trace SHA-256 | `81535bde5dfce1ebaa3052977c96356253d236414276001e86c5f5f7ba16a153` |
-| Wall time | 2,002.5 s |
+| ETOPO5 SHA-256 | `471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3` |
+| Production implementation revision | `eee3f98` |
+| Trace SHA-256 | `d51cc3aa78e44097e2a2c4c9a2469c2bd99401f65eb93b9130f2cd0ebdbeefea` |
+| Wall time | 2,696.7 s |
 
 Surface cell counts are 40,962, 163,842, and 655,362 for subdivisions 6, 7,
 and 8. Subdivision 7 matches the paper's 163,842 cells per radial plane.
@@ -134,7 +148,7 @@ The left-hand panels below are cropped from page 450 of the
 The published panels are © 2004 IEEE and are excerpted here for
 source-attributed technical comparison.
 The right-hand panels were regenerated with the current analysis code from the
-2026-08-05 subdivision-8 CUDA `float64` receiver trace. The Figure 8 reproduction
+2026-08-06 subdivision-8 CUDA `float64` ETOPO5 receiver trace. The Figure 8 reproduction
 uses Bannister's source equations and the final fixed comparison frequencies,
 not the deprecated plot-fit reference.
 
@@ -142,23 +156,27 @@ not the deprecated plot-fit reference.
 
 The reproduced Figure 7 waveforms have the same primary sequence as the
 published plots: a quiet pre-arrival interval, a sharp negative main pulse, a
-positive overshoot, and a decaying slow tail. The level-8 negative peaks occur
-at steps 7,490/7,491 for A/A′ and 14,449/14,450 for B/B′, consistent with the locations
-visible in the published panels. Absolute amplitudes are not an acceptance
-criterion because the paper does not state its source-current amplitude; the
-reproduction uses a 1 A normalization. The near-overlap of east and west
-curves in the reproduction, compared with the visible separation in the paper,
-also reflects the unavailable detailed lithosphere model discussed below.
+positive overshoot, and a decaying slow tail across the complete 35,000-step
+axis. The level-8 negative peaks occur at steps 7,491/7,721 for A/A′ and
+14,803/14,667 for B/B′. The values at step 35,000 remain negative at
+−0.02408/−0.02560 μV/m and −0.03277/−0.03189 μV/m, respectively, with tail
+magnitudes comparable to the published panels after relative scaling.
+Absolute amplitudes are not an acceptance criterion because the paper does not
+state its source-current amplitude; the reproduction uses a 1 A normalization.
+
+ETOPO5 restores the missing east–west separation, but not its quantitative
+pattern. The reproduced west peaks are 3.7% and 32.4% larger in magnitude than
+the east peaks at the quarter and half paths, whereas the published solid east
+curves are visually slightly deeper than the dashed west curves. The Figure 7
+status is therefore a qualitative morphology pass and an exact-plot fail.
 
 ![Published and reproduced Figure 8 attenuation curves](images/simpson-taflove-2004-fig-8-comparison.png)
 
-The reproduced Figure 8 points follow the same overall attenuation trend and
-are close to the Bannister daytime curve through most of the valid 50–500 Hz
-window. The visual divergence and oscillation near the upper end of that
-window correspond to the final subdivision-8 maximum residuals of 2.384 and
-1.092 dB/Mm. Thus the side-by-side plot supports the same mixed
-conclusion as the scalar metrics: qualitative and mean agreement are good, but
-the strict pointwise criterion fails at high frequency.
+The reproduced Figure 8 points follow the same overall attenuation trend, but
+the ETOPO5 east path is systematically more attenuating than the Bannister
+daytime curve. The upper-band oscillation gives final subdivision-8 maximum
+residuals of 2.538 and 3.258 dB/Mm. Thus the side-by-side plot supports the
+same conclusion as the scalar metrics: both strict pointwise criteria fail.
 
 ## Investigation history
 
@@ -198,19 +216,19 @@ below uses Bannister's source equations and the same 45 fixed frequencies.
 | 6 | 40,962 | 0.681 / 2.282 dB/Mm | 396.729 Hz | 0.696 / 2.420 dB/Mm | 447.591 Hz |
 | 7 | 163,842 | 0.387 / 2.708 dB/Mm | 488.281 Hz | 0.399 / 2.753 dB/Mm | 488.281 Hz |
 | 8, previous | 655,362 | 0.274 / 1.218 dB/Mm | 478.109 Hz | 0.275 / 1.225 dB/Mm | 478.109 Hz |
-| 8, audited polar rerun | 655,362 | 0.310 / 2.384 dB/Mm | 488.281 Hz | 0.286 / 1.092 dB/Mm | 478.109 Hz |
+| 8, fixed-depth polar control | 655,362 | 0.310 / 2.384 dB/Mm | 488.281 Hz | 0.286 / 1.092 dB/Mm | 478.109 Hz |
+| 8, ETOPO5 production | 655,362 | 1.104 / 2.538 dB/Mm | 457.764 Hz | 0.242 / 3.258 dB/Mm | 488.281 Hz |
 
-The current subdivision-8 mean errors remain below the historical level-7
-values, but the A–B pointwise maximum is not monotone under refinement. Relative
-to the previous level-8 report, the A′–B′ maximum improves by about 10.9%, from
-1.225 to 1.092 dB/Mm, while the A–B maximum worsens by about 95.7%, from 1.218
-to 2.384 dB/Mm. Neither path changes verdict.
+The current ETOPO5 west-path mean is lower than both earlier level-8 results,
+but its pointwise maximum is larger. The east path is systematically displaced
+and has the largest mean of the level-8 cases. Material fidelity therefore
+improves the time-domain asymmetry without improving Figure 8 as a whole.
+Neither path changes verdict.
 
-The audited level-8 run completed 25,023 steps in 2,002.5 seconds on an NVIDIA
-GeForce RTX 3060, 42.4% faster than the previous 3,477.9-second run. The lower
-peak memory of the ordered dual-circulation kernel also avoided the previous
-10.1 GB compiled-preflight allocation. Its adaptive cutoffs were 21,862,
-21,774, 22,308, and 22,425 samples for A, A′, B, and B′.
+The audited level-8 ETOPO5 run completed 35,000 steps in 2,696.7 seconds on an
+NVIDIA GeForce RTX 3060. The lower peak memory of the ordered dual-circulation
+kernel avoided the former 10.1 GB compiled-preflight allocation. Its adaptive
+cutoffs were 23,462, 22,676, 24,491, and 24,550 samples for A, A′, B, and B′.
 
 ## Uniform-model phase and arrival convergence
 
@@ -234,6 +252,12 @@ The mean phase-error order is not yet asymptotic: it drops from about one for
 level 6→7 to about 0.4 for level 7→8.
 
 ## NOAA ETOPO5 and crustal-profile check
+
+The paper identifies its relief source only as the NOAA-NGDC “Global Relief
+CD-ROM” in Reference 22. It does not name ETOPO5, a source filename, the
+edition, or the preprocessing convention. ETOPO5 is a 1993 NOAA-NGDC global
+relief product of the appropriate period and is used here as a reproducible
+reconstruction, not as a confirmed identical source.
 
 The archived big-endian NOAA-NGDC `ETOPO5.DAT` input contains a
 2,160×4,320 cell-centered, five-arc-minute elevation and bathymetry grid. The
@@ -343,33 +367,33 @@ anisotropy alone cannot explain the full high-frequency mismatch.
 
 ## Reproduction commands
 
-Run the corrected paper-scale natural-Earth case with CUDA `float64`:
+Run the authoritative complete-time ETOPO5 reconstruction with CUDA `float64`:
 
 ```bash
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
-  --subdivision 8 --mesh-orientation polar --steps 25023 \
+  --subdivision 8 --mesh-orientation polar --steps 35000 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
+  --synchronize-every 1024 \
+  --output-dir /tmp/ionosphere-verification-20260806/st2004-fig7-l8-etopo5-35000
+```
+
+Run the fixed-depth Natural Earth control by changing only the material and
+output directory:
+
+```bash
+uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+  --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material natural-earth \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
   --ionosphere-scale-height-km 3.3333333333333335 \
   --synchronize-every 1024 \
-  --output-dir /tmp/ionosphere-verification-20260805/st2004-l8
-```
-
-Run the ETOPO5 material case after placing the verified source file at
-`data/ETOPO5.DAT`:
-
-```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
-  --subdivision 7 --steps 25023 \
-  --material etopo5 --etopo5-path data/ETOPO5.DAT \
-  --backend torch --device cuda:0 --dtype float64 --torch-compile \
-  --dft-window adaptive \
-  --ionosphere-reference-height-km 70 \
-  --ionosphere-scale-height-km 3.33 \
-  --synchronize-every 1024 \
-  --output-dir artifacts/simpson-taflove-2004/etopo5-level-7-reproduction
+  --output-dir /tmp/ionosphere-verification-20260806/st2004-l8-fixed-depth-control
 ```
 
 Regenerate the directional-dispersion sweep without changing the geodesic
@@ -408,15 +432,18 @@ The implementation passes structural and qualitative checks:
 - directional grid error is quantified and converges at approximately second
   order.
 
-It fails the final quantitative reproduction criterion because subdivision 8
-still has 2.384 and 1.092 dB/Mm maximum attenuation errors, exceeding the
-required 0.5 and 1.0 dB/Mm limits. The residual is dominated by 400–500 Hz.
+It fails exact Figure 7 reproduction because the reconstructed east/west peak
+ordering is reversed and the half-path separation is excessive. It also fails
+Figure 8 because subdivision 8 has 2.538 and 3.258 dB/Mm maximum attenuation
+errors, exceeding the required 0.5 and 1.0 dB/Mm limits. The residual is
+dominated by 400–500 Hz.
 Likely contributors are isotropic high-frequency spatial dispersion, the
 finite 5 km radial discretization, unavailable local crustal structures from
 the conceptual Hermance section, and the unavoidable difference between the
 paper's adaptive merged latitude–longitude grid and this implementation's
 geodesic dual grid.
 
-This result must therefore be described as a convergent, qualitatively correct
-verification with a failed strict pointwise reproduction—not as a successful
+This result must therefore be described as a complete-time, morphologically
+correct Figure 7 reconstruction with failed relative-trace agreement, together
+with a failed strict pointwise Figure 8 reproduction—not as a successful exact
 reproduction of Figures 7 and 8.
