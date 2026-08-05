@@ -30,6 +30,10 @@ from ionosphere_fdtd.simpson_taflove_2004_report import (
     ValidationRunSummary,
     write_validation_report,
 )
+from ionosphere_fdtd.simpson_taflove_2004_cli import (
+    _parser as verification_parser,
+    _reproduction_command,
+)
 
 
 def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
@@ -69,6 +73,26 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
     assert source_metrics["source_staggered_upper_plane_altitude_m"] == 5_000.0
     assert source_metrics["source_staggered_radial_support_planes"] == 2
     assert source_metrics["source_distribution_weight_sum"] == pytest.approx(1.0)
+
+
+def test_reproduction_command_records_all_result_changing_windows() -> None:
+    args = verification_parser().parse_args(
+        (
+            "--tangential-interface",
+            "fractional",
+            "--tangential-support",
+            "edge-diamond",
+            "--spectral-window",
+            "cosine-tail",
+        )
+    )
+
+    command = _reproduction_command(args)
+
+    assert "--tangential-interface fractional" in command
+    assert "--tangential-support edge-diamond" in command
+    assert "--spectral-window cosine-tail" in command
+    assert "--dtype float64" in command
 
 
 def test_validation_setup_can_retain_native_orientation() -> None:
@@ -324,6 +348,9 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         ionosphere_reference_height_m=70_000.0,
         ionosphere_scale_height_m=3_330.0,
         dft_window="adaptive",
+        spectral_window="rectangular",
+        tangential_interface="point",
+        tangential_support="point",
         backend="torch",
         device="mps",
         dtype="float32",
@@ -351,6 +378,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "6.146 dB/Mm" in text
     assert "9.000 dB/Mm" in text
     assert "`adaptive`" in text
+    assert "spectral window | `rectangular`" in text
     assert "45개 bin" in text
     assert "Bannister (1984)" in text
     assert "daytime phase velocity" in text

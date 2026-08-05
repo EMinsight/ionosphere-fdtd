@@ -90,7 +90,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--dtype", choices=("auto", "float32", "float64"), default="float32")
+    parser.add_argument(
+        "--dtype", choices=("auto", "float32", "float64"), default="float64"
+    )
     parser.add_argument(
         "--torch-compile", action=argparse.BooleanOptionalAction, default=True
     )
@@ -275,6 +277,9 @@ def main(argv: list[str] | None = None) -> int:
             ),
             ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
             dft_window=args.dft_window,
+            spectral_window=args.spectral_window,
+            tangential_interface=args.tangential_interface,
+            tangential_support=args.tangential_support,
             backend=simulation.backend.name,
             device=simulation.backend.device,
             dtype=simulation.backend.dtype_name,
@@ -313,6 +318,9 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"--device {quote(args.device)}",
         f"--dtype {quote(args.dtype)}",
         f"--dft-window {quote(args.dft_window)}",
+        f"--spectral-window {quote(args.spectral_window)}",
+        f"--tangential-interface {quote(args.tangential_interface)}",
+        f"--tangential-support {quote(args.tangential_support)}",
         "--ionosphere-reference-height-km "
         f"{args.ionosphere_reference_height_km:g}",
         f"--ionosphere-scale-height-km {args.ionosphere_scale_height_km:g}",

@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
+import hashlib
+import json
 from pathlib import Path
+import subprocess
 from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
-from .materials import ETOPO5Relief, SimpsonTaflove2004Material, SphericalAnomaly
+from .materials import (
+    ETOPO5_SHA256,
+    ETOPO5Relief,
+    SimpsonTaflove2004Material,
+    SphericalAnomaly,
+)
 from .simpson_taflove_2004 import (
     AttenuationCurves,
     ValidationTraces,
@@ -61,6 +69,7 @@ class RadarTraces:
     ht_north_a_m: FloatArray
     source_center_s: float
     case: str
+    run_signature: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +317,13 @@ def record_radar_traces(
 
     if simulation.steps != 0:
         raise ValueError("radar recording requires a fresh simulation")
+    if case not in {"reference", "anomaly"}:
+        raise ValueError("radar case must be 'reference' or 'anomaly'")
+    run_signature = _radar_run_signature(
+        simulation,
+        case=case,
+        receiver_support=receiver_support,
+    )
     distributions = _surface_h_distributions(
         simulation, receiver_support=receiver_support
     )
@@ -330,6 +346,7 @@ def record_radar_traces(
         ht_north_a_m=ht[:, 1].astype(np.float64, copy=False),
         source_center_s=source_center,
         case=case,
+        run_signature=run_signature,
     )
 
 
@@ -340,12 +357,14 @@ def save_radar_traces(traces: RadarTraces, path: str | Path) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         output,
+        format_version=np.asarray(2),
         time_s=traces.time_s,
         hr_a_m=traces.hr_a_m,
         ht_east_a_m=traces.ht_east_a_m,
         ht_north_a_m=traces.ht_north_a_m,
         source_center_s=np.asarray(traces.source_center_s),
         case=np.asarray(traces.case),
+        run_signature=np.asarray(traces.run_signature),
     )
     return output
 
@@ -354,6 +373,8 @@ def load_radar_traces(path: str | Path) -> RadarTraces:
     """Load a radar trace archive written by :func:`save_radar_traces`."""
 
     with np.load(path) as values:
+        if int(values["format_version"]) != 2:
+            raise ValueError("unsupported radar trace format")
         return RadarTraces(
             time_s=values["time_s"].astype(np.float64),
             hr_a_m=values["hr_a_m"].astype(np.float64),
@@ -361,6 +382,7 @@ def load_radar_traces(path: str | Path) -> RadarTraces:
             ht_north_a_m=values["ht_north_a_m"].astype(np.float64),
             source_center_s=float(values["source_center_s"]),
             case=str(values["case"]),
+            run_signature=str(values["run_signature"]),
         )
 
 
@@ -374,6 +396,12 @@ def compute_radar_perturbation(
 ) -> RadarPerturbation:
     """Compute the Figure 7 pointwise reference-normalized perturbations."""
 
+    if reference.case != "reference" or anomaly.case != "anomaly":
+        raise ValueError("radar traces must be ordered as reference then anomaly")
+    if reference.run_signature != anomaly.run_signature:
+        raise ValueError("reference and anomaly run signatures do not match")
+    if reference.source_center_s != anomaly.source_center_s:
+        raise ValueError("reference and anomaly source centers do not match")
     if reference.time_s.shape != anomaly.time_s.shape or not np.allclose(
         reference.time_s, anomaly.time_s, rtol=0.0, atol=1.0e-15
     ):
@@ -421,6 +449,133 @@ def compute_radar_perturbation(
         valid_hr=valid_hr,
         ht_projection_east_north=projection,
     )
+
+
+def _radar_run_signature(
+    simulation: GeodesicFDTD,
+    *,
+    case: str,
+    receiver_support: str,
+) -> str:
+    """Return a canonical signature shared by a valid Figure 7 run pair."""
+
+    material_fields = {
+        field.name: getattr(simulation.material, field.name)
+        for field in fields(simulation.material)
+        if field.name != "anomalies"
+    }
+    anomalies = list(getattr(simulation.material, "anomalies", ()))
+    oil_indices = [
+        index for index, anomaly in enumerate(anomalies) if _is_paper_oil(anomaly)
+    ]
+    expected_oil_count = 0 if case == "reference" else 1
+    if len(oil_indices) != expected_oil_count:
+        raise ValueError(
+            f"{case} radar model must contain {expected_oil_count} paper oil anomaly"
+        )
+    shared_anomalies = [
+        anomaly for index, anomaly in enumerate(anomalies) if index not in oil_indices
+    ]
+    payload = {
+        "format_version": 1,
+        "git_revision": _git_revision(),
+        "mesh_vertices_sha256": _array_sha256(simulation.mesh.vertices),
+        "mesh_faces_sha256": hashlib.sha256(
+            np.ascontiguousarray(simulation.mesh.faces, dtype="<i8").tobytes()
+        ).hexdigest(),
+        "config": _signature_value(simulation.config),
+        "time_step_s": simulation.time_step_s,
+        "material_class": _qualified_name(simulation.material),
+        "material": _signature_value(material_fields),
+        "shared_anomalies": _signature_value(shared_anomalies),
+        "source_class": (
+            _qualified_name(simulation.source) if simulation.source is not None else None
+        ),
+        "source": _signature_value(simulation.source),
+        "receiver_support": receiver_support,
+        "backend": simulation.backend.name,
+        "dtype": simulation.backend.dtype_name,
+        "compiled": simulation.compiled,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _is_paper_oil(anomaly: Any) -> bool:
+    if not isinstance(anomaly, SphericalAnomaly):
+        return False
+    expected = (
+        PAPER_OIL_LATITUDE_DEG,
+        PAPER_OIL_LONGITUDE_DEG,
+        PAPER_OIL_RADIUS_M,
+        -(PAPER_OIL_MEDIAN_DEPTH_M + 0.5 * PAPER_OIL_THICKNESS_M),
+        -(PAPER_OIL_MEDIAN_DEPTH_M - 0.5 * PAPER_OIL_THICKNESS_M),
+        PAPER_OIL_CONDUCTIVITY_FACTOR,
+    )
+    actual = (
+        anomaly.latitude_deg,
+        anomaly.longitude_deg,
+        anomaly.radius_m,
+        anomaly.altitude_min_m,
+        anomaly.altitude_max_m,
+        anomaly.conductivity_factor,
+    )
+    return bool(np.allclose(actual, expected, rtol=0.0, atol=1.0e-12))
+
+
+def _signature_value(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, Path):
+        return str(value.expanduser().resolve())
+    if isinstance(value, ETOPO5Relief):
+        return {
+            "class": _qualified_name(value),
+            "path": str(value.path.expanduser().resolve()),
+            "sha256": ETOPO5_SHA256,
+        }
+    if is_dataclass(value):
+        return {
+            field.name: _signature_value(getattr(value, field.name))
+            for field in fields(value)
+        }
+    if isinstance(value, dict):
+        return {str(key): _signature_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_signature_value(item) for item in value]
+    if callable(value):
+        return {"callable": _qualified_name(value)}
+    raise TypeError(f"unsupported radar signature value: {type(value).__name__}")
+
+
+def _qualified_name(value: Any) -> str:
+    target = value if callable(value) and not is_dataclass(value) else type(value)
+    return f"{target.__module__}.{target.__qualname__}"
+
+
+def _array_sha256(values: NDArray[np.generic]) -> str:
+    canonical = np.ascontiguousarray(values, dtype="<f8")
+    return hashlib.sha256(canonical.tobytes()).hexdigest()
+
+
+def _git_revision() -> str:
+    try:
+        revision = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ("git", "status", "--porcelain"),
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return f"{revision}-dirty" if dirty else revision
 
 
 def radar_metrics(curves: RadarPerturbation) -> dict[str, float]:

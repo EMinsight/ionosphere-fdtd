@@ -17,6 +17,8 @@ from ionosphere_fdtd.simpson_taflove_2006 import (
     radar_field_metrics,
     radar_radial_altitudes_m,
     record_radar_traces,
+    load_radar_traces,
+    save_radar_traces,
 )
 from ionosphere_fdtd.simpson_taflove_2004 import ValidationTraces
 
@@ -237,7 +239,15 @@ def test_radar_courant_factor_controls_automatic_time_step() -> None:
 def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
     time = np.linspace(0.0, 0.1, 101)
     base = np.sin(2.0 * np.pi * 20.0 * time)
-    reference = RadarTraces(time, base, base, np.zeros_like(base), 0.0, "reference")
+    reference = RadarTraces(
+        time,
+        base,
+        base,
+        np.zeros_like(base),
+        0.0,
+        "reference",
+        "test-signature",
+    )
     anomaly = RadarTraces(
         time,
         11.0 * base,
@@ -245,6 +255,7 @@ def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
         np.zeros_like(base),
         0.0,
         "anomaly",
+        "test-signature",
     )
 
     curves = compute_radar_perturbation(
@@ -258,3 +269,60 @@ def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
     metrics = radar_field_metrics(reference, anomaly, curves)
     assert metrics["delta_hr_peak_normalized_db"] == pytest.approx(20.0)
     assert metrics["delta_ht_peak_normalized_db"] == pytest.approx(-30.0)
+
+
+def test_radar_perturbation_rejects_incompatible_runs() -> None:
+    time = np.linspace(0.0, 0.1, 11)
+    values = np.sin(2.0 * np.pi * 20.0 * time)
+    reference = RadarTraces(
+        time, values, values, values, 0.0, "reference", "configuration-a"
+    )
+    incompatible = RadarTraces(
+        time, values, values, values, 0.0, "anomaly", "configuration-b"
+    )
+
+    with pytest.raises(ValueError, match="signatures"):
+        compute_radar_perturbation(reference, incompatible)
+
+
+def test_recorded_radar_pair_has_matching_run_signature() -> None:
+    reference_simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+    anomaly_simulation = create_radar_simulation(
+        include_oil=True,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+    reference = record_radar_traces(
+        reference_simulation, steps=1, case="reference"
+    )
+    anomaly = record_radar_traces(anomaly_simulation, steps=1, case="anomaly")
+
+    assert reference.run_signature == anomaly.run_signature
+
+
+def test_radar_trace_archive_preserves_run_signature(tmp_path) -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+    traces = record_radar_traces(simulation, steps=1, case="reference")
+
+    restored = load_radar_traces(save_radar_traces(traces, tmp_path / "trace.npz"))
+
+    assert restored.run_signature == traces.run_signature
+    assert restored.case == "reference"
+    np.testing.assert_array_equal(restored.hr_a_m, traces.hr_a_m)
