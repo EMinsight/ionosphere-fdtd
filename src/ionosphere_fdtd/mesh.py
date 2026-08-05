@@ -149,7 +149,12 @@ def build_geodesic_mesh_from_vertices(
     radii = np.linalg.norm(coordinates, axis=1)
     if not np.allclose(radii, 1.0, rtol=0.0, atol=1.0e-7):
         raise ValueError("optimized vertices must lie on the unit sphere")
-    return _assemble_geodesic_mesh(coordinates / radii[:, None], faces, subdivision)
+    return _assemble_geodesic_mesh(
+        coordinates / radii[:, None],
+        faces,
+        subdivision,
+        require_well_centered=True,
+    )
 
 
 def _subdivided_icosahedron(
@@ -164,7 +169,11 @@ def _subdivided_icosahedron(
 
 
 def _assemble_geodesic_mesh(
-    vertices: FloatArray, faces: IntArray, subdivision: int
+    vertices: FloatArray,
+    faces: IntArray,
+    subdivision: int,
+    *,
+    require_well_centered: bool = False,
 ) -> GeodesicMesh:
     faces = _orient_faces(vertices, faces)
 
@@ -186,6 +195,16 @@ def _assemble_geodesic_mesh(
 
     if not np.all(degree >= 5):
         raise RuntimeError("invalid closed geodesic topology")
+    if not np.all(np.isfinite(primal_angles)) or not np.all(primal_angles > 0.0):
+        raise ValueError("geodesic mesh contains degenerate primal edges")
+    if not np.all(np.isfinite(dual_angles)) or not np.all(dual_angles > 0.0):
+        raise ValueError("geodesic mesh contains degenerate dual edges")
+    if not np.all(np.isfinite(face_areas)) or not np.all(face_areas > 0.0):
+        raise ValueError("geodesic mesh contains degenerate primal faces")
+    if not np.all(np.isfinite(dual_areas)) or not np.all(dual_areas > 0.0):
+        raise ValueError("geodesic mesh contains degenerate dual cells")
+    if require_well_centered:
+        _validate_well_centered_faces(vertices, faces, face_centers)
     if not np.isclose(face_areas.sum(), 4.0 * np.pi, rtol=1e-11):
         raise RuntimeError("primal face areas do not cover the unit sphere")
     if not np.isclose(dual_areas.sum(), 4.0 * np.pi, rtol=1e-10):
@@ -431,7 +450,10 @@ def _build_edges(
             face_edges[face_index, local_index] = edge_index
             face_signs[face_index, local_index] = sign
 
-    if any(len(adjacent) != 2 for adjacent in edge_faces):
+    if any(
+        len(adjacent) != 2 or {sign for _, sign in adjacent} != {-1, 1}
+        for adjacent in edge_faces
+    ):
         raise RuntimeError("geodesic mesh is not a closed two-manifold")
 
     edges = np.asarray(list(edge_lookup), dtype=np.int64)
@@ -444,6 +466,40 @@ def _build_edges(
             else:
                 right[edge_index] = face_index
     return edges, face_edges, face_signs, left, right
+
+
+def _validate_well_centered_faces(
+    vertices: FloatArray,
+    faces: IntArray,
+    face_centers: FloatArray,
+) -> None:
+    """Require every circumcenter to lie inside its spherical triangle.
+
+    The FDTD Hodge stars store unsigned primal and dual minor-arc lengths.  That
+    convention is valid only when adjacent circumcenters lie on opposite sides
+    of their shared primal edge.  Requiring a well-centered triangulation is a
+    deliberately stronger and inexpensive condition that guarantees that
+    crossing for externally optimized coordinates.
+    """
+
+    triangles = vertices[faces]
+    halfspace = np.column_stack(
+        tuple(
+            np.einsum(
+                "ij,ij->i",
+                np.cross(triangles[:, corner], triangles[:, (corner + 1) % 3]),
+                face_centers,
+            )
+            for corner in range(3)
+        )
+    )
+    tolerance = 64.0 * np.finfo(np.float64).eps
+    invalid = np.flatnonzero(np.any(halfspace <= tolerance, axis=1))
+    if len(invalid):
+        raise ValueError(
+            "optimized vertices must form a well-centered spherical mesh; "
+            f"{len(invalid)} circumcenter(s) lie outside or on a primal face"
+        )
 
 
 def _arc_length(first: FloatArray, second: FloatArray) -> FloatArray:

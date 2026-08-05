@@ -39,6 +39,29 @@ class MesquiteOptimization:
     fixed_vertex_count: int
 
 
+def _optimizer_report(stdout: str) -> dict[str, str]:
+    report = {
+        key.strip(): value.strip()
+        for line in stdout.splitlines()
+        if "=" in line
+        for key, value in (line.split("=", 1),)
+    }
+    required = {
+        "mesquite_version": None,
+        "objective": MESQUITE_OBJECTIVE.removeprefix("uniform-shape-size:"),
+        "vertex_mover": MESQUITE_VERTEX_MOVER,
+    }
+    for key, expected in required.items():
+        value = report.get(key, "")
+        if not value:
+            raise ValueError(f"Mesquite output does not report {key}")
+        if expected is not None and value != expected:
+            raise ValueError(
+                f"Mesquite reported unexpected {key}: expected {expected!r}, got {value!r}"
+            )
+    return report
+
+
 def optimize_with_mesquite(
     mesh: GeodesicMesh,
     executable: str | Path,
@@ -94,8 +117,16 @@ def optimize_with_mesquite(
             raise TimeoutError(
                 f"Mesquite optimization exceeded {timeout_s:g} seconds"
             ) from error
+        report = _optimizer_report(completed.stdout)
         coordinates = _read_vtk_points(output_vtk, mesh.n_vertices)
+        output_faces = _read_vtk_faces(output_vtk, mesh.n_faces)
 
+    if not np.array_equal(output_faces, mesh.faces):
+        raise ValueError("Mesquite changed mesh connectivity or cell ordering")
+    if np.any(fixed) and not np.allclose(
+        coordinates[fixed], mesh.vertices[fixed], rtol=0.0, atol=1.0e-12
+    ):
+        raise ValueError("Mesquite moved one or more fixed vertices")
     coordinates[fixed] = mesh.vertices[fixed]
     optimized = build_geodesic_mesh_from_vertices(
         mesh.subdivision,
@@ -103,10 +134,11 @@ def optimize_with_mesquite(
         orientation=orientation,
     )
     dot = np.clip(np.sum(mesh.vertices * optimized.vertices, axis=1), -1.0, 1.0)
+    cross = np.linalg.norm(np.cross(mesh.vertices, optimized.vertices), axis=1)
     return MesquiteOptimization(
         mesh=optimized,
         elapsed_s=time.perf_counter() - started,
-        maximum_displacement_rad=float(np.max(np.arccos(dot))),
+        maximum_displacement_rad=float(np.max(np.arctan2(cross, dot))),
         executable_sha256=_file_sha256(optimizer),
         stdout=completed.stdout,
         fixed_vertex_count=int(np.count_nonzero(fixed)),
@@ -128,14 +160,18 @@ def save_optimized_mesh(
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
+    report = _optimizer_report(result.stdout)
+    vertices = np.asarray(result.mesh.vertices, dtype=np.float64)
     metadata: dict[str, Any] = {
-        "format_version": 1,
+        "format_version": 2,
         "optimizer": "Sandia Mesquite",
-        "mesquite_commit": MESQUITE_COMMIT,
-        "mesquite_archive_sha256": MESQUITE_ARCHIVE_SHA256,
-        "mesquite_objective": MESQUITE_OBJECTIVE,
-        "mesquite_vertex_mover": MESQUITE_VERTEX_MOVER,
+        "optimizer_reported_version": report["mesquite_version"],
+        "configured_mesquite_commit": MESQUITE_COMMIT,
+        "configured_mesquite_archive_sha256": MESQUITE_ARCHIVE_SHA256,
+        "optimizer_reported_objective": report["objective"],
+        "optimizer_reported_vertex_mover": report["vertex_mover"],
         "optimizer_executable_sha256": result.executable_sha256,
+        "vertices_sha256": _array_sha256(vertices),
         "subdivision": result.mesh.subdivision,
         "orientation": orientation,
         "fixed_vertices": fixed_vertices,
@@ -149,8 +185,9 @@ def save_optimized_mesh(
     }
     np.savez_compressed(
         destination,
-        vertices=result.mesh.vertices,
+        vertices=vertices,
         metadata=np.asarray(json.dumps(metadata, sort_keys=True)),
+        optimizer_stdout=np.asarray(result.stdout),
     )
     return destination
 
@@ -170,8 +207,16 @@ def load_optimized_mesh(
             metadata = json.loads(str(archive["metadata"]))
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as error:
         raise ValueError(f"invalid optimized mesh archive: {source}") from error
-    if metadata.get("format_version") != 1:
+    if metadata.get("format_version") != 2:
         raise ValueError("unsupported optimized mesh format")
+    if metadata.get("vertices_sha256") != _array_sha256(vertices):
+        raise ValueError("optimized mesh coordinate checksum mismatch")
+    if metadata.get("optimizer_reported_objective") != MESQUITE_OBJECTIVE.removeprefix(
+        "uniform-shape-size:"
+    ):
+        raise ValueError("optimized mesh objective does not match the supported policy")
+    if metadata.get("optimizer_reported_vertex_mover") != MESQUITE_VERTEX_MOVER:
+        raise ValueError("optimized mesh vertex mover does not match the supported policy")
     subdivision = int(metadata["subdivision"])
     orientation = str(metadata["orientation"])
     if expected_subdivision is not None and subdivision != expected_subdivision:
@@ -255,9 +300,39 @@ def _read_vtk_points(path: Path, expected_count: int) -> FloatArray:
     return coordinates
 
 
+def _read_vtk_faces(path: Path, expected_count: int) -> np.ndarray:
+    """Read triangular cell connectivity from an ASCII legacy VTK file."""
+
+    rows: list[list[int]] = []
+    with path.open("r", encoding="ascii") as stream:
+        for line in stream:
+            fields = line.split()
+            if fields and fields[0] == "CELLS":
+                if (
+                    len(fields) != 3
+                    or int(fields[1]) != expected_count
+                    or int(fields[2]) != 4 * expected_count
+                ):
+                    raise ValueError("Mesquite output has the wrong cell count")
+                break
+        else:
+            raise ValueError("Mesquite output does not contain VTK cells")
+        for _ in range(expected_count):
+            fields = next(stream, "").split()
+            if len(fields) != 4 or fields[0] != "3":
+                raise ValueError("Mesquite output contains a non-triangular cell")
+            rows.append([int(value) for value in fields[1:]])
+    return np.asarray(rows, dtype=np.int64)
+
+
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _array_sha256(values: FloatArray) -> str:
+    canonical = np.ascontiguousarray(values, dtype="<f8")
+    return hashlib.sha256(canonical.tobytes()).hexdigest()

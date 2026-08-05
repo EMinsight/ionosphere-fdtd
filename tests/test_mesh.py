@@ -110,3 +110,13 @@ def test_mesh_rejects_invalid_external_vertices() -> None:
         build_geodesic_mesh_from_vertices(1, np.ones((4, 3)))
     with pytest.raises(ValueError, match="unit sphere"):
         build_geodesic_mesh_from_vertices(0, np.ones((12, 3)))
+
+
+def test_mesh_rejects_external_vertices_with_invalid_circumcentric_dual() -> None:
+    base = build_geodesic_mesh(1)
+    distorted = base.vertices.copy()
+    distorted[12] = distorted[12] + 0.6 * (distorted[0] - distorted[12])
+    distorted[12] /= np.linalg.norm(distorted[12])
+
+    with pytest.raises(ValueError, match="well-centered"):
+        build_geodesic_mesh_from_vertices(1, distorted)
