@@ -48,6 +48,17 @@ def test_zero_fields_are_stationary() -> None:
     assert not np.any(simulation.ht)
 
 
+def test_memory_diagnostics_distinguish_fields_from_persistent_arrays() -> None:
+    simulation = GeodesicFDTD(config=small_config())
+    diagnostics = simulation.diagnostics()
+
+    assert diagnostics["field_memory_bytes"] == simulation.memory_bytes
+    assert diagnostics["persistent_backend_bytes"] == (
+        simulation.persistent_backend_bytes
+    )
+    assert simulation.persistent_backend_bytes > simulation.memory_bytes
+
+
 def test_gaussian_source_launches_finite_fields() -> None:
     simulation = GeodesicFDTD(
         config=small_config(), source=GaussianCurrent(peak_current_a=1.0e6)
@@ -136,9 +147,13 @@ def test_staggered_source_update_preserves_total_current() -> None:
     vertices, layers, expected_weights = source.staggered_distribution(simulation)
 
     simulation._update_electric_fields(1.0)
+    dual_areas = (
+        simulation.mesh.dual_cell_solid_angles[vertices]
+        * simulation.radii_m[layers] ** 2
+    )
     represented_currents = (
         -simulation.er[vertices, layers]
-        * simulation._dual_areas_tm[vertices, layers]
+        * dual_areas
         / simulation._cb_er[vertices, layers]
     )
 
@@ -157,9 +172,14 @@ def test_tangential_source_update_uses_dual_face_current_density() -> None:
     edges, layers, expected_weights = source.edge_distribution(simulation)
 
     simulation._update_electric_fields(1.0)
+    dual_face_areas = (
+        simulation.mesh.dual_edge_angles[edges]
+        * simulation.radial_midpoints_m[layers]
+        * simulation.radial_steps_m[layers]
+    )
     represented_currents = (
         -simulation.et[edges, layers]
-        * simulation._dual_face_areas_te[edges, layers]
+        * dual_face_areas
         / simulation._cb_et[edges, layers]
     )
 

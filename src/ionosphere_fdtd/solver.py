@@ -250,35 +250,34 @@ class GeodesicFDTD:
         return 1.0 / (C_0 * np.sqrt(inverse_length_squared))
 
     def _prepare_geometry(self) -> None:
-        primal_lengths_tm = (
-            self.mesh.primal_edge_angles[:, None] * self.radii_m[None, :]
+        # Spherical metric tensors are separable into horizontal angles and
+        # radial factors. Keeping those factors one-dimensional avoids several
+        # dense edge-by-layer and face-by-layer arrays on the accelerator.
+        self._primal_edge_angles = self.backend.asarray(
+            self.mesh.primal_edge_angles[:, None]
         )
-        dual_lengths_tm = (
-            self.mesh.dual_edge_angles[:, None] * self.radii_m[None, :]
+        self._inverse_primal_edge_angles = self.backend.asarray(
+            1.0 / self.mesh.primal_edge_angles[:, None]
         )
-        dual_areas_tm = (
-            self.mesh.dual_cell_solid_angles[:, None] * self.radii_m[None, :] ** 2
+        self._dual_edge_angles = self.backend.asarray(
+            self.mesh.dual_edge_angles[:, None]
         )
-        primal_lengths_te = (
-            self.mesh.primal_edge_angles[:, None] * self.radial_midpoints_m[None, :]
+        self._inverse_dual_edge_angles = self.backend.asarray(
+            1.0 / self.mesh.dual_edge_angles[:, None]
         )
-        dual_lengths_te = (
-            self.mesh.dual_edge_angles[:, None] * self.radial_midpoints_m[None, :]
+        self._inverse_dual_cell_solid_angles = self.backend.asarray(
+            1.0 / self.mesh.dual_cell_solid_angles[:, None]
         )
-        face_areas_te = (
-            self.mesh.face_solid_angles[:, None]
-            * self.radial_midpoints_m[None, :] ** 2
+        self._inverse_face_solid_angles = self.backend.asarray(
+            1.0 / self.mesh.face_solid_angles[:, None]
         )
-        self._primal_lengths_tm = self.backend.asarray(primal_lengths_tm)
-        self._dual_lengths_tm = self.backend.asarray(dual_lengths_tm)
-        self._dual_areas_tm = self.backend.asarray(dual_areas_tm)
-        self._primal_lengths_te = self.backend.asarray(primal_lengths_te)
-        self._dual_lengths_te = self.backend.asarray(dual_lengths_te)
-        self._face_areas_te = self.backend.asarray(face_areas_te)
+        self._radii = self.backend.asarray(self.radii_m)
+        self._inverse_radii = self.backend.asarray(1.0 / self.radii_m[None, :])
+        self._radial_midpoints = self.backend.asarray(self.radial_midpoints_m)
+        self._inverse_radial_midpoints = self.backend.asarray(
+            1.0 / self.radial_midpoints_m[None, :]
+        )
         self._radial_steps = self.backend.asarray(self.radial_steps_m)
-        self._dual_face_areas_te = (
-            self._dual_lengths_te * self._radial_steps[None, :]
-        )
         self._radial_center_distances = self.backend.asarray(
             self.radial_midpoints_m[1:] - self.radial_midpoints_m[:-1]
         )
@@ -398,10 +397,12 @@ class GeodesicFDTD:
         self._cb_et = self.backend.asarray(
             self.time_step_s / (epsilon_et * (1.0 + loss_et))
         )
-        self.sigma_er = self.backend.asarray(sigma_er)
-        self.sigma_et = self.backend.asarray(sigma_et)
-        self.epsilon_r_er = self.backend.asarray(epsilon_r_er)
-        self.epsilon_r_et = self.backend.asarray(epsilon_r_et)
+        # These arrays are diagnostics only after the update coefficients are
+        # formed. Retain them on the host instead of duplicating them on a GPU.
+        self.sigma_er = sigma_er
+        self.sigma_et = sigma_et
+        self.epsilon_r_er = epsilon_r_er
+        self.epsilon_r_et = epsilon_r_et
 
     @staticmethod
     def _validated_material_sample(
@@ -475,9 +476,9 @@ class GeodesicFDTD:
         self._update_electric_fields(current_a)
 
     def _update_magnetic_fields(self) -> None:
-        surface_gradient_er = self.backend.edge_difference(
-            self.er
-        ) / self._primal_lengths_tm
+        surface_gradient_er = self.backend.edge_difference(self.er)
+        surface_gradient_er *= self._inverse_primal_edge_angles
+        surface_gradient_er *= self._inverse_radii
 
         # Et is odd across each radial boundary. This ghost-cell construction
         # places zero tangential electric field on the boundary (PEC).
@@ -495,23 +496,28 @@ class GeodesicFDTD:
         del surface_gradient_er, radial_derivative_et
 
         electric_circulation = self.backend.face_circulation(
-            self.et * self._primal_lengths_te
+            self.et * self._primal_edge_angles
         )
-        electric_circulation /= self._face_areas_te
+        electric_circulation *= self._inverse_face_solid_angles
+        electric_circulation *= self._inverse_radial_midpoints
         electric_circulation *= self.time_step_s / MU_0
         self.hr -= electric_circulation
 
     def _update_electric_fields(self, current_a: Any = 0.0) -> None:
         magnetic_circulation = self.backend.dual_cell_circulation(
-            self.ht * self._dual_lengths_tm
+            self.ht * self._dual_edge_angles
         )
-        magnetic_circulation /= self._dual_areas_tm
+        magnetic_circulation *= self._inverse_dual_cell_solid_angles
+        magnetic_circulation *= self._inverse_radii
 
         current_density = None
         if self.source is not None and self._source_distribution is not None:
             vertices, layers, weights = self._source_distribution
             current_density = (
-                weights * current_a / self._dual_areas_tm[vertices, layers]
+                weights
+                * current_a
+                * self._inverse_dual_cell_solid_angles[vertices, 0]
+                / self._radii[layers] ** 2
             )
 
         self.er *= self._ca_er
@@ -523,9 +529,9 @@ class GeodesicFDTD:
                 self._cb_er[vertices, layers] * current_density
             )
 
-        surface_gradient_hr = self.backend.dual_edge_difference(
-            self.hr
-        ) / self._dual_lengths_te
+        surface_gradient_hr = self.backend.dual_edge_difference(self.hr)
+        surface_gradient_hr *= self._inverse_dual_edge_angles
+        surface_gradient_hr *= self._inverse_radial_midpoints
         radial_derivative_ht = self.backend.diff(
             self.ht, axis=1
         ) / self._radial_steps[None, :]
@@ -537,7 +543,11 @@ class GeodesicFDTD:
         if self._tangential_source_distribution is not None:
             edges, layers, weights = self._tangential_source_distribution
             current_density = (
-                weights * current_a / self._dual_face_areas_te[edges, layers]
+                weights
+                * current_a
+                * self._inverse_dual_edge_angles[edges, 0]
+                / self._radial_midpoints[layers]
+                / self._radial_steps[layers]
             )
             self.et[edges, layers] -= self._cb_et[edges, layers] * current_density
 
@@ -554,6 +564,8 @@ class GeodesicFDTD:
             "radial_boundary_condition": self.config.radial_boundary_condition,
             "cfl_time_step_limit_s": self.cfl_time_step_limit_s,
             "courant_factor": self.config.courant_factor,
+            "field_memory_bytes": self.memory_bytes,
+            "persistent_backend_bytes": self.persistent_backend_bytes,
             "max_abs_er_v_m": self.backend.max_abs(self.er),
             "max_abs_et_v_m": self.backend.max_abs(self.et),
             "max_abs_hr_a_m": self.backend.max_abs(self.hr),
@@ -711,7 +723,59 @@ class GeodesicFDTD:
 
     @property
     def memory_bytes(self) -> int:
+        """Bytes occupied by the four evolving field arrays."""
+
         return sum(
             self.backend.nbytes(field)
             for field in (self.er, self.et, self.hr, self.ht)
         )
+
+    @property
+    def persistent_backend_bytes(self) -> int:
+        """Bytes in persistent field, coefficient, metric, and topology arrays."""
+
+        solver_names = (
+            "er",
+            "et",
+            "hr",
+            "ht",
+            "_ca_er",
+            "_cb_er",
+            "_ca_et",
+            "_cb_et",
+            "_primal_edge_angles",
+            "_inverse_primal_edge_angles",
+            "_dual_edge_angles",
+            "_inverse_dual_edge_angles",
+            "_inverse_dual_cell_solid_angles",
+            "_inverse_face_solid_angles",
+            "_radii",
+            "_inverse_radii",
+            "_radial_midpoints",
+            "_inverse_radial_midpoints",
+            "_radial_steps",
+            "_radial_center_distances",
+        )
+        backend_names = (
+            "edges",
+            "face_edges",
+            "face_edge_signs",
+            "edge_left_faces",
+            "edge_right_faces",
+            "vertex_edges",
+            "vertex_edge_signs",
+        )
+        arrays = [getattr(self, name) for name in solver_names]
+        arrays.extend(
+            getattr(self.backend, name)
+            for name in backend_names
+            if hasattr(self.backend, name)
+        )
+        for distribution in (
+            self._source_distribution,
+            self._tangential_source_distribution,
+        ):
+            if distribution is not None:
+                arrays.extend(distribution)
+        unique = {id(array): array for array in arrays}
+        return sum(self.backend.nbytes(array) for array in unique.values())
