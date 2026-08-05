@@ -26,11 +26,20 @@ class NumPyBackend(ArrayBackend):
             raise ValueError("dtype must be 'auto', 'float32', or 'float64'")
         self.dtype = np.dtype(dtype)
         self.dtype_name = self.dtype.name
-        self.edges = mesh.edges
-        self.face_edges = mesh.face_edges
-        self.face_edge_signs = mesh.face_edge_signs
-        self.edge_left_faces = mesh.edge_left_faces
-        self.edge_right_faces = mesh.edge_right_faces
+        # Own backend constants independently of the public mesh object. This
+        # prevents shallow NumPy aliasing from invalidating only part of the
+        # precomputed geometry.
+        self.edges = np.array(mesh.edges, dtype=np.int64, copy=True)
+        self.face_edges = np.array(mesh.face_edges, dtype=np.int64, copy=True)
+        self.face_edge_signs = np.array(
+            mesh.face_edge_signs, dtype=self.dtype, copy=True
+        )
+        self.edge_left_faces = np.array(
+            mesh.edge_left_faces, dtype=np.int64, copy=True
+        )
+        self.edge_right_faces = np.array(
+            mesh.edge_right_faces, dtype=np.int64, copy=True
+        )
         self.n_vertices = mesh.n_vertices
         self.vertex_edges, self.vertex_edge_signs = self._vertex_incidence(mesh)
 
@@ -67,10 +76,10 @@ class NumPyBackend(ArrayBackend):
         return vertex_edges, vertex_signs
 
     def asarray(self, values: Any) -> np.ndarray:
-        return np.asarray(values, dtype=self.dtype)
+        return np.array(values, dtype=self.dtype, copy=True)
 
     def index_array(self, values: Any) -> np.ndarray:
-        return np.asarray(values, dtype=np.int64)
+        return np.array(values, dtype=np.int64, copy=True)
 
     def zeros(self, shape: tuple[int, ...]) -> np.ndarray:
         return np.zeros(shape, dtype=self.dtype)

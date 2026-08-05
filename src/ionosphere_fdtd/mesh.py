@@ -35,6 +35,27 @@ class GeodesicMesh:
     vertex_degree: IntArray
     subdivision: int
 
+    def __post_init__(self) -> None:
+        # ``frozen=True`` protects attribute bindings but not array contents.
+        # Geometry and topology are coupled through precomputed Hodge factors,
+        # so partial mutation would invalidate the discrete Maxwell operator.
+        for values in (
+            self.vertices,
+            self.faces,
+            self.edges,
+            self.face_edges,
+            self.face_edge_signs,
+            self.edge_left_faces,
+            self.edge_right_faces,
+            self.face_centers,
+            self.primal_edge_angles,
+            self.dual_edge_angles,
+            self.face_solid_angles,
+            self.dual_cell_solid_angles,
+            self.vertex_degree,
+        ):
+            values.setflags(write=False)
+
     @property
     def n_vertices(self) -> int:
         return int(self.vertices.shape[0])
@@ -66,7 +87,7 @@ class GeodesicMesh:
         """Counter-clockwise circulation around every primal triangle."""
 
         selected = edge_values[self.face_edges]
-        signs = self.face_edge_signs
+        signs = self.face_edge_signs.astype(edge_values.dtype, copy=False)
         while signs.ndim < selected.ndim:
             signs = signs[..., None]
         return np.sum(selected * signs, axis=1)

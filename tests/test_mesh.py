@@ -20,6 +20,36 @@ def test_icosphere_counts_and_dual_topology(level: int) -> None:
     assert np.isclose(mesh.dual_cell_solid_angles.sum(), 4 * np.pi)
 
 
+def test_mesh_geometry_and_topology_arrays_are_read_only() -> None:
+    mesh = build_geodesic_mesh(1)
+
+    for values in (
+        mesh.vertices,
+        mesh.faces,
+        mesh.edges,
+        mesh.face_edges,
+        mesh.face_edge_signs,
+        mesh.edge_left_faces,
+        mesh.edge_right_faces,
+        mesh.face_centers,
+        mesh.primal_edge_angles,
+        mesh.dual_edge_angles,
+        mesh.face_solid_angles,
+        mesh.dual_cell_solid_angles,
+        mesh.vertex_degree,
+    ):
+        assert not values.flags.writeable
+        with pytest.raises(ValueError, match="read-only"):
+            values.flat[0] = values.flat[0]
+
+
+def test_mesh_face_circulation_preserves_field_dtype() -> None:
+    mesh = build_geodesic_mesh(1)
+    values = np.ones(mesh.n_edges, dtype=np.float32)
+
+    assert mesh.face_circulation(values).dtype == np.float32
+
+
 def test_boundary_of_boundary_is_zero() -> None:
     mesh = build_geodesic_mesh(2)
     vertex_values = np.arange(mesh.n_vertices, dtype=float)

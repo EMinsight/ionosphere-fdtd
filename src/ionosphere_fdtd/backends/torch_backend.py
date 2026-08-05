@@ -152,12 +152,12 @@ class TorchBackend(ArrayBackend):
         return device
 
     def asarray(self, values: Any) -> Any:
-        return self.torch.as_tensor(
+        return self.torch.tensor(
             values, dtype=self.dtype, device=self.torch_device
         )
 
     def index_array(self, values: Any) -> Any:
-        return self.torch.as_tensor(
+        return self.torch.tensor(
             values, dtype=self.torch.long, device=self.torch_device
         )
 

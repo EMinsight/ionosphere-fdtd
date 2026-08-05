@@ -24,6 +24,20 @@ def test_numpy_backend_defaults_to_cpu_float64() -> None:
     assert simulation.er.dtype == np.float64
 
 
+def test_backend_constants_do_not_alias_mesh_arrays() -> None:
+    mesh = build_geodesic_mesh(1)
+    simulation = GeodesicFDTD(config=config(), mesh=mesh)
+
+    assert not np.shares_memory(simulation.backend.edges, mesh.edges)
+    assert not np.shares_memory(simulation.backend.face_edges, mesh.face_edges)
+    assert not np.shares_memory(
+        simulation.backend.face_edge_signs, mesh.face_edge_signs
+    )
+    assert not np.shares_memory(
+        simulation._primal_edge_angles, mesh.primal_edge_angles
+    )
+
+
 def test_numpy_backend_rejects_accelerator_device() -> None:
     with pytest.raises(BackendUnavailableError, match="only supports"):
         GeodesicFDTD(config=config(), backend="numpy", device="mps")
@@ -108,6 +122,30 @@ def test_torch_face_circulation_matches_mesh(
     actual = backend.to_numpy(backend.face_circulation(torch.asarray(values)))
     expected = mesh.face_circulation(values)
     np.testing.assert_allclose(actual, expected, rtol=1.0e-13, atol=1.0e-13)
+
+
+def test_float32_face_circulation_has_consistent_backend_precision() -> None:
+    pytest.importorskip("torch")
+    mesh = build_geodesic_mesh(1)
+    numpy_backend = NumPyBackend(mesh, dtype="float32")
+    torch_backend = GeodesicFDTD(
+        config=config(), backend="torch", device="cpu", dtype="float32"
+    ).backend
+    values = np.zeros(mesh.n_edges, dtype=np.float32)
+    face_edges = mesh.face_edges[0]
+    values[face_edges] = (
+        np.asarray((1.0e8, 1.0, -1.0e8), dtype=np.float32)
+        * mesh.face_edge_signs[0]
+    )
+
+    numpy_result = numpy_backend.face_circulation(values)
+    torch_result = torch_backend.to_numpy(
+        torch_backend.face_circulation(torch_backend.asarray(values))
+    )
+
+    assert numpy_result.dtype == np.float32
+    assert torch_result.dtype == np.float32
+    np.testing.assert_array_equal(numpy_result, torch_result)
 
 
 @pytest.mark.parametrize("trailing_shape", [(), (7,), (3, 4)])
