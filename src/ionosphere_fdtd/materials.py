@@ -98,7 +98,23 @@ class ETOPO5Relief:
         south_east = np.asarray(self.elevations_m[row1, column1], dtype=np.float64)
         north = north_west + column_fraction * (north_east - north_west)
         south = south_west + column_fraction * (south_east - south_west)
-        return north + row_fraction * (south - north)
+        result = north + row_fraction * (south - north)
+
+        # Longitude is undefined at an exact pole. The south-most ETOPO5 row
+        # is not longitudinally constant, so choosing atan2(0, 0)'s arbitrary
+        # longitude would make a polar mesh vertex orientation-dependent.
+        polar = np.hypot(points[:, 0], points[:, 1]) <= (
+            64.0 * np.finfo(np.float64).eps
+        )
+        if np.any(polar):
+            pole_rows = np.where(points[polar, 2] >= 0.0, 0, ETOPO5_SHAPE[0] - 1)
+            result[polar] = np.asarray(
+                [
+                    np.mean(self.elevations_m[index], dtype=np.float64)
+                    for index in pole_rows
+                ]
+            )
+        return result
 
 
 @dataclass(frozen=True, slots=True)

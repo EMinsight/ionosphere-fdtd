@@ -143,6 +143,8 @@ def test_etopo5_relief_reads_big_endian_grid_and_wraps_longitude(tmp_path) -> No
     grid = np.memmap(path, dtype=">i2", mode="r+", shape=ETOPO5_SHAPE)
     grid[1_080, 0] = 1_200
     grid[1_080, -1] = -600
+    grid[-1, :] = 100
+    grid[-1, 0] = 300
     grid.flush()
     del grid
 
@@ -155,11 +157,13 @@ def test_etopo5_relief_reads_big_endian_grid_and_wraps_longitude(tmp_path) -> No
                 -np.sin(np.deg2rad(1.0 / 24.0)),
                 0.0,
             ),
+            (0.0, 0.0, -1.0),
         )
     )
 
     assert relief(directions)[0] == pytest.approx(1_200.0)
     assert relief(directions)[1] == pytest.approx(300.0)
+    assert relief(directions)[2] == pytest.approx(100.0 + 200.0 / 4_320.0)
 
 
 def test_relief_material_resolves_mountains_ocean_and_seafloor() -> None:
