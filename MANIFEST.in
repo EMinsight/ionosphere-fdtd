@@ -1,6 +1,2 @@
 # Repository-local paper verification workflows are not distribution content.
 prune verification
-exclude tests/test_directional_dispersion.py
-exclude tests/test_simpson_taflove_2004.py
-exclude tests/test_simpson_taflove_2006.py
-exclude tests/test_taflove_fig_3_11.py

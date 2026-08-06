@@ -39,5 +39,5 @@ ionosphere-visualize = "ionosphere_fdtd.viz_cli:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "verification/tests"]
 pythonpath = ["."]
