@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from ionosphere_fdtd.mesh import build_geodesic_mesh
-from ionosphere_fdtd.simpson_taflove_2004 import (
+from verification.simpson_taflove_2004.model import (
     PAPER_DFT_SIZE,
     PAPER_EVALUATION_FREQUENCIES_HZ,
     PAPER_RECEIVERS,
@@ -26,11 +26,11 @@ from ionosphere_fdtd.simpson_taflove_2004 import (
     trace_metrics,
     validation_metrics,
 )
-from ionosphere_fdtd.simpson_taflove_2004_report import (
+from verification.simpson_taflove_2004.report import (
     ValidationRunSummary,
     write_validation_report,
 )
-from ionosphere_fdtd.simpson_taflove_2004_cli import (
+from verification.simpson_taflove_2004.__main__ import (
     _parser as verification_parser,
     _reproduction_command,
 )
@@ -338,7 +338,10 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     figure_8 = tmp_path / "fig-8.png"
     summary = ValidationRunSummary(
         generated_at=datetime(2026, 8, 3, tzinfo=timezone.utc),
-        command="uv run ionosphere-verify-2004 --subdivision 7",
+        command=(
+            "uv run python -m verification.simpson_taflove_2004 "
+            "--subdivision 7"
+        ),
         git_revision="abc1234",
         subdivision=7,
         mesh_optimization_steps=0,
@@ -391,4 +394,4 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "Natural Earth 110-m" in text
     assert "![Figure 7 verification](fig-7.png)" in text
     assert "[Receiver traces (NPZ)](traces.npz)" in text
-    assert "uv run ionosphere-verify-2004" in text
+    assert "uv run python -m verification.simpson_taflove_2004" in text

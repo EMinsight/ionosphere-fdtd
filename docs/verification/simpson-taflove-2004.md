@@ -413,7 +413,8 @@ anisotropy alone cannot explain the full high-frequency mismatch.
 Run the authoritative complete-time ETOPO5 reconstruction with CUDA `float64`:
 
 ```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+uv run --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
   --deep-lithosphere-resistivity-ohm-m 500 \
@@ -429,7 +430,8 @@ Run the fixed-depth Natural Earth control by changing only the material and
 output directory:
 
 ```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+uv run --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material natural-earth \
   --deep-lithosphere-resistivity-ohm-m 500 \
@@ -446,8 +448,8 @@ grid:
 
 ```bash
 for subdivision in 5 6 7; do
-  uv run --extra pytorch --extra visualization \
-    ionosphere-measure-dispersion \
+  uv run --extra pytorch --extra visualization python -m \
+    verification.directional_dispersion \
     --subdivision "${subdivision}" --steps 25023 \
     --azimuth-step-deg 30 \
     --backend torch --device cuda:0 --dtype float64 --torch-compile \

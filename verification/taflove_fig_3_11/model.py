@@ -15,13 +15,13 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from .solver import GeodesicFDTD, SimulationConfig
-from .sources import (
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import (
     GWANGJU_LATITUDE_DEG,
     GWANGJU_LONGITUDE_DEG,
     GaussianCurrent,
 )
-from .visualization import (
+from ionosphere_fdtd.visualization import (
     VisualizationDependencyError,
     _add_earth_underlay,
     _dual_polydata,

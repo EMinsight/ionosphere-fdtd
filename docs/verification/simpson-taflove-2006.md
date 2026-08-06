@@ -898,7 +898,7 @@ python tools/mesquite/build.py --build-dir build/mesquite
   --movement-tolerance 1e-10 --max-iterations 200 \
   --output /tmp/ionosphere-mesquite-level-7.npz
 
-.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2004_cli \
+.venv/bin/python -m verification.simpson_taflove_2004 \
   --subdivision 7 --mesh-orientation polar \
   --mesh-coordinates /tmp/ionosphere-mesquite-level-7.npz \
   --minimum-ocean-depth-km 0 \
@@ -911,7 +911,7 @@ python tools/mesquite/build.py --build-dir build/mesquite
   --synchronize-every 1024 \
   --output-dir /tmp/ionosphere-verification-20260805/st2006-fig56-l7
 
-.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli \
+.venv/bin/python -m verification.simpson_taflove_2006 \
   figures-5-6 \
   --traces /tmp/ionosphere-verification-20260805/st2006-fig56-l7/simpson-taflove-2004-traces.npz \
   --output-dir /tmp/ionosphere-verification-20260805/st2006-fig56-l7/figures-5-6
@@ -927,7 +927,7 @@ is generated from the same current trace as Figure 5.
 The paired Figure 7 runs were:
 
 ```bash
-.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
+.venv/bin/python -m verification.simpson_taflove_2006 radar-run \
   --case reference --subdivision 7 --material etopo5 \
   --deep-lithosphere-resistivity-ohm-m 500 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
@@ -937,7 +937,7 @@ The paired Figure 7 runs were:
   --receiver-support local-linear --synchronize-every 1024 \
   --output /tmp/ionosphere-verification-20260805/st2006-fig7-reference.npz
 
-.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
+.venv/bin/python -m verification.simpson_taflove_2006 radar-run \
   --case anomaly --subdivision 7 --material etopo5 \
   --deep-lithosphere-resistivity-ohm-m 500 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
@@ -947,7 +947,7 @@ The paired Figure 7 runs were:
   --receiver-support local-linear --synchronize-every 1024 \
   --output /tmp/ionosphere-verification-20260805/st2006-fig7-anomaly.npz
 
-.venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli analyze-radar \
+.venv/bin/python -m verification.simpson_taflove_2006 analyze-radar \
   --reference /tmp/ionosphere-verification-20260805/st2006-fig7-reference.npz \
   --anomaly /tmp/ionosphere-verification-20260805/st2006-fig7-anomaly.npz \
   --figure /tmp/ionosphere-verification-20260805/st2006-figure-7.png

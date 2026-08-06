@@ -12,19 +12,20 @@ from pathlib import Path
 
 import numpy as np
 
-from .archive import save_npz_atomic
-from .backends import BackendUnavailableError
-from .directional_dispersion import (
+from ionosphere_fdtd.archive import save_npz_atomic
+from ionosphere_fdtd.backends import BackendUnavailableError
+from ionosphere_fdtd.solver import GeodesicFDTD
+
+from ..simpson_taflove_2004.model import (
+    PAPER_MINIMUM_SIMULATION_STEPS,
+    create_validation_simulation,
+)
+from .model import (
     compute_directional_phase_velocity,
     directional_dispersion_metrics,
     record_directional_traces,
     render_directional_dispersion,
     write_directional_dispersion_csv,
-)
-from .solver import GeodesicFDTD
-from .simpson_taflove_2004 import (
-    PAPER_MINIMUM_SIMULATION_STEPS,
-    create_validation_simulation,
 )
 
 
@@ -199,7 +200,8 @@ this experiment measures the existing geodesic dual grid unchanged.
 def _reproduction_command(args: argparse.Namespace) -> str:
     flag = "--torch-compile" if args.torch_compile else "--no-torch-compile"
     parts = [
-        "uv run --extra pytorch --extra visualization ionosphere-measure-dispersion",
+        "uv run --extra pytorch --extra visualization python -m "
+        "verification.directional_dispersion",
         f"--subdivision {args.subdivision}",
         f"--steps {args.steps}",
         f"--azimuth-step-deg {args.azimuth_step_deg}",

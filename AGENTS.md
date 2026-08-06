@@ -77,6 +77,19 @@ Document the supported subdivision levels and verify spherical area closure.
   with untranslated English. Scan for repeated transition phrases and verify
   terminology consistency before running the structural parity checks above.
 
+## Verification code
+
+- Keep reusable solver, mesh, material, source, backend, and visualization
+  functionality under `src/ionosphere_fdtd/`.
+- Keep paper-specific models, reproduction CLIs, report generators, and
+  directional verification under the repository-level `verification/`
+  package. Run these workflows as `python -m verification.<workflow>` from a
+  source checkout; do not add them to the distribution's console scripts.
+- Do not include `verification/` or its paper-specific tests in wheels or
+  source distributions. Confirm both archive contents after packaging changes.
+- Extract a function into the runtime package only when its API and semantics
+  are independent of a particular paper, figure, or acceptance criterion.
+
 ## Verification comparison plots
 
 Use the Simpson–Taflove 2004 Figure 7 and Figure 8 comparison images as the

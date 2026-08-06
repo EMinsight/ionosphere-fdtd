@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .backends import BackendUnavailableError
-from .taflove_fig_3_11 import (
+from ionosphere_fdtd.backends import BackendUnavailableError
+
+from .model import (
     FIGURE_3_11_COLOR_LIMIT_V_M,
     FIGURE_3_11_SOURCE_CURRENT_A,
     create_figure_3_11_simulation,

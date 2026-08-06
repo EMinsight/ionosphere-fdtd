@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ionosphere_fdtd.taflove_fig_3_11 import (
+from verification.taflove_fig_3_11.model import (
     FIGURE_3_11_SOURCE_CURRENT_A,
     FIGURE_3_11_SOURCE_CENTER_STEPS,
     FIGURE_3_11_SOURCE_FULL_WIDTH_STEPS,

@@ -12,14 +12,23 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from .archive import save_npz_atomic
-from .materials import (
+from ionosphere_fdtd.archive import save_npz_atomic
+from ionosphere_fdtd.materials import (
     ETOPO5_SHA256,
     ETOPO5Relief,
     SimpsonTaflove2004Material,
     SphericalAnomaly,
 )
-from .simpson_taflove_2004 import (
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import (
+    TangentialGaussianCurrent,
+    geographic_direction,
+    geographic_face_index,
+    geographic_tangent_basis,
+    radial_linear_distribution,
+)
+
+from ..simpson_taflove_2004.model import (
     AttenuationCurves,
     REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
     ValidationTraces,
@@ -27,14 +36,6 @@ from .simpson_taflove_2004 import (
     compute_attenuation,
     natural_earth_land_classifier,
     render_receiver_grid as _render_receiver_grid,
-)
-from .solver import GeodesicFDTD, SimulationConfig
-from .sources import (
-    TangentialGaussianCurrent,
-    geographic_direction,
-    geographic_face_index,
-    geographic_tangent_basis,
-    radial_linear_distribution,
 )
 
 FloatArray = NDArray[np.float64]

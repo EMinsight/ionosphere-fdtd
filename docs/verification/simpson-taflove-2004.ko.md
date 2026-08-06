@@ -245,7 +245,8 @@ Level 6→7 및 7→8에서 최대 위상 속도 오차의 관측 차수는 A–
 CUDA `float64`로 기준 complete-time ETOPO5 복원을 실행한다.
 
 ```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+uv run --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
   --deep-lithosphere-resistivity-ohm-m 500 \
@@ -260,7 +261,8 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
 물질과 출력 디렉터리만 바꾸어 고정 깊이 Natural Earth 대조군을 실행한다.
 
 ```bash
-uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
+uv run --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material natural-earth \
   --deep-lithosphere-resistivity-ohm-m 500 \
@@ -276,8 +278,8 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
 
 ```bash
 for subdivision in 5 6 7; do
-  uv run --extra pytorch --extra visualization \
-    ionosphere-measure-dispersion \
+  uv run --extra pytorch --extra visualization python -m \
+    verification.directional_dispersion \
     --subdivision "${subdivision}" --steps 25023 \
     --azimuth-step-deg 30 \
     --backend torch --device cuda:0 --dtype float64 --torch-compile \

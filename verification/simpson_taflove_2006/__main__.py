@@ -8,8 +8,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .simpson_taflove_2004 import ValidationTraces, compute_attenuation
-from .simpson_taflove_2006 import (
+from ..simpson_taflove_2004.model import ValidationTraces, compute_attenuation
+from .model import (
     PAPER_FIGURE_7_DURATION_S,
     PAPER_SOURCE_CENTER_S,
     REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,

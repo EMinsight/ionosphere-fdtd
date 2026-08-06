@@ -9,8 +9,11 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import C_0, EARTH_RADIUS_M
-from .simpson_taflove_2004 import (
+from ionosphere_fdtd.constants import C_0, EARTH_RADIUS_M
+from ionosphere_fdtd.solver import GeodesicFDTD
+from ionosphere_fdtd.sources import geographic_distribution
+
+from ..simpson_taflove_2004.model import (
     PAPER_DFT_SIZE,
     PAPER_TIME_STEP_S,
     ValidationTraces,
@@ -19,8 +22,6 @@ from .simpson_taflove_2004 import (
     find_dft_truncations,
     paper_evaluation_frequencies,
 )
-from .solver import GeodesicFDTD
-from .sources import geographic_distribution
 
 FloatArray = NDArray[np.float64]
 DEFAULT_AZIMUTHS_DEG = tuple(float(value) for value in range(0, 360, 30))

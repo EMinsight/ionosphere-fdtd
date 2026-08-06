@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from ionosphere_fdtd.materials import ETOPO5Relief
-from ionosphere_fdtd.simpson_taflove_2006 import (
+from verification.simpson_taflove_2006.model import (
     PAPER_ENVELOPE_FWHM_S,
     PAPER_OIL_AREA_KM2,
     PAPER_OIL_CONDUCTIVITY_FACTOR,
@@ -21,7 +21,7 @@ from ionosphere_fdtd.simpson_taflove_2006 import (
     load_radar_traces,
     save_radar_traces,
 )
-from ionosphere_fdtd.simpson_taflove_2004 import ValidationTraces
+from verification.simpson_taflove_2004.model import ValidationTraces
 
 
 def test_figure_5_normalization_preserves_four_individual_records() -> None:

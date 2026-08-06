@@ -12,7 +12,7 @@ import sys
 
 import numpy as np
 
-from .simpson_taflove_2004 import (
+from .model import (
     PAPER_PATH_AB_TOLERANCE_DB_PER_MM,
     PAPER_PATH_APBP_TOLERANCE_DB_PER_MM,
 )

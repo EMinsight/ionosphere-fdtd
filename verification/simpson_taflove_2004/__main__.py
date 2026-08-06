@@ -11,10 +11,11 @@ from pathlib import Path
 
 import numpy as np
 
-from .archive import save_npz_atomic
-from .backends import BackendUnavailableError
-from .mesquite import load_optimized_mesh
-from .simpson_taflove_2004 import (
+from ionosphere_fdtd.archive import save_npz_atomic
+from ionosphere_fdtd.backends import BackendUnavailableError
+from ionosphere_fdtd.mesquite import load_optimized_mesh
+
+from .model import (
     PAPER_DFT_TRUNCATIONS,
     PAPER_MINIMUM_SIMULATION_STEPS,
     PAPER_TRACE_STEPS,
@@ -33,7 +34,7 @@ from .simpson_taflove_2004 import (
     trace_metrics,
     validation_metrics,
 )
-from .simpson_taflove_2004_report import (
+from .report import (
     ValidationRunSummary,
     write_validation_report,
 )
@@ -322,7 +323,8 @@ def _reproduction_command(args: argparse.Namespace) -> str:
     compile_flag = "--torch-compile" if args.torch_compile else "--no-torch-compile"
     quote = shlex.quote
     parts = [
-        "uv run --extra pytorch --extra visualization ionosphere-verify-2004",
+        "uv run --extra pytorch --extra visualization python -m "
+        "verification.simpson_taflove_2004",
         f"--subdivision {args.subdivision}",
         f"--mesh-orientation {quote(args.mesh_orientation)}",
         f"--mesh-optimization-steps {args.mesh_optimization_steps}",

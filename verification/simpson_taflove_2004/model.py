@@ -11,15 +11,15 @@ from typing import Any, Mapping
 import numpy as np
 from numpy.typing import NDArray
 
-from .constants import C_0, EARTH_RADIUS_M
-from .materials import (
+from ionosphere_fdtd.constants import C_0, EARTH_RADIUS_M
+from ionosphere_fdtd.materials import (
     ETOPO5Relief,
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
 )
-from .mesh import GeodesicMesh, build_geodesic_mesh
-from .solver import GeodesicFDTD, SimulationConfig
-from .sources import GaussianCurrent, geographic_distribution
+from ionosphere_fdtd.mesh import GeodesicMesh, build_geodesic_mesh
+from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
+from ionosphere_fdtd.sources import GaussianCurrent, geographic_distribution
 
 PAPER_TIME_STEP_S = 3.0e-6
 PAPER_RADIAL_CELLS = 40

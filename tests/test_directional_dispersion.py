@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from ionosphere_fdtd.directional_dispersion import (
+from verification.directional_dispersion.model import (
     compute_directional_phase_velocity,
     destination_direction,
     directional_dispersion_metrics,
     record_directional_traces,
 )
-from ionosphere_fdtd.simpson_taflove_2004 import (
+from verification.simpson_taflove_2004.model import (
     PAPER_DFT_SIZE,
     PAPER_TIME_STEP_S,
     ValidationTraces,
