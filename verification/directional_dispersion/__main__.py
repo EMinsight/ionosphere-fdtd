@@ -12,10 +12,10 @@ from pathlib import Path
 
 import numpy as np
 
-from ionosphere_fdtd.archive import save_npz_atomic
 from ionosphere_fdtd.backends import BackendUnavailableError
 from ionosphere_fdtd.solver import GeodesicFDTD
 
+from ..common.archive import save_npz_atomic
 from ..simpson_taflove_2004.model import (
     PAPER_MINIMUM_SIMULATION_STEPS,
     create_validation_simulation,

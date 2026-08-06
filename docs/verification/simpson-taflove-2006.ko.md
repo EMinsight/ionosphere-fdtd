@@ -484,9 +484,9 @@ Figures 5–6에서 고정 깊이 material은 동서 대칭을 복원하지만 �
 최종 Figure 5 결과는 먼저 고정된 Mesquite source를 build하고 level-7 coordinate archive를 만든 뒤 ETOPO5 실행에서 사용한다.
 
 ```bash
-python tools/mesquite/build.py --build-dir build/mesquite
+python verification/mesh_optimization/tools/build.py --build-dir build/mesquite
 
-.venv/bin/python -m ionosphere_fdtd.mesh_optimize_cli \
+.venv/bin/python -m verification.mesh_optimization \
   --subdivision 7 --orientation polar --fixed-vertices poles \
   --executable build/mesquite/bin/ionosphere-mesquite-optimize \
   --movement-tolerance 1e-10 --max-iterations 200 \

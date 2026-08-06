@@ -13,12 +13,13 @@ from typing import Any
 
 import numpy as np
 
-from .archive import save_npz_atomic
-from .mesh import (
+from ionosphere_fdtd.mesh import (
     FloatArray,
     GeodesicMesh,
     build_geodesic_mesh_from_vertices,
 )
+
+from ..common.archive import save_npz_atomic
 
 MESQUITE_COMMIT = "7ae51c8e8617c67e63018c8a7effc0f5455f58b4"
 MESQUITE_ARCHIVE_SHA256 = (

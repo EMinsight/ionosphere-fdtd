@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from ionosphere_fdtd.mesh import build_geodesic_mesh
-from ionosphere_fdtd.mesquite import (
+from verification.mesh_optimization.mesquite import (
     MESQUITE_OBJECTIVE,
     MESQUITE_VERTEX_MOVER,
     _array_sha256,

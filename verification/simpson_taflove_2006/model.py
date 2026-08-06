@@ -12,7 +12,6 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from ionosphere_fdtd.archive import save_npz_atomic
 from ionosphere_fdtd.materials import (
     ETOPO5_SHA256,
     ETOPO5Relief,
@@ -28,6 +27,7 @@ from ionosphere_fdtd.sources import (
     radial_linear_distribution,
 )
 
+from ..common.archive import save_npz_atomic
 from ..simpson_taflove_2004.model import (
     AttenuationCurves,
     REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,

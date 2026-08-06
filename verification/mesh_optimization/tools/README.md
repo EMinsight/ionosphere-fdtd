@@ -9,7 +9,7 @@ The source identifies itself as Mesquite 2.99.
 Build it outside the Python package with:
 
 ```console
-python tools/mesquite/build.py
+python verification/mesh_optimization/tools/build.py
 ```
 
 The adapter uses `SphericalDomain`, fixes vertices marked by the input VTK

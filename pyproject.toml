@@ -33,7 +33,6 @@ visualization = [
 
 [project.scripts]
 ionosphere = "ionosphere_fdtd.cli:main"
-ionosphere-optimize-mesh = "ionosphere_fdtd.mesh_optimize_cli:main"
 ionosphere-visualize = "ionosphere_fdtd.viz_cli:main"
 
 [tool.setuptools.packages.find]

@@ -890,9 +890,9 @@ The final Figure 5 result first builds the pinned Mesquite source, creates the
 level-7 coordinate archive, and then uses that archive in the ETOPO5 run:
 
 ```bash
-python tools/mesquite/build.py --build-dir build/mesquite
+python verification/mesh_optimization/tools/build.py --build-dir build/mesquite
 
-.venv/bin/python -m ionosphere_fdtd.mesh_optimize_cli \
+.venv/bin/python -m verification.mesh_optimization \
   --subdivision 7 --orientation polar --fixed-vertices poles \
   --executable build/mesquite/bin/ionosphere-mesquite-optimize \
   --movement-tolerance 1e-10 --max-iterations 200 \

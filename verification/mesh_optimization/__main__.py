@@ -7,8 +7,9 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from .mesh import build_geodesic_mesh
-from .mesh_quality import mesh_quality_metrics
+from ionosphere_fdtd.mesh import build_geodesic_mesh
+from ionosphere_fdtd.mesh_quality import mesh_quality_metrics
+
 from .mesquite import optimize_with_mesquite, save_optimized_mesh
 
 

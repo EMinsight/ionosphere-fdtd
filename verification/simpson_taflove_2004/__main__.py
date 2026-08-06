@@ -11,9 +11,10 @@ from pathlib import Path
 
 import numpy as np
 
-from ionosphere_fdtd.archive import save_npz_atomic
 from ionosphere_fdtd.backends import BackendUnavailableError
-from ionosphere_fdtd.mesquite import load_optimized_mesh
+
+from ..common.archive import save_npz_atomic
+from ..mesh_optimization.mesquite import load_optimized_mesh
 
 from .model import (
     PAPER_DFT_TRUNCATIONS,
@@ -60,7 +61,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mesh-coordinates",
         type=Path,
-        help="NPZ coordinates produced by ionosphere-optimize-mesh",
+        help="NPZ coordinates produced by verification.mesh_optimization",
     )
     parser.add_argument("--steps", type=int, default=PAPER_TRACE_STEPS)
     parser.add_argument(
