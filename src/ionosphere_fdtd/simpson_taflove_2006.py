@@ -22,6 +22,7 @@ from .materials import (
 from .simpson_taflove_2004 import (
     AttenuationCurves,
     ValidationTraces,
+    bannister_figure_8_guide,
     compute_attenuation,
     natural_earth_land_classifier,
 )
@@ -706,11 +707,15 @@ def render_figure_5(traces: ValidationTraces, path: str | Path) -> Path:
     for label, trace in values.items():
         axis.plot(traces.time_s, trace, label=f"Point {label}", **styles[label])
     axis.set(
-        xlim=(0.0, 0.12),
-        xlabel="Time (seconds)",
-        ylabel="Normalized radial electric field",
+        xlim=(0.0, 0.11),
+        ylim=(-0.2, 1.0),
     )
-    axis.legend(frameon=False, ncol=2)
+    axis.set_xticks(np.arange(0.0, 0.101, 0.02))
+    axis.set_yticks(np.arange(-0.1, 1.01, 0.1))
+    axis.set_xlabel("Time (seconds)", fontsize=20)
+    axis.set_ylabel("Normalized radial electric field", fontsize=20)
+    axis.tick_params(axis="both", which="major", labelsize=18)
+    axis.legend(frameon=False, ncol=2, fontsize=18)
     figure.savefig(output, dpi=180)
     plt.close(figure)
     return output
@@ -723,17 +728,43 @@ def render_figure_6(curves: AttenuationCurves, path: str | Path) -> Path:
 
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    positive = curves.frequency_hz > 0.0
     simulated = (
         (curves.frequency_hz >= curves.valid_frequency_hz[0])
         & (curves.frequency_hz <= curves.valid_frequency_hz[1])
     )
+    guide_frequency = np.geomspace(5.0, 2_000.0, 512)
+    x_ticks = (5, 10, 20, 50, 100, 200, 500, 1_000, 2_000)
+    y_ticks = (0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30)
     figure, axis = plt.subplots(figsize=(7.0, 4.5), constrained_layout=True)
-    axis.loglog(curves.frequency_hz[simulated], curves.path_ab_db_per_mm[simulated], color="black", label="East of source")
-    axis.loglog(curves.frequency_hz[simulated], curves.path_apbp_db_per_mm[simulated], color="0.55", label="West of source")
-    axis.loglog(curves.frequency_hz[positive], curves.benchmark_db_per_mm[positive], color="black", linestyle=":", label="Previous theoretical results")
-    axis.set(xlim=(5.0, 2_000.0), ylim=(0.1, 30.0), xlabel="Frequency (Hz)", ylabel="Attenuation rate (dB/Mm)")
-    axis.legend(frameon=False)
+    axis.loglog(
+        curves.frequency_hz[simulated],
+        curves.path_ab_db_per_mm[simulated],
+        color="black",
+        label="East of source",
+    )
+    axis.loglog(
+        curves.frequency_hz[simulated],
+        curves.path_apbp_db_per_mm[simulated],
+        color="0.55",
+        label="West of source",
+    )
+    axis.loglog(
+        guide_frequency,
+        bannister_figure_8_guide(guide_frequency),
+        color="black",
+        linestyle=":",
+        label="Previous theoretical results",
+    )
+    axis.set(
+        xlim=(5.0, 2_000.0),
+        ylim=(0.1, 30.0),
+    )
+    axis.set_xticks(x_ticks, labels=[f"{value:g}" for value in x_ticks])
+    axis.set_yticks(y_ticks, labels=[f"{value:g}" for value in y_ticks])
+    axis.set_xlabel("Frequency (Hz)", fontsize=20)
+    axis.set_ylabel("Attenuation rate (dB/Mm)", fontsize=20)
+    axis.tick_params(axis="both", which="major", labelsize=18)
+    axis.legend(frameon=False, fontsize=18)
     figure.savefig(output, dpi=180)
     plt.close(figure)
     return output
@@ -747,10 +778,29 @@ def render_figure_7(curves: RadarPerturbation, path: str | Path) -> Path:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     figure, axis = plt.subplots(figsize=(7.0, 4.5), constrained_layout=True)
-    axis.plot(curves.time_s, curves.delta_ht_db, color="black", linestyle="--", label="(a) ΔHtan")
-    axis.plot(curves.time_s, curves.delta_hr_db, color="black", label="(b) ΔHr")
-    axis.set(xlim=(0.0, PAPER_FIGURE_7_DURATION_S), ylim=(-100.0, 30.0), xlabel="Time (seconds)", ylabel="Surface magnetic field perturbation (dB)")
-    axis.legend(frameon=False)
+    axis.plot(
+        curves.time_s,
+        curves.delta_ht_db,
+        color="black",
+        linestyle="--",
+        label="(a) ΔHtan",
+    )
+    axis.plot(
+        curves.time_s,
+        curves.delta_hr_db,
+        color="black",
+        label="(b) ΔHr",
+    )
+    axis.set(
+        xlim=(0.0, PAPER_FIGURE_7_DURATION_S),
+        ylim=(-100.0, 30.0),
+    )
+    axis.set_xticks(np.arange(0.0, 0.081, 0.01))
+    axis.set_yticks(np.arange(-100.0, 21.0, 20.0))
+    axis.set_xlabel("Time (seconds)", fontsize=20)
+    axis.set_ylabel("Surface magnetic field perturbation (dB)", fontsize=20)
+    axis.tick_params(axis="both", which="major", labelsize=18)
+    axis.legend(frameon=False, fontsize=18)
     figure.savefig(output, dpi=180)
     plt.close(figure)
     return output

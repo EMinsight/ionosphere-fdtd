@@ -122,3 +122,8 @@ Current geometry references:
   pixel canvas, with additional inter-column spacing for the enlarged
   reproduced y-axis label. Its reproduced panel uses 20-point axis labels and
   18-point major tick labels and legend text.
+- Simpson–Taflove 2006 comparison plots use a `3200 x 1340` pixel canvas,
+  20-point reproduced axis labels, and 18-point reproduced major tick labels
+  and legend text. Their matched published/reproduced data frames are
+  `1200 x 1033` pixels for Figure 5, `1200 x 1038` pixels for Figure 6, and
+  `1200 x 983` pixels for Figure 7.
