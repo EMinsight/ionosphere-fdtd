@@ -554,9 +554,10 @@ def render_figure_8(
 
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    frequency = curves.frequency_hz
-    display = (frequency >= 5.0) & (frequency <= 2_000.0)
     comparison_frequency, path_ab, path_apbp, _ = sample_paper_comparison(curves)
+    guide_frequency = np.geomspace(5.0, 2_000.0, 512)
+    x_ticks = (5, 10, 20, 50, 100, 200, 500, 1_000, 2_000)
+    y_ticks = (0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30)
     figure, ax = plt.subplots(figsize=(9.0, 6.2), constrained_layout=True)
     ax.axvspan(
         *curves.valid_frequency_hz,
@@ -564,8 +565,8 @@ def render_figure_8(
         label="paper-valid DFT window",
     )
     ax.plot(
-        frequency[display],
-        curves.benchmark_db_per_mm[display],
+        guide_frequency,
+        bannister_figure_8_guide(guide_frequency),
         color="black",
         label="Bannister daytime model",
     )
@@ -587,6 +588,8 @@ def render_figure_8(
     ax.set_yscale("log")
     ax.set_xlim(5.0, 2_000.0)
     ax.set_ylim(0.1, 30.0)
+    ax.set_xticks(x_ticks, labels=[f"{value:g}" for value in x_ticks])
+    ax.set_yticks(y_ticks, labels=[f"{value:g}" for value in y_ticks])
     ax.set_xlabel("Frequency (Hz)")
     ax.set_ylabel("Attenuation rate (dB/Mm)")
     ax.set_title("Simpson & Taflove (2004), Fig. 8 verification run")
