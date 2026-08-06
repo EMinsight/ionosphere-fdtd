@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from ionosphere_fdtd.materials import ETOPO5Relief
+from verification.simpson_taflove_2004.materials import ETOPO5Relief
 from verification.simpson_taflove_2006.model import (
     PAPER_ENVELOPE_FWHM_S,
     PAPER_OIL_AREA_KM2,

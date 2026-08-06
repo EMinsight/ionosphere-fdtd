@@ -7,7 +7,11 @@ from .backends import (
     TorchBackend,
     create_backend,
 )
-from .materials import EarthIonosphereMaterial, SphericalAnomaly
+from .materials import (
+    EarthIonosphereMaterial,
+    LayeredEarthIonosphereMaterial,
+    SphericalAnomaly,
+)
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
@@ -29,6 +33,7 @@ __all__ = [
     "ArrayBackend",
     "BackendUnavailableError",
     "EarthIonosphereMaterial",
+    "LayeredEarthIonosphereMaterial",
     "GaussianCurrent",
     "TangentialGaussianCurrent",
     "GeodesicFDTD",

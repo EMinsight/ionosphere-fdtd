@@ -4,7 +4,7 @@ import pytest
 from ionosphere_fdtd.constants import MU_0
 from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
-    SimpsonTaflove2004Material,
+    LayeredEarthIonosphereMaterial,
     SphericalAnomaly,
 )
 from ionosphere_fdtd.mesh import build_geodesic_mesh
@@ -585,7 +585,7 @@ def test_solver_validates_custom_material_outputs(kind: str, pattern: str) -> No
 
 
 def test_solver_uses_fractional_tangential_material_cells() -> None:
-    material = SimpsonTaflove2004Material(
+    material = LayeredEarthIonosphereMaterial(
         surface_elevation_sampler=lambda directions: np.full(
             len(directions), -207.0
         ),
