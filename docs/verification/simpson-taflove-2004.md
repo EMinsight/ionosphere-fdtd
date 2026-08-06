@@ -50,7 +50,7 @@ paper's reported ±0.5 dB/Mm A–B and ±1.0 dB/Mm A′–B′ agreement ranges.
 | B / B′ peak step | 14,449 / 14,450 | 14,803 / 14,667 | 136-step split replaces near overlap |
 | A–B attenuation MAE / maximum | 0.310 / 2.384 dB/Mm | 1.104 / 2.538 dB/Mm | worse |
 | A′–B′ attenuation MAE / maximum | 0.286 / 1.092 dB/Mm | 0.242 / 3.258 dB/Mm | mean better; maximum worse |
-| Production wall time | 2,002.5 s | 2,696.7 s | 40% more steps in 34.7% more time |
+| Production wall time | 2,002.5 s | 2,677.5 s | 40% more steps in 33.7% more time |
 
 The complete time axis and visible material-driven asymmetry are substantive
 Figure 7 improvements. They also reveal that the reconstructed relief and
@@ -132,13 +132,14 @@ Phase velocity is compared with Bannister equation (4).
 | Ionosphere scale height | `1/0.3 km` (3.333… km) |
 | Surface grid | subdivision 8, polar orientation, 655,362 cells |
 | Material | ETOPO5 relief reconstruction + Figure 6 oceanic/continental profiles |
+| Deep lithosphere resistivity | 500 Ω·m |
 | DFT window | adaptive post-overshoot zero crossing |
 | Production backend | PyTorch compiled update on CUDA |
 | Production precision | float64 |
 | ETOPO5 SHA-256 | `471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3` |
-| Production implementation revision | `eee3f98` |
-| Trace SHA-256 | `d51cc3aa78e44097e2a2c4c9a2469c2bd99401f65eb93b9130f2cd0ebdbeefea` |
-| Wall time | 2,696.7 s |
+| Production implementation revision | `ec9583a` |
+| Trace SHA-256 | `147b4756b11c25f11b63825a381afe9fc17e747dbc2a33910c7a36060946d5e1` |
+| Wall time | 2,677.5 s |
 
 Surface cell counts are 40,962, 163,842, and 655,362 for subdivisions 6, 7,
 and 8. Subdivision 7 matches the paper's 163,842 cells per radial plane.
@@ -161,9 +162,10 @@ The left-hand panels below are cropped from page 450 of the
 The published panels are © 2004 IEEE and are excerpted here for
 source-attributed technical comparison.
 The right-hand panels were regenerated with the current analysis code from the
-2026-08-06 subdivision-8 CUDA `float64` ETOPO5 receiver trace. The Figure 8 reproduction
-uses Bannister's source equations and the final fixed comparison frequencies,
-not the deprecated plot-fit reference.
+2026-08-06 subdivision-8 CUDA `float64` ETOPO5 receiver trace that explicitly
+uses the Reference 23 deep-rock value and Reference 24 ionosphere profile. The
+Figure 8 reproduction uses Bannister's source equations and the final fixed
+comparison frequencies, not the deprecated plot-fit reference.
 
 ![Published and reproduced Figure 7 temporal responses](images/simpson-taflove-2004-fig-7-comparison.png)
 
@@ -238,7 +240,7 @@ and has the largest mean of the level-8 cases. Material fidelity therefore
 improves the time-domain asymmetry without improving Figure 8 as a whole.
 Neither path changes verdict.
 
-The audited level-8 ETOPO5 run completed 35,000 steps in 2,696.7 seconds on an
+The audited level-8 ETOPO5 run completed 35,000 steps in 2,677.5 seconds on an
 NVIDIA GeForce RTX 3060. The lower peak memory of the ordered dual-circulation
 kernel avoided the former 10.1 GB compiled-preflight allocation. Its adaptive
 cutoffs were 23,462, 22,676, 24,491, and 24,550 samples for A, A′, B, and B′.
@@ -293,6 +295,13 @@ controlled subdivision-5 CUDA `float64` receiver traces by only `2.34e-16`
 relative RMS. The attenuation metrics are equal at the reported precision
 because the corrected material lies many ELF skin depths below the surface.
 
+The authoritative subdivision-8, 35,000-step CUDA `float64` run was then
+repeated with the same corrected value. Its receiver fields differ from the
+former production trace by `7.69e-16` relative RMS, with a maximum absolute
+difference of `8.74e-22 V/m`. Peak steps, adaptive DFT cutoffs, Figure 8
+metrics, and every PASS/FAIL decision remain unchanged. Figures 7 and 8 were
+rendered again from this trace and are pixel-identical to the former raw plots.
+
 | Deep value | A–B / A′–B′ MAE | A–B / A′–B′ maximum | B / B′ normalized peak |
 |---:|---:|---:|---:|
 | 50 Ω·m, former | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
@@ -303,8 +312,8 @@ single-scale-height profile as
 `σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]`. The implementation now encodes
 `ζ₀ = 1/0.3 km` exactly instead of rounding it to 3.33 km and has a regression
 test for `σ(H) = 2.5×10⁵ ε0`. The final production commands already supplied
-the exact value explicitly, so this default correction does not change the
-archived production curves.
+the exact value explicitly. The complete subdivision-8 rerun therefore also
+confirms that this default correction does not change the production curves.
 
 | Level-7 material | Quarter-arc east–west RMS | A / A′ peak steps | A–B / A′–B′ attenuation MAE | A–B / A′–B′ maximum error |
 |---|---:|---:|---:|---:|

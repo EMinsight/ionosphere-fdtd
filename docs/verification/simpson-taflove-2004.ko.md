@@ -36,7 +36,7 @@ Figure 8에서 동일한 트레이스로 계산한 평균 절대 감쇠 오차�
 | B / B′ 피크 step | 14,449 / 14,450 | 14,803 / 14,667 | 거의 겹치던 피크가 136 steps 분리됨 |
 | A–B 감쇠 MAE / 최대 | 0.310 / 2.384 dB/Mm | 1.104 / 2.538 dB/Mm | 악화 |
 | A′–B′ 감쇠 MAE / 최대 | 0.286 / 1.092 dB/Mm | 0.242 / 3.258 dB/Mm | 평균은 개선, 최대는 악화 |
-| 프로덕션 실행 시간 | 2,002.5 s | 2,696.7 s | steps가 40% 늘고 시간은 34.7% 증가 |
+| 프로덕션 실행 시간 | 2,002.5 s | 2,677.5 s | steps가 40% 늘고 시간은 33.7% 증가 |
 
 완전한 시간축과 물질에 의해 나타나는 비대칭은 Figure 7의 실질적인 개선이다. 동시에 복원한 지형과 대표 전도도 프로파일이 수신기 쌍을 지나치게 분리하고 출판된 피크 순서를 반대로 만든다는 점도 드러났다. Figure 8의 전체 판정은 여전히 실패다. 서쪽 경로의 평균은 개선됐지만 두 지점별 최댓값 모두 허용 범위를 벗어난다.
 
@@ -92,13 +92,14 @@ Figure 8의 “Previous Results” 곡선은 P. R. Bannister, “ELF Propagation
 | 전리층 scale height | `1/0.3 km` (3.333… km) |
 | 표면 격자 | subdivision 8, polar orientation, 655,362 cells |
 | 물질 | ETOPO5 기복 복원 + Figure 6 해양/대륙 프로파일 |
+| 심부 암석권 비저항 | 500 Ω·m |
 | DFT window | 오버슈트 뒤 적응형 zero crossing |
 | 프로덕션 backend | CUDA의 PyTorch compiled update |
 | 프로덕션 정밀도 | float64 |
 | ETOPO5 SHA-256 | `471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3` |
-| 프로덕션 구현 revision | `eee3f98` |
-| 트레이스 SHA-256 | `d51cc3aa78e44097e2a2c4c9a2469c2bd99401f65eb93b9130f2cd0ebdbeefea` |
-| 실행 시간 | 2,696.7 s |
+| 프로덕션 구현 revision | `ec9583a` |
+| 트레이스 SHA-256 | `147b4756b11c25f11b63825a381afe9fc17e747dbc2a33910c7a36060946d5e1` |
+| 실행 시간 | 2,677.5 s |
 
 표면 셀 수는 subdivisions 6, 7, 8에서 각각 40,962, 163,842, 655,362개이다. Subdivision 7은 논문의 방사 평면당 163,842개 셀과 일치한다.
 
@@ -110,7 +111,7 @@ Figure 8의 “Previous Results” 곡선은 P. R. Bannister, “ELF Propagation
 
 ## 출판 플롯 비교
 
-아래 왼쪽 패널은 [저자 제공 논문 PDF](https://my.ece.utah.edu/~simpson/Papers/Paper2.pdf)의 450쪽에서 잘라냈다. 출판 패널의 저작권은 © 2004 IEEE에 있으며, 출처를 밝힌 기술 비교 목적으로 인용했다. 오른쪽 패널은 현재 분석 코드로 2026-08-06 subdivision-8 CUDA `float64` ETOPO5 수신 트레이스에서 다시 생성했다. Figure 8 재현에는 더 이상 쓰지 않는 plot-fit 기준이 아니라 Bannister의 원 방정식과 최종 고정 비교 주파수를 사용했다.
+아래 왼쪽 패널은 [저자 제공 논문 PDF](https://my.ece.utah.edu/~simpson/Papers/Paper2.pdf)의 450쪽에서 잘라냈다. 출판 패널의 저작권은 © 2004 IEEE에 있으며, 출처를 밝힌 기술 비교 목적으로 인용했다. 오른쪽 패널은 인용문헌 23의 심부 암석값과 인용문헌 24의 전리층 프로파일을 명시적으로 적용한 2026-08-06 subdivision-8 CUDA `float64` ETOPO5 수신 트레이스에서 현재 분석 코드로 다시 생성했다. Figure 8 재현에는 더 이상 쓰지 않는 plot-fit 기준이 아니라 Bannister의 원 방정식과 최종 고정 비교 주파수를 사용했다.
 
 ![출판된 Figure 7과 재현한 Figure 7 시간 응답](images/simpson-taflove-2004-fig-7-comparison.png)
 
@@ -150,7 +151,7 @@ ETOPO5는 사라졌던 동서 분리를 복원하지만 정량적인 양상은 �
 
 현재 ETOPO5 서쪽 경로의 평균은 이전 두 level-8 결과보다 낮지만 지점별 최댓값은 더 크다. 동쪽 경로는 체계적으로 이동했고 level-8 사례 중 평균이 가장 크다. 따라서 물질 충실도는 시간 영역 비대칭을 개선하지만 Figure 8 전체를 개선하지는 않는다. 어느 경로의 판정도 바뀌지 않는다.
 
-검토한 level-8 ETOPO5 실행은 NVIDIA GeForce RTX 3060에서 35,000 steps를 2,696.7초에 완료했다. 정렬된 dual-circulation kernel의 낮은 peak memory 덕분에 이전 10.1 GB compiled-preflight 할당을 피했다. 적응형 절단 길이는 A, A′, B, B′에 대해 각각 23,462, 22,676, 24,491, 24,550 samples였다.
+검토한 level-8 ETOPO5 실행은 NVIDIA GeForce RTX 3060에서 35,000 steps를 2,677.5초에 완료했다. 정렬된 dual-circulation kernel의 낮은 peak memory 덕분에 이전 10.1 GB compiled-preflight 할당을 피했다. 적응형 절단 길이는 A, A′, B, B′에 대해 각각 23,462, 22,676, 24,491, 24,550 samples였다.
 
 ## 균일 모델 위상 및 도달 수렴
 
@@ -174,12 +175,14 @@ Level 6→7 및 7→8에서 최대 위상 속도 오차의 관측 차수는 A–
 
 첨부한 원문을 대조하면서 기존 프로파일의 오류를 확인했다. 기존 50 Ω·m가 Figure 6의 전 지구 영역 어디에도 해당하지 않는데 60 km 아래 전체 격자에 적용돼 있었다. 이 값을 500 Ω·m로 고친 뒤 subdivision-5 CUDA `float64` 수신 트레이스의 상대 RMS 변화는 `2.34e-16`에 그쳤다. 보정한 영역이 표면에서 ELF skin depth의 수십 배 아래에 있어, 보고 정밀도에서 감쇠 지표는 같다.
 
+이어 같은 보정값으로 최종 subdivision-8, 35,000-step CUDA `float64` 실행을 다시 수행했다. 새 수신 전계와 기존 프로덕션 트레이스의 상대 RMS 차이는 `7.69e-16`, 최대 절대 차이는 `8.74e-22 V/m`이다. 피크 step, 적응형 DFT 절단점, Figure 8 지표와 모든 PASS/FAIL 판정은 그대로다. 이 트레이스에서 Figure 7과 8을 다시 그렸으며 기존 raw plot과 픽셀 단위로 같다.
+
 | 심부 값 | A–B / A′–B′ MAE | A–B / A′–B′ 최댓값 | B / B′ 정규화 피크 |
 |---:|---:|---:|---:|
 | 기존 50 Ω·m | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
 | 보정 500 Ω·m | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
 
-[Bannister(1985)](https://doi.org/10.1029/RS020i004p00977)의 주간 단일 scale-height 프로파일은 `σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]`이다. 구현은 이제 `ζ₀ = 1/0.3 km`를 3.33 km로 반올림하지 않고 그대로 사용하며, `σ(H) = 2.5×10⁵ ε0`를 확인하는 회귀 테스트도 추가했다. 최종 프로덕션 명령은 이미 정확한 값을 명시했으므로 이 기본값 보정은 보관한 프로덕션 곡선을 바꾸지 않는다.
+[Bannister(1985)](https://doi.org/10.1029/RS020i004p00977)의 주간 단일 scale-height 프로파일은 `σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]`이다. 구현은 이제 `ζ₀ = 1/0.3 km`를 3.33 km로 반올림하지 않고 그대로 사용하며, `σ(H) = 2.5×10⁵ ε0`를 확인하는 회귀 테스트도 추가했다. 최종 프로덕션 명령은 이미 정확한 값을 명시했다. 이번 subdivision-8 전체 재실행에서도 기본값 보정이 프로덕션 곡선을 바꾸지 않음을 확인했다.
 
 | Level-7 물질 | 1/4 호 동서 RMS | A / A′ 피크 steps | A–B / A′–B′ 감쇠 MAE | A–B / A′–B′ 최대 오차 |
 |---|---:|---:|---:|---:|
