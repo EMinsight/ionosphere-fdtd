@@ -4,6 +4,8 @@
 
 Production rerun performed on 2026-08-05 (Asia/Seoul).
 
+Korean version: [한국어](simpson-taflove-2006.ko.md).
+
 ## Executive summary
 
 This study tests whether the present three-dimensional geodesic FDTD
