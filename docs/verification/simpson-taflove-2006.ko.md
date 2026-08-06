@@ -64,15 +64,15 @@ Figure 7 본문과 caption은 정규화 설명이 서로 모순된다. 본문은
 | Gaussian `1/e` 전체 폭 / 중심 | `480 Δt` / `960 Δt` |
 | 수신기 | 적도를 따라 A/A′는 ±45°, B/B′는 ±90° |
 | 표면 자료 | NOAA-NGDC ETOPO5, bilinear sampling |
-| 전리층 | 70 km 기준 높이, 3.33 km scale height |
+| 전리층 | 70 km 기준 높이, `1/0.3 km` (3.333… km) scale height |
 | Backend | compiled PyTorch, CUDA, float64 |
 | Optimizer | `TShapeSizeB1`, `PMeanP(1)`, `TrustRegion` |
 | Mesquite source revision | `7ae51c8e8617c67e63018c8a7effc0f5455f58b4` |
-| 프로덕션 구현 revision | `e916119` |
+| 프로덕션 구현 revision | `57fdd48` |
 | Mesh-coordinate SHA-256 | `221052c8a2bb109f4ee0142d19b4e181c31fd04e508074495f5ff7923cede75f` |
 | Vertex-coordinate SHA-256 | `c5736acfb24f1e9e7c97e5ade78c5f4c9ddeb30859aba6ead1502781091cac47` |
-| 트레이스 SHA-256 | `34a8f94a329035cebdcd9b56aef8f14f23782754f888ead9bfdaba0e97c86372` |
-| 격자 최적화 / FDTD 실행 시간 | 165.7 / 627.1 s |
+| 트레이스 SHA-256 | `7b41ebf8d1cfbf82fe167f71140819d5b56059ee83b420d4b41592951c9007e3` |
+| 격자 최적화 / FDTD 실행 시간 | 165.7 / 592.5 s |
 
 소스는 수평 평면에서 barycentric distribution하고 0과 5 km `Er` 평면 사이에서 선형 stagger하여 정확한 2.5 km 중심과 총전류를 보존한다.
 
@@ -181,7 +181,13 @@ Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 �
 | 고정 깊이 Natural Earth 육지/해양 | 0.38240 / 0.38539 | 0.07481 / 0.07466 | 5.2% / 1.9% |
 | ETOPO5 기복 및 대표 암석 프로파일 | 0.11120 / 0.39237 | 0.02238 / 0.06673 | 30.8% / 235.9% |
 
-균일 및 고정 깊이 육지/해양 모델은 출판된 약 0.39의 원거리 피크를 복원하고 동/서 경로를 유사하게 유지한다. ETOPO5와 대표 500/200/50 Ω·m 프로파일을 추가하면 동쪽 B 경로가 강하게 억제되고 B′는 출판 피크 부근에 남는다. 이는 core FDTD update가 아니라 현재 기복/암석권 이산화가 보정 위치 경로 비대칭의 주원인임을 나타낸다. 논문에서 사용한 정확한 Hermance 기반 cellwise conductivity는 구할 수 없다.
+균일 및 고정 깊이 육지/해양 모델은 출판된 약 0.39의 원거리 피크를 복원하고 동/서 경로를 유사하게 유지한다. ETOPO5와 대표 500/200/500 Ω·m 프로파일을 추가하면 동쪽 B 경로가 강하게 억제되고 B′는 출판 피크 부근에 남는다. 이는 core FDTD update가 아니라 현재 기복/암석권 이산화가 보정 위치 경로 비대칭의 주원인임을 나타낸다. 논문에서 사용한 정확한 Hermance 기반 cellwise conductivity는 구할 수 없다.
+
+2004 논문의 인용문헌 23과 24로 첨부한 원문을 직접 대조했다. [Hermance Figure 6의 경계](https://doi.org/10.1029/RF001p0190)는 심부 배경을 ≤500 Ω·m로 표시한다. 기존 구현은 Figure 6의 전 지구 영역 어디에도 해당하지 않는 50 Ω·m를 60 km 아래 전체 격자에 적용했다. 심부 배경을 500 Ω·m로 고친 뒤 subdivision-5 CUDA `float64` 트레이스의 상대 RMS 변화는 `2.34e-16`이었고, 보고한 감쇠 지표는 모두 같았다. 물질 해석은 바로잡았지만 이 깊이는 전자기적으로 차폐되므로 Figure 5는 개선되지 않았다.
+
+전체 subdivision-7 Mesquite CUDA `float64` 재실행은 592.5초 걸렸으며 선별 결과를 확인했다. 기존 프로덕션 트레이스와의 상대 RMS 차이는 `1.05e-15`이다. Figure 5–6의 동/서 평균 오차는 0.921/0.284 dB/Mm, 최대 오차는 3.020/2.125 dB/Mm로 그대로다. 보정 트레이스의 SHA-256은 `7b41ebf8d1cfbf82fe167f71140819d5b56059ee83b420d4b41592951c9007e3`이다. 새로 그린 두 플롯은 기존 raw plot과 픽셀 단위로 같아 published-comparison 이미지는 다시 생성하지 않았다.
+
+[Bannister 식 (1)](https://doi.org/10.1029/RS020i004p00977)은 구현한 `σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]` 프로파일을 확인해 준다. 기본값은 이제 `ζ₀=1/0.3 km`를 정확하게 표현하며 기준 전도도를 확인하는 회귀 테스트도 추가했다. 검토한 프로덕션 명령은 이미 이 값을 정확하게 사용했으므로 대기 보정은 프로덕션 트레이스를 바꾸지 않는다.
 
 프로덕션 해상도 비교에서도 같은 결과를 확인한다.
 
@@ -490,6 +496,7 @@ python tools/mesquite/build.py --build-dir build/mesquite
   --subdivision 7 --mesh-orientation polar \
   --mesh-coordinates /tmp/ionosphere-mesquite-level-7.npz \
   --minimum-ocean-depth-km 0 \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --steps 40000 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --dft-window adaptive \
@@ -511,6 +518,7 @@ Figure 7 paired run은 다음과 같다.
 ```bash
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case reference --subdivision 7 --material etopo5 \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --torch-compile --courant 1.0 \
   --source-basis both --vertical-reference terrain \
@@ -520,6 +528,7 @@ Figure 7 paired run은 다음과 같다.
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case anomaly --subdivision 7 --material etopo5 \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --torch-compile --courant 1.0 \
   --source-basis both --vertical-reference terrain \

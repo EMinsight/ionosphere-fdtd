@@ -129,7 +129,7 @@ Phase velocity is compared with Bannister equation (4).
 | A / A′ distance | 45° east / west from the source |
 | B / B′ distance | 90° east / west from the source |
 | Ionosphere reference height | 70 km |
-| Ionosphere scale height | 3.33 km |
+| Ionosphere scale height | `1/0.3 km` (3.333… km) |
 | Surface grid | subdivision 8, polar orientation, 655,362 cells |
 | Material | ETOPO5 relief reconstruction + Figure 6 oceanic/continental profiles |
 | DFT window | adaptive post-overshoot zero crossing |
@@ -278,12 +278,33 @@ loader verifies its 18,662,400-byte size and SHA-256 digest
 `471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3`,
 then bilinearly samples it at each geodesic material point.
 
-Hermance (1995) is the source of the bounded conceptual section reused in the
-paper's Figure 6, not a distributable global 3-D conductivity data set. The
-implemented material therefore uses the shown 0.3 Ω·m seawater and
-representative 500/200/50 Ω·m oceanic and continental depth profiles. Local
-≤5/≤10 Ω·m conductors in the figure cannot be reproduced because their
-positions and volumes are not specified numerically.
+[Hermance (1995)](https://doi.org/10.1029/RF001p0190) is the source of the
+bounded conceptual section reused in the paper's Figure 6, not a distributable
+global 3-D conductivity data set. The figure labels 0.3 Ω·m seawater,
+≥500 Ω·m shallow rock, a ≤200 Ω·m oceanic intermediate region, and
+≤500 Ω·m deep rock. The implementation uses the labeled boundary values,
+giving a representative 500/200/500 Ω·m profile. Its geographically
+unspecified local ≤5/≤10 Ω·m conductors are not promoted to global layers.
+
+An audit with the supplied source exposed an error in the former profile: its
+50 Ω·m value had no corresponding global region in Figure 6 but was applied
+everywhere below 60 km. Correcting that deep value to 500 Ω·m changes the
+controlled subdivision-5 CUDA `float64` receiver traces by only `2.34e-16`
+relative RMS. The attenuation metrics are equal at the reported precision
+because the corrected material lies many ELF skin depths below the surface.
+
+| Deep value | A–B / A′–B′ MAE | A–B / A′–B′ maximum | B / B′ normalized peak |
+|---:|---:|---:|---:|
+| 50 Ω·m, former | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
+| 500 Ω·m, corrected | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
+
+[Bannister (1985)](https://doi.org/10.1029/RS020i004p00977) gives the daytime
+single-scale-height profile as
+`σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]`. The implementation now encodes
+`ζ₀ = 1/0.3 km` exactly instead of rounding it to 3.33 km and has a regression
+test for `σ(H) = 2.5×10⁵ ε0`. The final production commands already supplied
+the exact value explicitly, so this default correction does not change the
+archived production curves.
 
 | Level-7 material | Quarter-arc east–west RMS | A / A′ peak steps | A–B / A′–B′ attenuation MAE | A–B / A′–B′ maximum error |
 |---|---:|---:|---:|---:|
@@ -386,6 +407,7 @@ Run the authoritative complete-time ETOPO5 reconstruction with CUDA `float64`:
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
@@ -401,6 +423,7 @@ output directory:
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material natural-earth \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
   --ionosphere-reference-height-km 70 \

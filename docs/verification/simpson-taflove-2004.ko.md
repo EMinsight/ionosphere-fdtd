@@ -89,7 +89,7 @@ Figure 8의 “Previous Results” 곡선은 P. R. Bannister, “ELF Propagation
 | A / A′ 거리 | 소스에서 동 / 서로 45° |
 | B / B′ 거리 | 소스에서 동 / 서로 90° |
 | 전리층 기준 높이 | 70 km |
-| 전리층 scale height | 3.33 km |
+| 전리층 scale height | `1/0.3 km` (3.333… km) |
 | 표면 격자 | subdivision 8, polar orientation, 655,362 cells |
 | 물질 | ETOPO5 기복 복원 + Figure 6 해양/대륙 프로파일 |
 | DFT window | 오버슈트 뒤 적응형 zero crossing |
@@ -170,7 +170,16 @@ Level 6→7 및 7→8에서 최대 위상 속도 오차의 관측 차수는 A–
 
 보관한 big-endian NOAA-NGDC `ETOPO5.DAT` 입력은 2,160×4,320 cell-centered 5-arc-minute 고도·수심 격자이다. Loader는 18,662,400-byte 크기와 SHA-256 digest `471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3`를 확인한 뒤 각 측지 물질 지점에서 bilinear sampling한다.
 
-Hermance(1995)는 논문 Figure 6에서 재사용한 제한된 개념 단면의 출처이지 배포 가능한 전 지구 3-D 전도도 데이터셋은 아니다. 따라서 구현 물질은 그림에 나온 0.3 Ω·m 해수와 대표적인 500/200/50 Ω·m 해양·대륙 심도 프로파일을 사용한다. 그림의 국소 ≤5/≤10 Ω·m 전도체는 위치와 부피가 수치로 명시되지 않아 재현할 수 없다.
+[Hermance(1995)](https://doi.org/10.1029/RF001p0190)는 논문 Figure 6에서 재사용한 제한된 개념 단면의 출처이지 배포 가능한 전 지구 3-D 전도도 데이터셋은 아니다. 그림은 0.3 Ω·m 해수, ≥500 Ω·m 상부 암반, ≤200 Ω·m 해양 중간층, ≤500 Ω·m 심부 암반을 제시한다. 구현은 표시된 경계값을 취해 500/200/500 Ω·m 대표 프로파일을 사용한다. 위치가 수치로 주어지지 않은 국소 ≤5/≤10 Ω·m 전도체는 전 지구 층으로 확장하지 않는다.
+
+첨부한 원문을 대조하면서 기존 프로파일의 오류를 확인했다. 기존 50 Ω·m가 Figure 6의 전 지구 영역 어디에도 해당하지 않는데 60 km 아래 전체 격자에 적용돼 있었다. 이 값을 500 Ω·m로 고친 뒤 subdivision-5 CUDA `float64` 수신 트레이스의 상대 RMS 변화는 `2.34e-16`에 그쳤다. 보정한 영역이 표면에서 ELF skin depth의 수십 배 아래에 있어, 보고 정밀도에서 감쇠 지표는 같다.
+
+| 심부 값 | A–B / A′–B′ MAE | A–B / A′–B′ 최댓값 | B / B′ 정규화 피크 |
+|---:|---:|---:|---:|
+| 기존 50 Ω·m | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
+| 보정 500 Ω·m | 5.04682 / 2.19317 dB/Mm | 7.34090 / 6.21746 dB/Mm | 0.040361 / 0.407856 |
+
+[Bannister(1985)](https://doi.org/10.1029/RS020i004p00977)의 주간 단일 scale-height 프로파일은 `σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]`이다. 구현은 이제 `ζ₀ = 1/0.3 km`를 3.33 km로 반올림하지 않고 그대로 사용하며, `σ(H) = 2.5×10⁵ ε0`를 확인하는 회귀 테스트도 추가했다. 최종 프로덕션 명령은 이미 정확한 값을 명시했으므로 이 기본값 보정은 보관한 프로덕션 곡선을 바꾸지 않는다.
 
 | Level-7 물질 | 1/4 호 동서 RMS | A / A′ 피크 steps | A–B / A′–B′ 감쇠 MAE | A–B / A′–B′ 최대 오차 |
 |---|---:|---:|---:|---:|
@@ -236,6 +245,7 @@ CUDA `float64`로 기준 complete-time ETOPO5 복원을 실행한다.
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
   --ionosphere-reference-height-km 70 \
@@ -250,6 +260,7 @@ uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
 uv run --extra pytorch --extra visualization ionosphere-verify-2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material natural-earth \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
   --ionosphere-reference-height-km 70 \

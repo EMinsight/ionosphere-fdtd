@@ -108,15 +108,15 @@ requires at least 95% of nonsingular samples to be below −25 dB.
 | Gaussian `1/e` full width / center | `480 Δt` / `960 Δt` |
 | Receivers | A/A′ at ±45° and B/B′ at ±90° along the equator |
 | Surface data | NOAA-NGDC ETOPO5, bilinear sampling |
-| Ionosphere | 70 km reference height, 3.33 km scale height |
+| Ionosphere | 70 km reference height, `1/0.3 km` (3.333… km) scale height |
 | Backend | compiled PyTorch, CUDA, float64 |
 | Optimizer | `TShapeSizeB1`, `PMeanP(1)`, `TrustRegion` |
 | Mesquite source revision | `7ae51c8e8617c67e63018c8a7effc0f5455f58b4` |
-| Production implementation revision | `e916119` |
+| Production implementation revision | `57fdd48` |
 | Mesh-coordinate SHA-256 | `221052c8a2bb109f4ee0142d19b4e181c31fd04e508074495f5ff7923cede75f` |
 | Vertex-coordinate SHA-256 | `c5736acfb24f1e9e7c97e5ade78c5f4c9ddeb30859aba6ead1502781091cac47` |
-| Trace SHA-256 | `34a8f94a329035cebdcd9b56aef8f14f23782754f888ead9bfdaba0e97c86372` |
-| Mesh optimization / FDTD wall time | 165.7 / 627.1 s |
+| Trace SHA-256 | `7b41ebf8d1cfbf82fe167f71140819d5b56059ee83b420d4b41592951c9007e3` |
+| Mesh optimization / FDTD wall time | 165.7 / 592.5 s |
 
 The source is barycentrically distributed in the horizontal plane and linearly
 staggered between the 0 and 5 km `Er` planes, preserving its exact 2.5 km
@@ -277,11 +277,34 @@ cases isolated the material contribution. Each used 40,000 steps, CUDA
 
 The uniform and fixed-depth land/ocean models recover the published far-peak
 scale of approximately 0.39 and keep east/west paths similar. Adding ETOPO5
-and the representative 500/200/50 Ω·m profiles strongly suppresses the eastern
+and the representative 500/200/500 Ω·m profiles strongly suppresses the eastern
 B path while leaving B′ near the published peak. This identifies the current
 relief/lithosphere discretization, rather than the core FDTD update, as the
 dominant source of the corrected-location path asymmetry. The exact
 Hermance-derived cellwise conductivity used by the paper remains unavailable.
+
+The supplied References 23 and 24 from the 2004 paper were audited directly.
+[Hermance's Figure 6 bounds](https://doi.org/10.1029/RF001p0190) show that the
+deep background is ≤500 Ω·m; the former implementation used 50 Ω·m below
+60 km even though Figure 6 has no corresponding global region.
+Changing the deep background to 500 Ω·m changes controlled subdivision-5
+CUDA `float64` traces by only `2.34e-16` relative RMS and leaves every reported
+attenuation metric unchanged. It corrects the material interpretation but does
+not improve Figure 5 because that depth is electromagnetically screened.
+
+The complete subdivision-7 Mesquite CUDA `float64` rerun took 592.5 s and
+confirmed the screen: its relative RMS difference from the former production
+trace is `1.05e-15`. The Figure 5–6 metrics remain 0.921/0.284 dB/Mm mean error
+and 3.020/2.125 dB/Mm maximum error for the east/west paths. The corrected trace
+SHA-256 is `7b41ebf8d1cfbf82fe167f71140819d5b56059ee83b420d4b41592951c9007e3`.
+Both newly rendered plots are pixel-identical to the prior raw plots, so the
+published-comparison images do not need lossy regeneration.
+
+[Bannister's equation (1)](https://doi.org/10.1029/RS020i004p00977) confirms
+the implemented `σ(z)/ε0 = 2.5×10⁵ exp[(z−H)/ζ₀]` profile. The default
+now represents `ζ₀=1/0.3 km` exactly and a regression test checks the
+reference conductivity. The audited production command already used this exact
+value, so the atmosphere correction does not alter the production traces.
 
 The production-resolution comparison confirms the same result:
 
@@ -879,6 +902,7 @@ python tools/mesquite/build.py --build-dir build/mesquite
   --subdivision 7 --mesh-orientation polar \
   --mesh-coordinates /tmp/ionosphere-mesquite-level-7.npz \
   --minimum-ocean-depth-km 0 \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --steps 40000 --material etopo5 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --dft-window adaptive \
@@ -905,6 +929,7 @@ The paired Figure 7 runs were:
 ```bash
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case reference --subdivision 7 --material etopo5 \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:1 \
   --dtype float64 --torch-compile --courant 1.0 \
   --source-basis both --vertical-reference terrain \
@@ -914,6 +939,7 @@ The paired Figure 7 runs were:
 
 .venv/bin/python -m ionosphere_fdtd.simpson_taflove_2006_cli radar-run \
   --case anomaly --subdivision 7 --material etopo5 \
+  --deep-lithosphere-resistivity-ohm-m 500 \
   --etopo5-path data/ETOPO5.DAT --backend torch --device cuda:0 \
   --dtype float64 --torch-compile --courant 1.0 \
   --source-basis both --vertical-reference terrain \
