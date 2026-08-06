@@ -4,6 +4,8 @@
 
 Production rerun completed on 2026-08-06 (Asia/Seoul).
 
+Korean version: [한국어](simpson-taflove-2004.ko.md).
+
 ## Executive summary
 
 This study tested whether the geodesic FDTD implementation reproduces the
