@@ -33,6 +33,10 @@ Document the supported subdivision levels and verify spherical area closure.
 - Generate or update both language versions in the same change. Add reciprocal
   language links near the top of each document so readers can switch versions
   directly.
+- Treat the English and Korean reports as a synchronized pair in both
+  directions. Any content or wording change made first in the Korean version
+  must also be reflected in the English original, just as an English change
+  must be reflected in the Korean translation.
 - Mirror the complete report structure in the Korean version. Preserve every
   table, figure, link, equation, command, file path, identifier, checksum,
   metric, and PASS/FAIL verdict; do not replace the translation with an

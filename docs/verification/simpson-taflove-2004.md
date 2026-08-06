@@ -17,9 +17,9 @@ pointwise attenuation tolerances over the complete 50–500 Hz band.
 
 The authoritative comparison uses a complete 35,000-step receiver trace and
 the period-appropriate ETOPO5 reconstruction of the paper's unspecified
-NOAA-NGDC Global Relief CD-ROM input. ETOPO5 is not claimed to be the exact
-source selected by the authors. The rerun restores clearly visible east–west
-asymmetry and follows the published time extent. It reproduces the negative
+NOAA-NGDC Global Relief CD-ROM input. ETOPO5 cannot be conclusively identified
+as the exact source selected by the authors. The rerun restores clearly visible
+east–west asymmetry and follows the published time extent. It reproduces the negative
 main pulse, positive overshoot, and persistent slow tail, but the relative
 east/west peak ordering and separation do not reproduce the published panel.
 
