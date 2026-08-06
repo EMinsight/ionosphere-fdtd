@@ -25,6 +25,7 @@ from .simpson_taflove_2004 import (
     bannister_figure_8_guide,
     compute_attenuation,
     natural_earth_land_classifier,
+    render_receiver_grid as _render_receiver_grid,
 )
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import (
@@ -60,6 +61,19 @@ PAPER_OIL_THICKNESS_M = 1_250.0
 PAPER_OIL_MEDIAN_DEPTH_M = 1_200.0
 PAPER_OIL_CONDUCTIVITY_FACTOR = 0.1
 PAPER_FIGURE_7_DURATION_S = 0.085
+
+
+def render_receiver_grid(
+    output: str | Path, *, display_subdivision: int = 4
+) -> Path:
+    """Render the Figure 5--6 source and receivers on the production topology."""
+
+    return _render_receiver_grid(
+        output,
+        display_subdivision=display_subdivision,
+        production_subdivision=PAPER_SUBDIVISION,
+        study_label="Simpson, Heikes, and Taflove (2006)",
+    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -119,6 +119,12 @@ Figure 7 본문과 caption은 정규화 설명이 서로 모순된다. 본문은
 
 논문은 Canadian Shield 전도도를 `2.4e-4 S/m`로 제시하지만 정확한 격자 mask는 공개하지 않는다. 따라서 두 모델 모두 Canada 중심의 문서화된 2,500 km cap 근사를 사용한다. 이 선택은 기준/이상체 차이에서 일부 상쇄되지만 재현성 한계로 남는다.
 
+## Figures 5–6 수신점 배치
+
+Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 사용한다. 서경 47° 소스를 기준으로 A와 A′은 동·서쪽 45°, B와 B′은 동·서쪽 90°에 있다. 셀을 식별할 수 있도록 같은 polar orientation과 recursive dual-grid 구조를 지닌 subdivision 4 격자 위에 정확한 좌표를 표시했다. 프로덕션 subdivision 7 격자에는 셀이 163,842개 있으며, 마커를 표시용 격자의 셀 중심으로 옮기지 않았다. Figure 7은 위에 정리한 Clam Lake–Alaska 배치를 별도로 사용하므로 이 지도에는 나타나지 않는다.
+
+![Figures 5–6의 측지 dual grid 위 소스와 수신점](images/simpson-taflove-2006-receiver-grid.png)
+
 ## Figure 5: 시간 응답
 
 ![출판된 Figure 5와 재현한 Figure 5](images/simpson-taflove-2006-fig-5-comparison.png)

@@ -504,7 +504,11 @@ def sample_paper_comparison(
 
 
 def render_receiver_grid(
-    output: str | Path, *, display_subdivision: int = 4
+    output: str | Path,
+    *,
+    display_subdivision: int = 4,
+    production_subdivision: int = 8,
+    study_label: str = "Simpson–Taflove (2004)",
 ) -> Path:
     """Render the exact paper receiver coordinates on the polar dual grid."""
 
@@ -515,6 +519,10 @@ def render_receiver_grid(
 
     if display_subdivision < 0:
         raise ValueError("display subdivision must be non-negative")
+    if production_subdivision < 0:
+        raise ValueError("production subdivision must be non-negative")
+    if not study_label:
+        raise ValueError("study label must not be empty")
     mesh = build_geodesic_mesh(
         subdivision=display_subdivision,
         orientation="polar",
@@ -727,16 +735,18 @@ def render_receiver_grid(
         fontsize=10,
     )
     figure.suptitle(
-        "Simpson–Taflove (2004) receiver locations on the polar geodesic grid",
+        f"{study_label} receiver locations on the polar geodesic grid",
         fontsize=19,
         fontweight="bold",
     )
+    production_cell_count = 10 * 4**production_subdivision + 2
     figure.text(
         0.5,
         0.006,
         f"Display grid: subdivision {display_subdivision} "
-        f"({mesh.n_vertices:,} dual cells). Production subdivision 8 has the "
-        "same polar orientation and recursive topology but 655,362 cells.",
+        f"({mesh.n_vertices:,} dual cells). Production subdivision "
+        f"{production_subdivision} has the same polar orientation and recursive "
+        f"topology but {production_cell_count:,} cells.",
         ha="center",
         fontsize=10,
         color="#475569",

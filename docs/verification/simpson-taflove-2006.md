@@ -185,6 +185,18 @@ publish its exact grid mask. Both models therefore use the same documented
 2,500 km cap approximation centered over Canada. This choice cancels partly in
 the reference/anomaly difference but remains a reproducibility limitation.
 
+## Figures 5–6 receiver geometry
+
+Figures 5–6 use the same equatorial source-receiver geometry as the 2004
+experiment: A and A′ are 45° east and west of the 47° W source, while B and B′
+are 90° east and west. The exact coordinates are drawn over a subdivision-4
+version of the same polar-oriented recursive dual grid so that individual cells
+remain visible. The production subdivision-7 grid contains 163,842 cells;
+markers are not snapped to display-grid cell centers. Figure 7 uses the separate
+Clam Lake–Alaska geometry documented above and is not represented on this map.
+
+![Figures 5–6 source and receiver locations on the geodesic dual grid](images/simpson-taflove-2006-receiver-grid.png)
+
 ## Figure 5: temporal response
 
 ![Published and reproduced Figure 5](images/simpson-taflove-2006-fig-5-comparison.png)
