@@ -21,6 +21,8 @@ The implementation follows three ideas from the project references:
 The package includes projected surface maps, great-circle radial sections,
 receiver traces, interactive 3-D geodesic meshes, and GIF/MP4 animations.
 
+![FDTD pulse propagation from Gwangju on the geodesic Earth-ionosphere grid](docs/verification/images/taflove-fig-3-11-gwangju.gif)
+
 ## Installation
 
 Python 3.11 or newer is required.
