@@ -143,6 +143,17 @@ Phase velocity is compared with Bannister equation (4).
 Surface cell counts are 40,962, 163,842, and 655,362 for subdivisions 6, 7,
 and 8. Subdivision 7 matches the paper's 163,842 cells per radial plane.
 
+## Receiver geometry
+
+The requested receiver coordinates lie on the equator at 45° and 90° east or
+west of the 47° W source. The exact coordinates are drawn over a subdivision-4
+version of the same polar-oriented recursive dual grid so that the cells remain
+visible; the production subdivision-8 grid has 655,362 cells and is visually
+indistinguishable from a solid fill at this scale. Markers are not snapped to
+display-grid cell centers.
+
+![Source and receiver locations on the geodesic dual grid](images/simpson-taflove-2004-receiver-grid.png)
+
 ## Published-plot comparison
 
 The left-hand panels below are cropped from page 450 of the

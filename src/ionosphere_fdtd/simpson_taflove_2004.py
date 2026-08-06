@@ -17,7 +17,7 @@ from .materials import (
     EarthIonosphereMaterial,
     SimpsonTaflove2004Material,
 )
-from .mesh import GeodesicMesh
+from .mesh import GeodesicMesh, build_geodesic_mesh
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, geographic_distribution
 
@@ -501,6 +501,251 @@ def sample_paper_comparison(
         np.interp(frequency, curves.frequency_hz, curves.path_apbp_db_per_mm),
         bannister_figure_8_guide(frequency),
     )
+
+
+def render_receiver_grid(
+    output: str | Path, *, display_subdivision: int = 4
+) -> Path:
+    """Render the exact paper receiver coordinates on the polar dual grid."""
+
+    import cartopy.crs as ccrs
+    import matplotlib.pyplot as plt
+    from matplotlib.collections import LineCollection
+    from matplotlib.lines import Line2D
+
+    if display_subdivision < 0:
+        raise ValueError("display subdivision must be non-negative")
+    mesh = build_geodesic_mesh(
+        subdivision=display_subdivision,
+        orientation="polar",
+    )
+    centers = mesh.face_centers
+    longitude = np.rad2deg(np.arctan2(centers[:, 1], centers[:, 0]))
+    latitude = np.rad2deg(
+        np.arctan2(centers[:, 2], np.hypot(centers[:, 0], centers[:, 1]))
+    )
+    dual_segments = np.stack(
+        (
+            np.column_stack(
+                (
+                    longitude[mesh.edge_left_faces],
+                    latitude[mesh.edge_left_faces],
+                )
+            ),
+            np.column_stack(
+                (
+                    longitude[mesh.edge_right_faces],
+                    latitude[mesh.edge_right_faces],
+                )
+            ),
+        ),
+        axis=1,
+    )
+    # Cartopy wraps the projection itself. Omitting only the longitude-seam
+    # segments avoids drawing a few dual edges across the entire map.
+    dual_segments = dual_segments[
+        np.abs(dual_segments[:, 0, 0] - dual_segments[:, 1, 0]) < 180.0
+    ]
+
+    figure = plt.figure(figsize=(14.0, 8.6), constrained_layout=True)
+    grid = figure.add_gridspec(2, 1, height_ratios=(2.2, 1.0))
+    axes = (
+        figure.add_subplot(
+            grid[0], projection=ccrs.Mollweide(central_longitude=-47.0)
+        ),
+        figure.add_subplot(grid[1], projection=ccrs.PlateCarree()),
+    )
+    label_offsets = {
+        "B′": (-6.0, 3.2),
+        "A′": (-5.0, -5.0),
+        "Source": (-8.0, 3.2),
+        "A": (-1.0, -5.0),
+        "B": (-1.0, 3.2),
+    }
+    locations = [("Source", PAPER_SOURCE_LONGITUDE_DEG)] + [
+        (receiver.label, receiver.longitude_deg) for receiver in PAPER_RECEIVERS
+    ]
+    path_endpoints = {
+        receiver.direction: receiver.longitude_deg
+        for receiver in PAPER_RECEIVERS
+        if receiver.fraction_to_antipode == 0.50
+    }
+    for index, axis in enumerate(axes):
+        axis.set_facecolor("#f8fafc")
+        axis.add_collection(
+            LineCollection(
+                dual_segments,
+                colors="#64748b",
+                linewidths=0.30,
+                alpha=0.42,
+                transform=ccrs.PlateCarree(),
+                zorder=1,
+            )
+        )
+        axis.coastlines(
+            resolution="110m", color="#334155", linewidth=0.65, zorder=2
+        )
+        if index == 0:
+            axis.set_global()
+            axis.gridlines(color="#94a3b8", linewidth=0.4, alpha=0.5)
+        else:
+            axis.set_extent((-150.0, 55.0, -13.0, 13.0), crs=ccrs.PlateCarree())
+            gridlines = axis.gridlines(
+                draw_labels=True,
+                xlocs=np.arange(-150.0, 61.0, 15.0),
+                ylocs=(-10.0, 0.0, 10.0),
+                color="#94a3b8",
+                linewidth=0.45,
+                alpha=0.55,
+            )
+            gridlines.top_labels = False
+            gridlines.right_labels = False
+            gridlines.xlabel_style = {"size": 9}
+            gridlines.ylabel_style = {"size": 9}
+
+        axis.plot(
+            (PAPER_SOURCE_LONGITUDE_DEG, path_endpoints["east"]),
+            (0.0, 0.0),
+            color="#2563eb",
+            linewidth=3.0,
+            alpha=0.75,
+            transform=ccrs.PlateCarree(),
+            zorder=3,
+        )
+        axis.plot(
+            (PAPER_SOURCE_LONGITUDE_DEG, path_endpoints["west"]),
+            (0.0, 0.0),
+            color="#d97706",
+            linewidth=3.0,
+            alpha=0.75,
+            transform=ccrs.PlateCarree(),
+            zorder=3,
+        )
+        axis.scatter(
+            (PAPER_SOURCE_LONGITUDE_DEG,),
+            (PAPER_SOURCE_LATITUDE_DEG,),
+            s=150 if index == 0 else 180,
+            marker="*",
+            color="#dc2626",
+            edgecolors="white",
+            linewidths=1.1,
+            transform=ccrs.PlateCarree(),
+            zorder=5,
+        )
+        for receiver in PAPER_RECEIVERS:
+            color = "#2563eb" if receiver.direction == "east" else "#d97706"
+            marker = "o" if receiver.fraction_to_antipode == 0.25 else "s"
+            axis.scatter(
+                (receiver.longitude_deg,),
+                (0.0,),
+                s=75 if index == 0 else 95,
+                marker=marker,
+                color=color,
+                edgecolors="white",
+                linewidths=1.2,
+                transform=ccrs.PlateCarree(),
+                zorder=5,
+            )
+        for label, receiver_longitude in locations:
+            longitude_offset, latitude_offset = label_offsets[label]
+            axis.text(
+                receiver_longitude + longitude_offset,
+                latitude_offset,
+                f"{label}\n({receiver_longitude:g}°)",
+                fontsize=10 if index == 0 else 11,
+                fontweight="bold",
+                ha="left",
+                va="center",
+                color="#0f172a",
+                transform=ccrs.PlateCarree(),
+                zorder=6,
+                bbox={
+                    "boxstyle": "round,pad=.18",
+                    "facecolor": "white",
+                    "edgecolor": "none",
+                    "alpha": 0.78,
+                },
+            )
+
+    axes[0].set_title("Global receiver geometry", fontsize=16, fontweight="bold")
+    axes[1].set_title(
+        "Equatorial detail: exact requested coordinates on the dual grid",
+        fontsize=14,
+        fontweight="bold",
+    )
+    legend = (
+        Line2D(
+            (0,),
+            (0,),
+            marker="*",
+            color="none",
+            markerfacecolor="#dc2626",
+            markeredgecolor="white",
+            markersize=14,
+            label="Source (47° W)",
+        ),
+        Line2D(
+            (0,),
+            (0,),
+            marker="o",
+            color="#2563eb",
+            markersize=8,
+            label="A: east 45°",
+        ),
+        Line2D(
+            (0,),
+            (0,),
+            marker="s",
+            color="#2563eb",
+            markersize=8,
+            label="B: east 90°",
+        ),
+        Line2D(
+            (0,),
+            (0,),
+            marker="o",
+            color="#d97706",
+            markersize=8,
+            label="A′: west 45°",
+        ),
+        Line2D(
+            (0,),
+            (0,),
+            marker="s",
+            color="#d97706",
+            markersize=8,
+            label="B′: west 90°",
+        ),
+        Line2D((0,), (0,), color="#64748b", label="Dual-cell boundary"),
+    )
+    axes[0].legend(
+        handles=legend,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.03),
+        ncol=3,
+        frameon=True,
+        fontsize=10,
+    )
+    figure.suptitle(
+        "Simpson–Taflove (2004) receiver locations on the polar geodesic grid",
+        fontsize=19,
+        fontweight="bold",
+    )
+    figure.text(
+        0.5,
+        0.006,
+        f"Display grid: subdivision {display_subdivision} "
+        f"({mesh.n_vertices:,} dual cells). Production subdivision 8 has the "
+        "same polar orientation and recursive topology but 655,362 cells.",
+        ha="center",
+        fontsize=10,
+        color="#475569",
+    )
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output_path, dpi=180, facecolor="white")
+    plt.close(figure)
+    return output_path
 
 
 def render_figure_7(

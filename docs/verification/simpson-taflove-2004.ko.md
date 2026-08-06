@@ -102,6 +102,12 @@ Figure 8의 “Previous Results” 곡선은 P. R. Bannister, “ELF Propagation
 
 표면 셀 수는 subdivisions 6, 7, 8에서 각각 40,962, 163,842, 655,362개이다. Subdivision 7은 논문의 방사 평면당 163,842개 셀과 일치한다.
 
+## 수신점 배치
+
+요청한 수신점은 서경 47°의 소스를 기준으로 동쪽과 서쪽 45° 및 90°에 해당하는 적도 위에 놓인다. 셀을 식별할 수 있도록 같은 polar orientation과 recursive dual-grid 구조를 지닌 subdivision 4 격자 위에 정확한 좌표를 표시했다. 프로덕션 subdivision 8 격자는 셀이 655,362개여서 이 축척에서는 내부가 채워진 것처럼 보인다. 마커는 표시용 격자의 셀 중심으로 옮기지 않았다.
+
+![측지 dual grid 위의 소스와 수신점](images/simpson-taflove-2004-receiver-grid.png)
+
 ## 출판 플롯 비교
 
 아래 왼쪽 패널은 [저자 제공 논문 PDF](https://my.ece.utah.edu/~simpson/Papers/Paper2.pdf)의 450쪽에서 잘라냈다. 출판 패널의 저작권은 © 2004 IEEE에 있으며, 출처를 밝힌 기술 비교 목적으로 인용했다. 오른쪽 패널은 현재 분석 코드로 2026-08-06 subdivision-8 CUDA `float64` ETOPO5 수신 트레이스에서 다시 생성했다. Figure 8 재현에는 더 이상 쓰지 않는 plot-fit 기준이 아니라 Bannister의 원 방정식과 최종 고정 비교 주파수를 사용했다.
