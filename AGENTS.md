@@ -25,6 +25,24 @@ Generate an icosphere and its pentagon-hexagon dual topology with NumPy.
 Document the supported subdivision levels and verify spherical area closure.
 ```
 
+## Verification reports
+
+- Create and maintain verification reports in both English and Korean. Keep
+  the English report at `docs/verification/<name>.md` and its complete Korean
+  translation at `docs/verification/<name>.ko.md`.
+- Generate or update both language versions in the same change. Add reciprocal
+  language links near the top of each document so readers can switch versions
+  directly.
+- Mirror the complete report structure in the Korean version. Preserve every
+  table, figure, link, equation, command, file path, identifier, checksum,
+  metric, and PASS/FAIL verdict; do not replace the translation with an
+  abridged summary.
+- Keep code, command-line options, mathematical notation, hashes, and numeric
+  values unchanged. Translate headings, explanatory prose, captions, and
+  human-readable table labels and cells.
+- Before committing, compare the two versions for matching headings, table
+  rows, image references, fenced command blocks, and verification verdicts.
+
 ## Verification comparison plots
 
 Use the Simpson–Taflove 2004 Figure 7 and Figure 8 comparison images as the
