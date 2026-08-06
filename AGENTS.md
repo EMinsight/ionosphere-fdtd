@@ -124,9 +124,10 @@ Current geometry references:
   18-point major tick labels and legend text.
 - Simpson–Taflove 2006 comparison plots use a `3400 x 1460` pixel canvas for
   Figures 5 and 7 and a tighter `3320 x 1460` canvas for Figure 6. They use
-  20-point reproduced axis labels and 18-point reproduced major tick labels
+  22-point reproduced axis labels and 20-point reproduced major tick labels
   and legend text. Their matched published/reproduced data frames are
   `1400 x 1111` pixels for Figure 5, `1400 x 1104` pixels for Figure 6, and
-  `1400 x 1099` pixels for Figure 7, with a 300-pixel gap between the data
-  frames. Measure these ratios from the original PDF page crops, not from a
-  previously composed comparison image.
+  `1400 x 1099` pixels for Figure 7. The data-frame gaps are 290 pixels for
+  Figure 5, 280 pixels for Figure 6, and 300 pixels for Figure 7, leaving room
+  for their different reproduced labels. Measure these ratios from the
+  original PDF page crops, not from a previously composed comparison image.
