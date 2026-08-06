@@ -28,6 +28,7 @@ class ValidationRunSummary:
     subdivision: int
     mesh_optimization_steps: int
     minimum_ocean_depth_m: float
+    deep_lithosphere_resistivity_ohm_m: float
     surface_cells: int
     radial_cells: int
     time_step_s: float
@@ -86,8 +87,9 @@ def write_validation_report(
         material_notes = """- NOAA-NGDC `ETOPO5.DAT`의 5′ 지형·수심을 각 geodesic 표본점에
   bilinear interpolation하여 공기·해수·암석 경계를 정한다.
 - Hermance (1995)는 배포 가능한 3-D 전도도 격자가 아니라 Fig. 6의
-  경계형 개념도 출처다. 해양/대륙별 500/200/50 Ω·m 대표 깊이
-  프로파일을 사용하며, 그림의 국지 전도성 구조는 재현하지 않는다."""
+  경계형 개념도 출처다. 표시된 경계값에 따라 500/200/500 Ω·m 대표
+  깊이 프로파일을 사용하며, 위치가 수치로 주어지지 않은 ≤5/≤10 Ω·m
+  국지 전도성 구조는 전 지구 층으로 확장하지 않는다."""
     elif summary.material_model == "natural-earth":
         material_notes = """- NOAA-NGDC relief 원본 대신 Natural Earth 110-m 육지 마스크와
   5 km 고정 해양층을 사용한다.
@@ -120,6 +122,7 @@ def write_validation_report(
 | subdivision | {summary.subdivision} |
 | mesh optimization steps | {summary.mesh_optimization_steps} |
 | minimum ocean depth | {summary.minimum_ocean_depth_m / 1_000.0:g} km |
+| deep lithosphere resistivity | {summary.deep_lithosphere_resistivity_ohm_m:g} Ω·m |
 | 표면 셀 | {summary.surface_cells:,} |
 | 방사 셀 | {summary.radial_cells} |
 | 시간 간격 | {summary.time_step_s:.3e} s |

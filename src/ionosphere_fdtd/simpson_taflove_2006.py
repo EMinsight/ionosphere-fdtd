@@ -21,6 +21,7 @@ from .materials import (
 )
 from .simpson_taflove_2004 import (
     AttenuationCurves,
+    REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
     ValidationTraces,
     bannister_figure_8_guide,
     compute_attenuation,
@@ -176,6 +177,9 @@ def create_radar_simulation(
     mesh_orientation: str = "polar",
     vertical_reference: str = "terrain",
     horizontal_anomaly_mode: str = "conservative-nearest",
+    deep_lithosphere_resistivity_ohm_m: float = (
+        REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M
+    ),
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -183,6 +187,9 @@ def create_radar_simulation(
         raise ValueError("vertical_reference must be 'sea-level' or 'terrain'")
     material_arguments: dict[str, Any] = {
         "tangential_interface_mode": tangential_interface_mode,
+        "deep_rock_resistivity_ohm_m": (
+            deep_lithosphere_resistivity_ohm_m
+        ),
     }
     relief: ETOPO5Relief | None = None
     if material_model == "etopo5":

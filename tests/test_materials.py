@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from ionosphere_fdtd.constants import EPSILON_0
 from ionosphere_fdtd.materials import (
     ETOPO5_SHAPE,
     ETOPO5_SIZE_BYTES,
@@ -78,7 +79,24 @@ def test_simpson_taflove_material_distinguishes_land_water_and_rock() -> None:
     assert epsilon_r[1, 0] == material.sea_water_relative_permittivity
     assert sigma[0, 2] == sigma[1, 2]
     assert material.ionosphere_reference_height_m == 70_000.0
-    assert material.ionosphere_scale_height_m == 3_330.0
+    assert material.ionosphere_scale_height_m == pytest.approx(1_000.0 / 0.3)
+    assert material.deep_rock_resistivity_ohm_m == 500.0
+
+
+def test_simpson_taflove_material_matches_bannister_reference_value() -> None:
+    material = SimpsonTaflove2004Material(
+        land_classifier=lambda directions: np.ones(
+            len(directions), dtype=np.bool_
+        )
+    )
+
+    sigma, _ = material.sample(
+        np.asarray(((1.0, 0.0, 0.0),)),
+        np.asarray((material.ionosphere_reference_height_m,)),
+        6_371_000.0,
+    )
+
+    assert sigma[0, 0] == pytest.approx(2.5e5 * EPSILON_0)
 
 
 def test_simpson_taflove_material_applies_buried_anomaly() -> None:
@@ -184,7 +202,7 @@ def test_relief_material_resolves_mountains_ocean_and_seafloor() -> None:
     assert epsilon_r[1, 0] == material.atmosphere_relative_permittivity
     assert sigma[1, 1] == 1.0 / material.sea_water_resistivity_ohm_m
     assert sigma[1, 2] == 1.0 / material.upper_crust_resistivity_ohm_m
-    assert np.all(sigma[:, 3] == 1.0 / material.lower_mantle_resistivity_ohm_m)
+    assert np.all(sigma[:, 3] == 1.0 / material.deep_rock_resistivity_ohm_m)
 
 
 def test_fractional_tangential_interface_preserves_shallow_water_fraction() -> None:

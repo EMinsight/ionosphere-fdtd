@@ -12,6 +12,7 @@ from .simpson_taflove_2004 import ValidationTraces, compute_attenuation
 from .simpson_taflove_2006 import (
     PAPER_FIGURE_7_DURATION_S,
     PAPER_SOURCE_CENTER_S,
+    REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
     compute_radar_perturbation,
     create_radar_simulation,
     load_radar_traces,
@@ -44,6 +45,11 @@ def _parser() -> argparse.ArgumentParser:
         "--material", choices=("etopo5", "natural-earth"), default="etopo5"
     )
     radar.add_argument("--etopo5-path", type=Path)
+    radar.add_argument(
+        "--deep-lithosphere-resistivity-ohm-m",
+        type=float,
+        default=REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
+    )
     radar.add_argument(
         "--tangential-interface",
         choices=("point", "fractional"),
@@ -160,6 +166,9 @@ def _run_radar(args: argparse.Namespace) -> int:
         mesh_orientation=args.mesh_orientation,
         vertical_reference=args.vertical_reference,
         horizontal_anomaly_mode=args.horizontal_anomaly,
+        deep_lithosphere_resistivity_ohm_m=(
+            args.deep_lithosphere_resistivity_ohm_m
+        ),
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -175,6 +184,8 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"receiver={args.receiver_support} "
         f"vertical_reference={args.vertical_reference} "
         f"horizontal_anomaly={args.horizontal_anomaly} "
+        "deep_lithosphere_resistivity_ohm_m="
+        f"{args.deep_lithosphere_resistivity_ohm_m:g} "
         f"shield={args.shield_radius_km:g}km/{args.shield} "
         f"dt={simulation.time_step_s:.9e}s steps={steps:,}",
         flush=True,

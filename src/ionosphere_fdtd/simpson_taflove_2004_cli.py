@@ -18,6 +18,7 @@ from .simpson_taflove_2004 import (
     PAPER_DFT_TRUNCATIONS,
     PAPER_MINIMUM_SIMULATION_STEPS,
     PAPER_TRACE_STEPS,
+    REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
     REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M,
     REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M,
     arrival_metrics,
@@ -88,6 +89,12 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         default=0.0,
         help="opt-in conservative ocean-column depth for radial voxelization",
+    )
+    parser.add_argument(
+        "--deep-lithosphere-resistivity-ohm-m",
+        type=float,
+        default=REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
+        help="representative resistivity below 60 km from Hermance Figure 6",
     )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
@@ -171,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
             tangential_interface_mode=args.tangential_interface,
             tangential_material_support=args.tangential_support,
             minimum_ocean_depth_m=1_000.0 * args.minimum_ocean_depth_km,
+            deep_lithosphere_resistivity_ohm_m=(
+                args.deep_lithosphere_resistivity_ohm_m
+            ),
             mesh=optimized_mesh,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
@@ -182,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
         f"mesh_optimization_steps={args.mesh_optimization_steps} "
         f"mesh_coordinates={args.mesh_coordinates or 'generated'} "
         f"minimum_ocean_depth_km={args.minimum_ocean_depth_km:g} "
+        "deep_lithosphere_resistivity_ohm_m="
+        f"{args.deep_lithosphere_resistivity_ohm_m:g} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
         f"dt={simulation.time_step_s:.3e}s",
@@ -266,6 +278,9 @@ def main(argv: list[str] | None = None) -> int:
             subdivision=args.subdivision,
             mesh_optimization_steps=args.mesh_optimization_steps,
             minimum_ocean_depth_m=1_000.0 * args.minimum_ocean_depth_km,
+            deep_lithosphere_resistivity_ohm_m=(
+                args.deep_lithosphere_resistivity_ohm_m
+            ),
             surface_cells=simulation.mesh.n_vertices,
             radial_cells=simulation.config.radial_cells,
             time_step_s=simulation.time_step_s,
@@ -312,6 +327,8 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"--mesh-orientation {quote(args.mesh_orientation)}",
         f"--mesh-optimization-steps {args.mesh_optimization_steps}",
         f"--minimum-ocean-depth-km {args.minimum_ocean_depth_km:g}",
+        "--deep-lithosphere-resistivity-ohm-m "
+        f"{args.deep_lithosphere_resistivity_ohm_m:g}",
         f"--steps {args.steps}",
         f"--material {quote(args.material)}",
         f"--backend {quote(args.backend)}",

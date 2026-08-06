@@ -33,7 +33,8 @@ PAPER_TRACE_STEPS = 35_000
 PAPER_DFT_TRUNCATIONS = {"A": 22_849, "B": 24_165, "A′": 22_737, "B′": 25_023}
 PAPER_DFT_SIZE = 32_768
 REPRESENTATIVE_IONOSPHERE_REFERENCE_HEIGHT_M = 70_000.0
-REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M = 3_330.0
+REPRESENTATIVE_IONOSPHERE_SCALE_HEIGHT_M = 1_000.0 / 0.3
+REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M = 500.0
 PAPER_VALID_FREQUENCY_HZ = (50.0, 500.0)
 PAPER_PATH_AB_TOLERANCE_DB_PER_MM = 0.5
 PAPER_PATH_APBP_TOLERANCE_DB_PER_MM = 1.0
@@ -162,6 +163,9 @@ def create_validation_simulation(
     tangential_interface_mode: str = "point",
     tangential_material_support: str = "point",
     minimum_ocean_depth_m: float = 0.0,
+    deep_lithosphere_resistivity_ohm_m: float = (
+        REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M
+    ),
     mesh: GeodesicMesh | None = None,
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
@@ -173,6 +177,7 @@ def create_validation_simulation(
             ionosphere_scale_height_m=ionosphere_scale_height_m,
             tangential_interface_mode=tangential_interface_mode,
             minimum_ocean_depth_m=minimum_ocean_depth_m,
+            deep_rock_resistivity_ohm_m=deep_lithosphere_resistivity_ohm_m,
         )
     elif material_model == "etopo5":
         if etopo5_path is None:
@@ -183,6 +188,7 @@ def create_validation_simulation(
             ionosphere_scale_height_m=ionosphere_scale_height_m,
             tangential_interface_mode=tangential_interface_mode,
             minimum_ocean_depth_m=minimum_ocean_depth_m,
+            deep_rock_resistivity_ohm_m=deep_lithosphere_resistivity_ohm_m,
         )
     elif material_model == "uniform":
         material = EarthIonosphereMaterial(

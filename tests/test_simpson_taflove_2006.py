@@ -90,6 +90,7 @@ def test_conservative_radar_anomaly_preserves_oil_area_on_both_grids() -> None:
 
     assert represented_er_km2 == pytest.approx(PAPER_OIL_AREA_KM2)
     assert represented_et_km2 == pytest.approx(PAPER_OIL_AREA_KM2)
+    assert simulation.material.deep_rock_resistivity_ohm_m == 500.0
     assert np.count_nonzero(er_fraction) >= 1
     assert np.count_nonzero(et_fraction) >= 1
 

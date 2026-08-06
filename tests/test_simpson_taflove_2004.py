@@ -96,6 +96,7 @@ def test_reproduction_command_records_all_result_changing_windows() -> None:
     assert "--tangential-support edge-diamond" in command
     assert "--spectral-window cosine-tail" in command
     assert "--dtype float64" in command
+    assert "--deep-lithosphere-resistivity-ohm-m 500" in command
 
 
 def test_validation_setup_can_retain_native_orientation() -> None:
@@ -342,6 +343,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         subdivision=7,
         mesh_optimization_steps=0,
         minimum_ocean_depth_m=0.0,
+        deep_lithosphere_resistivity_ohm_m=500.0,
         surface_cells=163_842,
         radial_cells=40,
         time_step_s=3.0e-6,
@@ -349,7 +351,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         material_model="natural-earth",
         relief_data=None,
         ionosphere_reference_height_m=70_000.0,
-        ionosphere_scale_height_m=3_330.0,
+        ionosphere_scale_height_m=1_000.0 / 0.3,
         dft_window="adaptive",
         spectral_window="rectangular",
         tangential_interface="point",
@@ -377,6 +379,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "정량 검증 상태: **실패**" in text
     assert "mesh optimization steps | 0" in text
     assert "minimum ocean depth | 0 km" in text
+    assert "deep lithosphere resistivity | 500 Ω·m" in text
     assert "163,842" in text
     assert "6.146 dB/Mm" in text
     assert "9.000 dB/Mm" in text

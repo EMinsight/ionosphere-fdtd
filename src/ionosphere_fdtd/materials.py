@@ -431,9 +431,10 @@ class SimpsonTaflove2004Material:
     A relief sampler uses actual surface elevation and bathymetry when supplied;
     the legacy land classifier retains a fixed-depth fallback.  Figure 6 gives
     bounded, conceptual oceanic and continental resistivity regions rather than
-    a downloadable 3-D conductivity grid, so the exposed layer values use those
-    bounds as representative profiles.  The ionosphere defaults use the 70-km
-    reference height and 3.33-km scale height of the standard daytime profile.
+    a downloadable 3-D conductivity grid.  The exposed layer values use the
+    labeled bounds from that section while omitting its geographically
+    unspecified local conductors.  The ionosphere defaults implement
+    Bannister's standard 70-km, 1/0.3-km daytime exponential exactly.
     """
 
     land_classifier: LandClassifier | None = None
@@ -442,14 +443,14 @@ class SimpsonTaflove2004Material:
     sea_water_resistivity_ohm_m: float = 0.3
     upper_crust_resistivity_ohm_m: float = 500.0
     asthenosphere_resistivity_ohm_m: float = 200.0
-    lower_mantle_resistivity_ohm_m: float = 50.0
+    deep_rock_resistivity_ohm_m: float = 500.0
     asthenosphere_top_depth_m: float = 20_000.0
     asthenosphere_bottom_depth_m: float = 60_000.0
     lithosphere_relative_permittivity: float = 10.0
     sea_water_relative_permittivity: float = 80.0
     atmosphere_relative_permittivity: float = 1.0
     ionosphere_reference_height_m: float = 70_000.0
-    ionosphere_scale_height_m: float = 3_330.0
+    ionosphere_scale_height_m: float = 1_000.0 / 0.3
     ionosphere_prefactor_hz: float = 2.5e5
     anomalies: tuple[SphericalAnomaly, ...] = field(default_factory=tuple)
     tangential_interface_mode: str = "point"
@@ -467,7 +468,7 @@ class SimpsonTaflove2004Material:
             self.sea_water_resistivity_ohm_m,
             self.upper_crust_resistivity_ohm_m,
             self.asthenosphere_resistivity_ohm_m,
-            self.lower_mantle_resistivity_ohm_m,
+            self.deep_rock_resistivity_ohm_m,
             self.asthenosphere_top_depth_m,
             self.asthenosphere_bottom_depth_m,
             self.lithosphere_relative_permittivity,
@@ -485,7 +486,7 @@ class SimpsonTaflove2004Material:
             self.sea_water_resistivity_ohm_m,
             self.upper_crust_resistivity_ohm_m,
             self.asthenosphere_resistivity_ohm_m,
-            self.lower_mantle_resistivity_ohm_m,
+            self.deep_rock_resistivity_ohm_m,
             self.asthenosphere_top_depth_m,
             self.asthenosphere_bottom_depth_m,
             self.ionosphere_scale_height_m,
@@ -544,7 +545,7 @@ class SimpsonTaflove2004Material:
         depth = np.maximum(-altitudes_m, 0.0)
         ocean = np.where(
             depth >= self.asthenosphere_bottom_depth_m,
-            self.lower_mantle_resistivity_ohm_m,
+            self.deep_rock_resistivity_ohm_m,
             np.where(
                 depth >= self.asthenosphere_top_depth_m,
                 self.asthenosphere_resistivity_ohm_m,
@@ -553,7 +554,7 @@ class SimpsonTaflove2004Material:
         )
         continent = np.where(
             depth >= self.asthenosphere_bottom_depth_m,
-            self.lower_mantle_resistivity_ohm_m,
+            self.deep_rock_resistivity_ohm_m,
             self.upper_crust_resistivity_ohm_m,
         )
         return np.where(is_land[:, None], continent[None, :], ocean[None, :])
