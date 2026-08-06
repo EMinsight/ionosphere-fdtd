@@ -537,7 +537,7 @@ def render_figure_7(
         ax.set_ylabel(r"$E_r$ ($\mu$V/m)")
         ax.set_title(f"Equator, {fraction}")
         ax.grid(True, color="0.9", linewidth=0.7)
-        ax.legend()
+        ax.legend(loc="lower right")
     axes[-1].set_xlabel("Time steps (Δt = 3 μs)")
     figure.suptitle("Simpson & Taflove (2004), Fig. 7 verification run")
     figure.savefig(output_path, dpi=180, facecolor="white")
