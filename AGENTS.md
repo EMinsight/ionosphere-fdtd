@@ -120,4 +120,5 @@ Current geometry references:
   `2880 x 2400` pixel canvas.
 - Figure 8 uses matched `1250 x 988` pixel data frames on a `3040 x 1230`
   pixel canvas, with additional inter-column spacing for the enlarged
-  reproduced y-axis label.
+  reproduced y-axis label. Its reproduced panel uses 20-point axis labels and
+  18-point major tick labels and legend text.

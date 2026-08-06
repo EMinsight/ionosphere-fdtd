@@ -590,11 +590,15 @@ def render_figure_8(
     ax.set_ylim(0.1, 30.0)
     ax.set_xticks(x_ticks, labels=[f"{value:g}" for value in x_ticks])
     ax.set_yticks(y_ticks, labels=[f"{value:g}" for value in y_ticks])
-    ax.set_xlabel("Frequency (Hz)")
-    ax.set_ylabel("Attenuation rate (dB/Mm)")
-    ax.set_title("Simpson & Taflove (2004), Fig. 8 verification run")
+    ax.set_xlabel("Frequency (Hz)", fontsize=20)
+    ax.set_ylabel("Attenuation rate (dB/Mm)", fontsize=20)
+    ax.set_title(
+        "Simpson & Taflove (2004), Fig. 8 verification run",
+        fontsize=20,
+    )
+    ax.tick_params(axis="both", which="major", labelsize=18)
     ax.grid(True, which="both", color="0.9", linewidth=0.6)
-    ax.legend()
+    ax.legend(fontsize=18)
     figure.savefig(output_path, dpi=180, facecolor="white")
     plt.close(figure)
     return output_path
