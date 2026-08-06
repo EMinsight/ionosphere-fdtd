@@ -125,5 +125,6 @@ Current geometry references:
 - Simpson–Taflove 2006 comparison plots use a `3200 x 1340` pixel canvas,
   20-point reproduced axis labels, and 18-point reproduced major tick labels
   and legend text. Their matched published/reproduced data frames are
-  `1200 x 1033` pixels for Figure 5, `1200 x 1038` pixels for Figure 6, and
-  `1200 x 983` pixels for Figure 7.
+  `1200 x 952` pixels for Figure 5, `1200 x 946` pixels for Figure 6, and
+  `1200 x 942` pixels for Figure 7. Measure these ratios from the original PDF
+  page crops, not from a previously composed comparison image.

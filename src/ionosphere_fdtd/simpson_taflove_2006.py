@@ -707,10 +707,10 @@ def render_figure_5(traces: ValidationTraces, path: str | Path) -> Path:
     for label, trace in values.items():
         axis.plot(traces.time_s, trace, label=f"Point {label}", **styles[label])
     axis.set(
-        xlim=(0.0, 0.11),
+        xlim=(0.0, 0.12),
         ylim=(-0.2, 1.0),
     )
-    axis.set_xticks(np.arange(0.0, 0.101, 0.02))
+    axis.set_xticks(np.arange(0.0, 0.121, 0.02))
     axis.set_yticks(np.arange(-0.1, 1.01, 0.1))
     axis.set_xlabel("Time (seconds)", fontsize=20)
     axis.set_ylabel("Normalized radial electric field", fontsize=20)
