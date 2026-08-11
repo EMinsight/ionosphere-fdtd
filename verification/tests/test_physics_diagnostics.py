@@ -115,7 +115,9 @@ def test_physics_sampler_matches_independent_volume_integrals() -> None:
         np.testing.assert_array_equal(after, before)
 
 
-def test_chunked_diagnostics_do_not_change_traces_or_fields() -> None:
+def test_chunked_diagnostics_do_not_change_traces_or_fields(
+    tmp_path: Path,
+) -> None:
     direct = _small_simulation()
     observed = _small_simulation()
     expected = record_validation_traces(direct, steps=12)
@@ -138,6 +140,17 @@ def test_chunked_diagnostics_do_not_change_traces_or_fields() -> None:
     ):
         np.testing.assert_array_equal(observed_field, direct_field)
     assert [item.step for item in recorder.snapshots] == [0, 5, 10, 12]
+    assert all(
+        tuple(sorted(item.scalars))
+        == tuple(sorted(recorder.snapshots[0].scalars))
+        for item in recorder.snapshots
+    )
+    assert save_physics_snapshots(
+        tmp_path / "chunked.npz",
+        recorder.snapshots,
+        node_altitudes_m=observed.altitudes_m,
+        cell_altitudes_m=observed.radial_midpoint_altitudes_m,
+    ).is_file()
 
 
 def test_cuda_sampler_matches_numpy_float64_reductions() -> None:

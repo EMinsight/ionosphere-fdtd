@@ -179,8 +179,9 @@ class PhysicsDiagnosticSampler:
         )
         scalars["time/electric_s"] = simulation.electric_time_s
         scalars["time/magnetic_s"] = simulation.magnetic_time_s
-        if steps_per_second is not None:
-            scalars["performance/steps_per_second"] = float(steps_per_second)
+        scalars["performance/steps_per_second"] = float(
+            steps_per_second if steps_per_second is not None else 0.0
+        )
         scalars.update(self._accelerator_scalars())
         return PhysicsSnapshot(
             step=simulation.steps,
