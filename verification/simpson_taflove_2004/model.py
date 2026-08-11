@@ -17,6 +17,7 @@ from ionosphere_fdtd.mesh import GeodesicMesh, build_geodesic_mesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import GaussianCurrent, geographic_distribution
 
+from ..physics_diagnostics.model import record_er_observations_with_diagnostics
 from .materials import ETOPO5Relief, SimpsonTaflove2004Material
 
 PAPER_TIME_STEP_S = 3.0e-6
@@ -238,6 +239,8 @@ def record_validation_traces(
     *,
     steps: int = PAPER_TRACE_STEPS,
     synchronize_every: int = 128,
+    diagnostics_every: int = 512,
+    recorder: Any | None = None,
 ) -> ValidationTraces:
     """Record barycentrically interpolated ``Er`` at A, A′, B, and B′."""
 
@@ -254,13 +257,26 @@ def record_validation_traces(
     vertices = np.stack([item[0] for item in distributions])
     layers = np.asarray([item[1] for item in distributions], dtype=np.int64)
     weights = np.stack([item[2] for item in distributions])
-    values = simulation.record_er_observations(
-        vertices,
-        layers,
-        weights,
-        steps,
-        synchronize_every=synchronize_every,
-    ).astype(np.float64, copy=False)
+    if recorder is None:
+        values = simulation.record_er_observations(
+            vertices,
+            layers,
+            weights,
+            steps,
+            synchronize_every=synchronize_every,
+        ).astype(np.float64, copy=False)
+    else:
+        values = record_er_observations_with_diagnostics(
+            simulation,
+            vertices,
+            layers,
+            weights,
+            tuple(receiver.label for receiver in PAPER_RECEIVERS),
+            steps,
+            diagnostics_every=diagnostics_every,
+            recorder=recorder,
+            synchronize_every=synchronize_every,
+        )
     time_steps = np.arange(steps + 1, dtype=np.int64)
     return ValidationTraces(
         time_steps=time_steps,

@@ -15,6 +15,10 @@ from ionosphere_fdtd.backends import BackendUnavailableError
 
 from ..common.archive import save_npz_atomic
 from ..mesh_optimization.mesquite import load_optimized_mesh
+from ..physics_diagnostics import (
+    TensorBoardPhysicsRecorder,
+    save_physics_snapshots,
+)
 
 from .model import (
     PAPER_DFT_TRUNCATIONS,
@@ -109,6 +113,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--torch-threads", type=int)
     parser.add_argument("--synchronize-every", type=int, default=128)
     parser.add_argument(
+        "--tensorboard-log-dir",
+        type=Path,
+        help="write periodic physics diagnostics as TensorBoard event files",
+    )
+    parser.add_argument(
+        "--diagnostics-every",
+        type=int,
+        default=512,
+        help="TensorBoard physics sampling interval in time steps",
+    )
+    parser.add_argument(
         "--dft-window",
         choices=("adaptive", "paper"),
         default="adaptive",
@@ -201,12 +216,66 @@ def main(argv: list[str] | None = None) -> int:
         f"dt={simulation.time_step_s:.3e}s",
         flush=True,
     )
-    traces = record_validation_traces(
-        simulation,
-        steps=args.steps,
-        synchronize_every=args.synchronize_every,
-    )
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    diagnostic_recorder = None
+    diagnostic_data = None
+    if args.tensorboard_log_dir is not None:
+        if args.diagnostics_every < 1:
+            raise SystemExit("--diagnostics-every must be positive")
+        try:
+            diagnostic_recorder = TensorBoardPhysicsRecorder(
+                simulation,
+                args.tensorboard_log_dir,
+                metadata={
+                    "study": "Simpson-Taflove 2004 Figures 7-8",
+                    "material": args.material,
+                    "mesh_orientation": args.mesh_orientation,
+                    "mesh_coordinates": str(
+                        args.mesh_coordinates or "generated"
+                    ),
+                    "steps": args.steps,
+                    "diagnostics_every": args.diagnostics_every,
+                    "tangential_interface": args.tangential_interface,
+                    "tangential_support": args.tangential_support,
+                    "minimum_ocean_depth_km": args.minimum_ocean_depth_km,
+                    "deep_lithosphere_resistivity_ohm_m": (
+                        args.deep_lithosphere_resistivity_ohm_m
+                    ),
+                    "ionosphere_reference_height_km": (
+                        args.ionosphere_reference_height_km
+                    ),
+                    "ionosphere_scale_height_km": (
+                        args.ionosphere_scale_height_km
+                    ),
+                },
+            )
+        except ImportError as error:
+            raise SystemExit(str(error)) from error
+        print(
+            "physics_diagnostic_backend_bytes="
+            f"{diagnostic_recorder.sampler.diagnostic_backend_bytes:,} "
+            f"tensorboard={args.tensorboard_log_dir}",
+            flush=True,
+        )
+    try:
+        traces = record_validation_traces(
+            simulation,
+            steps=args.steps,
+            synchronize_every=args.synchronize_every,
+            diagnostics_every=args.diagnostics_every,
+            recorder=diagnostic_recorder,
+        )
+    finally:
+        if diagnostic_recorder is not None:
+            diagnostic_recorder.close()
+    if diagnostic_recorder is not None:
+        diagnostic_data = save_physics_snapshots(
+            args.output_dir / "physics-diagnostics.npz",
+            diagnostic_recorder.snapshots,
+            node_altitudes_m=simulation.altitudes_m,
+            cell_altitudes_m=simulation.radial_midpoint_altitudes_m,
+            metadata=diagnostic_recorder.metadata,
+        )
     trace_data = save_npz_atomic(
         args.output_dir / "simpson-taflove-2004-traces.npz",
         time_steps=traces.time_steps,
@@ -312,6 +381,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"figure 7: {figure_7}")
     print(f"figure 8: {figure_8}")
     print(f"traces: {trace_data}")
+    if diagnostic_data is not None:
+        print(f"physics diagnostics: {diagnostic_data}")
+        print(f"TensorBoard logs: {args.tensorboard_log_dir}")
     print(f"report: {report}")
     for name, value in metrics.items():
         rendered = str(value) if isinstance(value, int) else f"{value:.3f}"
@@ -356,6 +428,13 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         parts.append(f"--mesh-coordinates {quote(str(args.mesh_coordinates))}")
     if args.report is not None:
         parts.append(f"--report {quote(str(args.report))}")
+    if args.tensorboard_log_dir is not None:
+        parts.extend(
+            (
+                f"--tensorboard-log-dir {quote(str(args.tensorboard_log_dir))}",
+                f"--diagnostics-every {args.diagnostics_every}",
+            )
+        )
     separator = f" {chr(92)}\n  "
     return separator.join(parts)
 
