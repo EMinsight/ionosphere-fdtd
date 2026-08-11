@@ -42,6 +42,8 @@ Figure 8에서 동일한 트레이스로 계산한 평균 절대 감쇠 오차�
 
 조사 결과 부동소수점 정밀도, FFT zero-padding, DFT 절단 지점 선택, source-plane 반올림은 주원인이 아닌 것으로 판명됐다. 균일 모델과 방위각 연구는 공간 분산이 실제로 존재하며 수렴함을 보여준다. 논문 규모인 subdivision-7 측지 격자에서는 평가 대역의 방향 비등방성이 이미 0.295% 이하로 작다. 따라서 남은 절대 잔차에는 등방성 공간 분산과 유한한 방사 및 지각 모델의 차이도 포함된다.
 
+새 CUDA `float64` 물리 진단으로 Figure 7의 물질 관련 불일치 범위를 더 좁혔다. PyTorch backend, compilation, 진단 기록, 비유한 필드, 동쪽 경로 전체의 더 큰 전도 손실은 원인에서 제외했다. Subdivision 5에서 비정상적으로 약한 B 트레이스는 하나의 수신점 지지 셀에서 발생했다. 정확한 B 좌표는 ETOPO5 기준 해수면 아래 207 m지만, 이 셀의 표면은 해수면 위 30 m다. 원인 분리 목적으로 양의 지형고도만 0으로 제한하자 B/B′ 쌍이 복원됐다. 따라서 조격자의 해안선에서 수평·수직 물질 aliasing이 발생한다. 이 결과는 실제 지형을 없애야 한다는 뜻이 아니라, 물질 체적을 보존적으로 평균해야 한다는 근거다. Subdivision-8 B 지지점은 보간 가중치 기준으로 이미 88.9%가 해양이므로, 이 진단은 중요한 원인을 하나 찾았지만 최종 고주파 Figure 8 잔차 전체를 해결하지는 못한다.
+
 ## 범위와 합격 기준
 
 대상 연구는 다음과 같다.
@@ -191,6 +193,49 @@ Level 6→7 및 7→8에서 최대 위상 속도 오차의 관측 차수는 A–
 
 표본화한 level-7 기복은 −9.69~+6.30 km이며 육지는 28.9%다. 실제 기복과 별도의 해양/대륙 프로파일은 A/A′ 피크를 43 steps 분리하고 1/4 호 동서 RMS를 약 21배 높인다. 이는 물질에 의한 방향 비대칭을 재현하지만 지점별 감쇠 잔차를 논문의 범위 안으로 넣지는 못한다.
 
+## TensorBoard 물리 진단
+
+진단 실행은 검증 workflow와 같은 solver update를 사용하며 CUDA device에서 reduction을 수행한다. Field norm, finite flag, 양수인 이산 staggered-field energy, 방사 영역별 및 동·서 적도 회랑별 전도 전력, 소스 timing, 수신값, 처리량, CUDA memory를 기록한다. 정확한 표본값은 `physics-diagnostics.npz`에도 저장하며 TensorBoard는 대화형 표시 수단일 뿐이다. Staggered energy는 비교용 진단값이며, 동일 시각의 정확한 보존 Hamiltonian이라고 주장하지 않는다.
+
+### Backend 및 관측기 대조 실험
+
+Backend 대조 실험에는 subdivision-3 균일 모델을 15,000 steps 실행했다. 기록 중립성 대조 실험에서는 실제 TensorBoard recorder를 512 steps마다 호출했다.
+
+| 점검 | 수치 결과 | 결론 |
+|---|---:|---|
+| NumPy CPU 대 CUDA eager | 최종 `Er`, `Et`, `Hr`, `Ht` 배열이 정확히 같고 트레이스 상대 L2는 `4.15e-17` | CUDA eager 연산은 원인이 아님 |
+| NumPy CPU 대 CUDA compiled | 트레이스 상대 L2 `6.52e-15`, `Er`/`Et`/`Ht` 상대 L2 약 `1e-14` | Compilation은 반올림 수준의 값만 바꿈 |
+| Compiled `Hr` 대조군 | 최대 절대 차이 `1.84e-24 A/m`, 기준 norm `1.26e-23 A/m` | 이상적으로 없어야 할 mode의 큰 상대비는 수치적으로 무의미함 |
+| 기록한 실행 대 기록하지 않은 CUDA compiled 실행 | 수신 트레이스와 최종 필드 네 개가 bitwise equal | TensorBoard 관측은 시뮬레이션을 바꾸지 않음 |
+| Finite-field flag | 모든 35,000-step 물질 실행의 표본 필드가 유한함 | 불안정성과 NaN/Inf 전파를 제외함 |
+
+### 에너지 및 전도 손실 위치 추적
+
+물질 대조 실험은 subdivision 5, CUDA `float64`, 35,000 steps를 사용했고 소스, 전리층, 방사 격자, solver 설정은 모두 같게 유지했다. 전 지구 적분값은 256 steps마다 표본화했다. 회랑 비율은 별도의 512-step 간격 재실행에서 구했다. 회랑은 소스 공통 근방을 제외하고, 소스에서 동쪽 또는 서쪽 5°–90°와 위도 ±10° 범위를 포함한다.
+
+| 물질 | 전 지구 전도 손실 | 대기 영역 비율 | 동/서 회랑 손실비 | B / B′ 음의 피크 |
+|---|---:|---:|---:|---:|
+| 균일 | 0.62843 mJ | 88.43% | 1.0452 | −0.404 / −0.403 μV/m |
+| Natural Earth | 0.62819 mJ | 88.69% | 1.0450 | −0.414 / −0.415 μV/m |
+| ETOPO5 + Figure 6 프로파일 | 0.62714 mJ | 88.88% | 1.0279 | −0.040 / −0.407 μV/m |
+
+세 전 지구 손실은 0.21% 안에서 일치한다. ETOPO5는 B가 10분의 1로 약해졌는데도 회랑 손실비가 가장 대칭적이다. B 도달 시점과 가까운 step 15,360에서 ETOPO5 동쪽 회랑의 표본 field energy는 `5.28e-8 J`로, 서쪽의 `4.12e-8 J`보다 28% 많다. 따라서 약한 B 값은 동쪽 경로의 과도한 누적 손실로 펄스가 사라진 결과가 아니다.
+
+### 수신점 지지 자유도와 해안선 aliasing
+
+적도 동경 43°의 정확한 B 좌표에서 ETOPO5 고도는 −207 m다. 그런데 subdivision-5 barycentric receiver는 가중치의 88.8869%를 동경 42.75°의 인접 dual vertex에 할당하며, 이 vertex의 표면고도는 +30 m다. B 피크에서 이 육지 vertex의 값은 거의 0인 반면 두 해양 지지 vertex는 모두 약 −0.36 μV/m다. 따라서 이 이상은 보간값의 상쇄가 아니다. 지배적인 지지 자유도의 해수면 `Er` 평면 전체에 암석 물질이 할당된 결과다.
+
+| Subdivision | B 보간 가중치 중 육지에 할당된 비율 | 지배적인 지지점의 표면 |
+|---:|---:|---:|
+| 5 | 88.8869% | +30.00 m, 육지 |
+| 6 | 77.7772% | +30.00 m, 육지 |
+| 7 | 55.5555% | +30.00 m, 육지 |
+| 8 | 11.1111% | −246.75 m, 해양 |
+
+격자를 세분화할수록 지배적인 지지점이 해양으로 이동하고 육지 가중치는 단조롭게 감소한다. Subdivision-5 민감도 실행에서는 모든 수심을 유지하고 양의 표면고도만 0으로 바꿨다. B/B′는 −0.040/−0.407에서 −0.414/−0.414 μV/m로 바뀌었고, 1/2 경로 동서 RMS는 8.649에서 0.00556으로 감소했다. 이 의도적으로 비물리적인 제한은 원인 분리용 대조 실험이지 제안하는 지형 모델이 아니다.
+
+Subdivision 8에서 5°–90° 회랑을 면적 가중 방식으로 정적 점검한 결과, 소스 동쪽은 44.96%, 서쪽은 30.27%가 육지다. 얕은 바다는 동쪽 5.02%, 서쪽 6.05%이므로 얕은 해양 표본화만으로는 동쪽의 더 큰 감쇠 방향을 설명할 수 없다. 남은 효과는 두 가지로 나뉜다. 점 표본화한 지형은 5 km 방사 셀에서 해안 육지의 영향을 과장할 수 있다. 한편 400–500 Hz 잔차에는 별도로 측정한 등방성 공간 분산과 논문의 격자·물질 자료와의 차이도 들어 있다. 다음 구현 실험에서는 실제 기복을 유지하면서 각 `Er` 방사 제어체적의 물질을 보존적 또는 분율 방식으로 평균해야 한다.
+
 ## Staggered 소스 배치 점검
 
 논문의 5 km 수직 소스 중심은 2.5 km로, 이 solver의 staggered `Er` 평면 0과 5 km의 중간이다. 보정한 구현은 수평 barycentric weight 3개와 방사 0.5/0.5 cloud-in-cell weight를 결합하여 `Er` 자유도 6개에서 정확한 2,500 m 중심과 총전류를 모두 보존한다.
@@ -239,6 +284,10 @@ Level 6→7 및 7→8에서 최대 위상 속도 오차의 관측 차수는 A–
 | 적응형 절단을 ±16 samples 이동 | 최대 오차 약 0.01 dB/Mm 변화 | 절단 선택은 원인이 아님 |
 | 최근접 평면 대 staggered 소스 | 5.496e-4 트레이스 상대 RMS | 소스 반올림은 원인이 아님 |
 | 세분화에 따른 균일 대칭성 | 약 2차 수렴 | 격자 방향성은 해상도로 제어됨 |
+| NumPy 대 CUDA eager/compiled | 정확히 같거나 상대 약 `1e-14` 이내 | PyTorch backend와 compilation은 원인이 아님 |
+| 기록한 실행 대 기록하지 않은 CUDA compiled 실행 | 필드와 트레이스가 bitwise identical | TensorBoard 관측은 계산을 바꾸지 않음 |
+| ETOPO5 동/서 회랑 손실 | B가 10분의 1로 약하지만 비율은 1.0279 | 동쪽 경로 전체의 전도 손실은 원인이 아님 |
+| Level 5 양의 기복 제한 | B/B′가 −0.414/−0.414 μV/m로 복원됨 | 조격자 해안선 물질 aliasing을 확인함 |
 
 ## 재현 명령
 
@@ -274,6 +323,26 @@ uv run --extra pytorch --extra visualization python -m \
   --output-dir /tmp/ionosphere-verification-20260806/st2004-l8-fixed-depth-control
 ```
 
+정확한 표본 archive를 남기면서 subdivision-5 ETOPO5 물리 대조 실험을 TensorBoard에 기록한다.
+
+```bash
+uv run --with tensorboard --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
+  --subdivision 5 --mesh-orientation polar --steps 35000 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --deep-lithosphere-resistivity-ohm-m 500 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
+  --diagnostics-every 512 \
+  --tensorboard-log-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5/events \
+  --output-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5
+
+uv run --with tensorboard tensorboard \
+  --logdir /tmp/ionosphere-diagnostics
+```
+
 측지 격자를 바꾸지 않고 방향 분산 sweep을 다시 생성한다.
 
 ```bash
@@ -301,7 +370,10 @@ done
 - ETOPO5 기복과 제한된 지각 프로파일이 물리적으로 타당한 동서 비대칭을 만든다.
 - 소스는 전류를 보존하면서 정확한 staggered 중심에 배치된다.
 - 방향 격자 오차가 정량화되며 약 2차로 수렴한다.
+- Backend 간 일치와 비침습 진단을 확인하여 PyTorch 구현 경로를 관측된 불일치의 원인에서 제외했다.
+- Field energy와 전도 손실의 위치를 추적하여 수치 불안정성과 동쪽 경로 전체의 과도한 흡수를 제외했다.
+- 지형 대조 실험에서 조격자 B 억제의 직접 원인이 해안선 물질 aliasing임을 확인했다.
 
-복원한 동/서 피크 순서가 반대이고 1/2 경로 분리가 과도하므로 Figure 7의 정확한 재현에는 실패한다. 또한 subdivision 8의 최대 감쇠 오차가 2.538 및 3.258 dB/Mm로 요구 한계 0.5 및 1.0 dB/Mm를 넘으므로 Figure 8도 실패한다. 잔차는 400–500 Hz에서 지배적이다. 가능한 원인은 등방성 고주파 공간 분산, 유한한 5 km 방사 이산화, Hermance 개념 단면에서 사용할 수 없는 국소 지각 구조, 그리고 논문의 adaptive merged latitude–longitude grid와 현재 구현의 geodesic dual grid 사이의 불가피한 차이다.
+복원한 동/서 피크 순서가 반대이고 1/2 경로 분리가 과도하므로 Figure 7의 정확한 재현에는 실패한다. 또한 subdivision 8의 최대 감쇠 오차가 2.538 및 3.258 dB/Mm로 요구 한계 0.5 및 1.0 dB/Mm를 넘으므로 Figure 8도 실패한다. 잔차는 400–500 Hz에서 지배적이다. 가능한 원인은 등방성 고주파 공간 분산, 유한한 5 km 방사 이산화, 점 표본화한 해안 물질 체적, Hermance 개념 단면에서 사용할 수 없는 국소 지각 구조, 그리고 논문의 adaptive merged latitude–longitude grid와 현재 구현의 geodesic dual grid 사이의 불가피한 차이다. 조격자 수신점 이상은 이제 위치를 특정했지만, subdivision-8 지지 기하를 보면 이 현상만으로 고주파 감쇠 잔차 전체를 설명할 수 없다.
 
 따라서 이 결과는 Figure 7의 전체 시간 범위를 포괄하며 형태는 올바르지만 상대 트레이스 일치에는 실패한 복원과, Figure 8의 엄격한 지점별 재현 실패로 기술해야 한다. Figures 7과 8의 정확한 재현에 성공했다고 기술해서는 안 된다.

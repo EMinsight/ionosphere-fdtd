@@ -66,6 +66,19 @@ anisotropy is already small—no more than 0.295% over the evaluated band—so t
 remaining absolute residual also includes isotropic spatial dispersion and
 differences in the finite radial and crustal models.
 
+New CUDA `float64` physics diagnostics further narrow the material-driven
+Figure 7 mismatch. They rule out the PyTorch backend, compilation, diagnostic
+logging, non-finite fields, and larger bulk east-path conductive loss. At
+subdivision 5, the anomalously weak B trace instead comes from one dominant
+receiver-support cell whose ETOPO5 surface is 30 m above sea level even though
+the exact B coordinate is 207 m below sea level. Clamping positive relief only
+as a diagnostic restores the B/B′ pair, which identifies coarse horizontal and
+vertical material aliasing at the coastline. This is evidence for conservative
+material-volume averaging, not justification for removing real topography.
+The subdivision-8 B support is already 88.9% ocean by interpolation weight, so
+this diagnosis identifies an important contributor but does not by itself
+resolve the final high-frequency Figure 8 residual.
+
 ## Scope and acceptance criteria
 
 The target study is:
@@ -326,6 +339,86 @@ Real relief and separate oceanic/continental profiles split the A/A′ peaks by
 This reproduces material-driven directional asymmetry, but it does not bring
 the pointwise attenuation residuals inside the paper's ranges.
 
+## TensorBoard physics diagnosis
+
+The diagnostic runs use the same solver update as the verification workflow
+and perform reductions on the CUDA device. They record field norms, finite
+flags, a positive discrete staggered-field energy, conductive power by radial
+region and east/west equatorial corridor, source timing, receiver values,
+throughput, and CUDA memory. Exact sampled values are also written to
+`physics-diagnostics.npz`; TensorBoard is only the interactive view. The
+staggered energy is a comparison diagnostic rather than a claim of an exact
+same-time conserved Hamiltonian.
+
+### Backend and observer controls
+
+The backend controls used a subdivision-3 uniform model for 15,000 steps.
+The logging-neutrality control used the actual TensorBoard recorder every 512
+steps.
+
+| Check | Numerical result | Consequence |
+|---|---:|---|
+| NumPy CPU vs CUDA eager | Final `Er`, `Et`, `Hr`, and `Ht` arrays exactly equal; trace relative L2 `4.15e-17` | CUDA eager arithmetic is not the cause |
+| NumPy CPU vs CUDA compiled | Trace relative L2 `6.52e-15`; `Er`/`Et`/`Ht` relative L2 about `1e-14` | Compilation changes only roundoff-scale values |
+| Compiled `Hr` control | Maximum absolute difference `1.84e-24 A/m`; reference norm `1.26e-23 A/m` | A large relative ratio in this ideally absent mode is numerically insignificant |
+| Logged vs unlogged CUDA compiled | Receiver traces and all four final fields are bitwise equal | TensorBoard observation does not perturb the simulation |
+| Finite-field flags | All sampled fields finite in every 35,000-step material run | Instability and NaN/Inf propagation are excluded |
+
+### Energy and conductive-loss localization
+
+The material controls used subdivision 5, CUDA `float64`, 35,000 steps, and
+otherwise identical source, ionosphere, radial grid, and solver settings. The
+global integrals were sampled every 256 steps. Corridor ratios came from
+independent 512-step-cadence reruns and cover latitude ±10° from 5° to 90°
+east or west of the source, excluding the common source neighborhood.
+
+| Material | Global conductive loss | Atmosphere share | East/west corridor loss | B / B′ negative peak |
+|---|---:|---:|---:|---:|
+| Uniform | 0.62843 mJ | 88.43% | 1.0452 | −0.404 / −0.403 μV/m |
+| Natural Earth | 0.62819 mJ | 88.69% | 1.0450 | −0.414 / −0.415 μV/m |
+| ETOPO5 + Figure 6 profiles | 0.62714 mJ | 88.88% | 1.0279 | −0.040 / −0.407 μV/m |
+
+All three global losses agree within 0.21%, and ETOPO5 has the most symmetric
+corridor-loss ratio despite its tenfold B suppression. Near the B arrival at
+step 15,360, the ETOPO5 east corridor contains `5.28e-8 J`, 28% more sampled
+field energy than the west corridor's `4.12e-8 J`. The weak B value therefore
+does not represent a pulse removed by excessive integrated east-path loss.
+
+### Receiver support and coastline aliasing
+
+At the exact B coordinate, 43° E on the equator, ETOPO5 gives −207 m. The
+subdivision-5 barycentric receiver nevertheless assigns 88.8869% of its weight
+to a neighboring dual vertex at 42.75° E whose sampled surface is +30 m. At
+the B peak, that land vertex is nearly zero while the two ocean support
+vertices are both about −0.36 μV/m. The anomaly is thus not destructive
+interpolation cancellation: the dominant support degree of freedom has been
+assigned rock at the sea-level `Er` plane.
+
+| Subdivision | B interpolation weight assigned to land | Dominant support surface |
+|---:|---:|---:|
+| 5 | 88.8869% | +30.00 m, land |
+| 6 | 77.7772% | +30.00 m, land |
+| 7 | 55.5555% | +30.00 m, land |
+| 8 | 11.1111% | −246.75 m, ocean |
+
+Refinement moves the dominant support into the ocean and reduces the land
+weight monotonically. A subdivision-5 sensitivity run retained all bathymetry
+but replaced only positive surface elevations with zero. It changed B/B′
+from −0.040/−0.407 to −0.414/−0.414 μV/m and reduced the half-path
+east/west RMS from 8.649 to 0.00556. This deliberately nonphysical clamp is a
+cause-isolation control, not a proposed terrain model.
+
+At subdivision 8, an area-weighted static audit of the 5°–90° corridors finds
+44.96% land east of the source and 30.27% west. Shallow ocean occupies 5.02%
+east and 6.05% west, so shallow-ocean sampling alone has the wrong sign to
+explain the greater east-path attenuation. The evidence supports two separate
+remaining effects: point-sampled topography can overstate the influence of
+coastal land in a 5 km radial cell, while the 400–500 Hz residual also contains
+the independently measured isotropic spatial dispersion and differences from
+the paper's grid and material data. The appropriate implementation experiment
+is conservative or fractional material averaging over each `Er` radial
+control volume while preserving the actual relief.
+
 ## Staggered source-placement check
 
 The paper's 5 km vertical source is centered at 2.5 km, halfway between this
@@ -407,6 +500,10 @@ anisotropy alone cannot explain the full high-frequency mismatch.
 | Adaptive cutoff shifted by ±16 samples | approximately 0.01 dB/Mm maximum-error change | Cutoff choice is not the cause |
 | Nearest-plane vs staggered source | 5.496e-4 trace-relative RMS | Source rounding is not the cause |
 | Uniform symmetry under refinement | approximately second-order convergence | Grid directionality is controlled by resolution |
+| NumPy vs CUDA eager/compiled | Exact to approximately `1e-14` relative | PyTorch backend and compilation are not the cause |
+| Logged vs unlogged CUDA compiled | Bitwise-identical fields and traces | TensorBoard observation is non-perturbing |
+| ETOPO5 east/west corridor loss | Ratio 1.0279 despite tenfold B suppression | Bulk east-path conductive loss is not the cause |
+| Positive-relief clamp at level 5 | B/B′ restored to −0.414/−0.414 μV/m | Coarse coastline material aliasing is confirmed |
 
 ## Reproduction commands
 
@@ -443,6 +540,27 @@ uv run --extra pytorch --extra visualization python -m \
   --output-dir /tmp/ionosphere-verification-20260806/st2004-l8-fixed-depth-control
 ```
 
+Record the subdivision-5 ETOPO5 physics controls in TensorBoard while retaining
+the exact sampled archive:
+
+```bash
+uv run --with tensorboard --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
+  --subdivision 5 --mesh-orientation polar --steps 35000 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --deep-lithosphere-resistivity-ohm-m 500 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
+  --diagnostics-every 512 \
+  --tensorboard-log-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5/events \
+  --output-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5
+
+uv run --with tensorboard tensorboard \
+  --logdir /tmp/ionosphere-diagnostics
+```
+
 Regenerate the directional-dispersion sweep without changing the geodesic
 grid:
 
@@ -477,7 +595,13 @@ The implementation passes structural and qualitative checks:
 - the source is positioned at its exact staggered centroid with conserved
   current;
 - directional grid error is quantified and converges at approximately second
-  order.
+  order;
+- backend equivalence and non-perturbing diagnostics exclude the PyTorch
+  implementation path from the observed mismatch;
+- field-energy and conductive-loss localization exclude numerical instability
+  and excessive bulk east-path absorption;
+- a controlled topography experiment identifies coastline material aliasing
+  as the direct cause of the extreme coarse-grid B suppression.
 
 It fails exact Figure 7 reproduction because the reconstructed east/west peak
 ordering is reversed and the half-path separation is excessive. It also fails
@@ -485,10 +609,13 @@ Figure 8 because subdivision 8 has 2.538 and 3.258 dB/Mm maximum attenuation
 errors, exceeding the required 0.5 and 1.0 dB/Mm limits. The residual is
 dominated by 400–500 Hz.
 Likely contributors are isotropic high-frequency spatial dispersion, the
-finite 5 km radial discretization, unavailable local crustal structures from
-the conceptual Hermance section, and the unavoidable difference between the
-paper's adaptive merged latitude–longitude grid and this implementation's
-geodesic dual grid.
+finite 5 km radial discretization, point-sampled coastal material volumes,
+unavailable local crustal structures from the conceptual Hermance section,
+and the unavoidable difference between the paper's adaptive merged
+latitude–longitude grid and this implementation's geodesic dual grid. The
+coarse-grid receiver anomaly is now localized, but the subdivision-8 support
+geometry shows that it cannot account for the complete high-frequency
+attenuation residual.
 
 This result must therefore be described as a complete-time, morphologically
 correct Figure 7 reconstruction with failed relative-trace agreement, together
