@@ -5,6 +5,7 @@ import pytest
 
 from ionosphere_fdtd.constants import EPSILON_0, MU_0
 from verification.physics_diagnostics import (
+    HorizontalRegion,
     PhysicsDiagnosticSampler,
     TensorBoardPhysicsRecorder,
     save_physics_snapshots,
@@ -151,6 +152,39 @@ def test_chunked_diagnostics_do_not_change_traces_or_fields(
         node_altitudes_m=observed.altitudes_m,
         cell_altitudes_m=observed.radial_midpoint_altitudes_m,
     ).is_file()
+
+
+def test_full_horizontal_region_matches_global_energy_and_loss() -> None:
+    simulation = _small_simulation()
+    simulation.er.fill(2.0)
+    simulation.et.fill(3.0)
+    simulation.hr.fill(4.0)
+    simulation.ht.fill(5.0)
+    full = HorizontalRegion(
+        np.ones(simulation.mesh.n_vertices),
+        np.ones(simulation.mesh.n_edges),
+        np.ones(simulation.mesh.n_faces),
+    )
+
+    snapshot = PhysicsDiagnosticSampler(
+        simulation, horizontal_regions={"full": full}
+    ).sample()
+
+    assert snapshot.scalars["energy_horizontal_region/full_j"] == pytest.approx(
+        snapshot.scalars["energy/total_staggered_j"]
+    )
+    assert snapshot.scalars[
+        "conductive_loss_horizontal_region/full_w"
+    ] == pytest.approx(snapshot.scalars["conductive_loss/total_w"])
+    regional_loss = sum(
+        snapshot.scalars[
+            f"conductive_loss_horizontal_region/full/{region}_w"
+        ]
+        for region in ("earth", "atmosphere", "ionosphere")
+    )
+    assert regional_loss == pytest.approx(
+        snapshot.scalars["conductive_loss/total_w"]
+    )
 
 
 def test_cuda_sampler_matches_numpy_float64_reductions() -> None:

@@ -20,6 +20,7 @@ from verification.simpson_taflove_2004.model import (
     compute_attenuation,
     compute_phase_velocity,
     create_validation_simulation,
+    equatorial_path_diagnostic_regions,
     find_dft_truncations,
     record_validation_traces,
     source_distribution_metrics,
@@ -116,6 +117,27 @@ def test_validation_setup_can_retain_native_orientation() -> None:
     assert simulation.mesh.vertex_degree[south] == 6
 
 
+def test_equatorial_diagnostic_corridors_are_disjoint_and_symmetric() -> None:
+    simulation = create_validation_simulation(
+        subdivision=3,
+        material_model="uniform",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+
+    regions = equatorial_path_diagnostic_regions(simulation)
+
+    assert set(regions) == {"east", "west"}
+    for field in ("er_weights", "edge_weights", "hr_weights"):
+        east = getattr(regions["east"], field)
+        west = getattr(regions["west"], field)
+        assert np.count_nonzero(east) > 0
+        assert np.count_nonzero(west) > 0
+        assert not np.any(east * west)
+        assert np.count_nonzero(east) == pytest.approx(
+            np.count_nonzero(west), rel=0.12
+        )
 def test_validation_setup_accepts_external_mesh() -> None:
     mesh = build_geodesic_mesh(1, optimization_steps=1)
     simulation = create_validation_simulation(

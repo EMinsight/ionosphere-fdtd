@@ -21,6 +21,15 @@ FloatArray = NDArray[np.float64]
 
 
 @dataclass(frozen=True, slots=True)
+class HorizontalRegion:
+    """Per-field horizontal support weights for one diagnostic region."""
+
+    er_weights: FloatArray
+    edge_weights: FloatArray
+    hr_weights: FloatArray
+
+
+@dataclass(frozen=True, slots=True)
 class PhysicsSnapshot:
     """One read-only diagnostic sample at the current leapfrog state."""
 
@@ -57,7 +66,12 @@ class PhysicsDiagnosticSampler:
     radial profiles leave the accelerator.
     """
 
-    def __init__(self, simulation: GeodesicFDTD) -> None:
+    def __init__(
+        self,
+        simulation: GeodesicFDTD,
+        *,
+        horizontal_regions: Mapping[str, HorizontalRegion] | None = None,
+    ) -> None:
         self.simulation = simulation
         backend = simulation.backend
         mesh = simulation.mesh
@@ -76,19 +90,43 @@ class PhysicsDiagnosticSampler:
         self._epsilon_et = backend.asarray(EPSILON_0 * simulation.epsilon_r_et)
         self._sigma_er = backend.asarray(simulation.sigma_er)
         self._sigma_et = backend.asarray(simulation.sigma_et)
+        self._horizontal_regions: dict[str, tuple[Any, Any, Any]] = {}
+        for name, region in (horizontal_regions or {}).items():
+            if not name or "/" in name:
+                raise ValueError("horizontal region names must be nonempty tags")
+            er_weights = self._validated_region_weights(
+                region.er_weights, mesh.n_vertices, f"{name} Er"
+            )
+            edge_weights = self._validated_region_weights(
+                region.edge_weights, mesh.n_edges, f"{name} edge"
+            )
+            hr_weights = self._validated_region_weights(
+                region.hr_weights, mesh.n_faces, f"{name} Hr"
+            )
+            self._horizontal_regions[name] = (
+                self._horizontal_er * backend.asarray(er_weights[:, None]),
+                self._horizontal_edge * backend.asarray(edge_weights[:, None]),
+                self._horizontal_hr * backend.asarray(hr_weights[:, None]),
+            )
+        diagnostic_arrays = [
+            self._horizontal_er,
+            self._horizontal_hr,
+            self._horizontal_edge,
+            self._radial_nodes,
+            self._radial_cells,
+            self._epsilon_er,
+            self._epsilon_et,
+            self._sigma_er,
+            self._sigma_et,
+        ]
+        diagnostic_arrays.extend(
+            array
+            for region in self._horizontal_regions.values()
+            for array in region
+        )
         self.diagnostic_backend_bytes = sum(
             backend.nbytes(values)
-            for values in (
-                self._horizontal_er,
-                self._horizontal_hr,
-                self._horizontal_edge,
-                self._radial_nodes,
-                self._radial_cells,
-                self._epsilon_er,
-                self._epsilon_et,
-                self._sigma_er,
-                self._sigma_et,
-            )
+            for values in diagnostic_arrays
         )
         reference_height = getattr(
             simulation.material, "ionosphere_reference_height_m", 70_000.0
@@ -173,6 +211,7 @@ class PhysicsDiagnosticSampler:
             + scalars["conductive_loss/et_w"]
         )
         self._add_region_scalars(scalars, profiles, loss_profiles)
+        self._add_horizontal_region_scalars(scalars)
         scalars.update(self._source_scalars())
         scalars["memory/diagnostic_backend_bytes"] = float(
             self.diagnostic_backend_bytes
@@ -238,6 +277,95 @@ class PhysicsDiagnosticSampler:
         else:
             finite = np.isfinite(field).all()
         return float(bool(backend.scalar(finite)))
+
+    @staticmethod
+    def _validated_region_weights(
+        values: FloatArray, expected_count: int, label: str
+    ) -> FloatArray:
+        weights = np.asarray(values, dtype=np.float64)
+        if weights.shape != (expected_count,):
+            raise ValueError(
+                f"{label} region weights must have shape ({expected_count},)"
+            )
+        if not np.all(np.isfinite(weights)) or np.any(
+            (weights < 0.0) | (weights > 1.0)
+        ):
+            raise ValueError(f"{label} region weights must be finite in [0, 1]")
+        return weights
+
+    def _add_horizontal_region_scalars(
+        self, scalars: dict[str, float]
+    ) -> None:
+        simulation = self.simulation
+        node_altitudes = simulation.altitudes_m
+        cell_altitudes = simulation.radial_midpoint_altitudes_m
+        vertical_regions = {
+            "earth": (node_altitudes < 0.0, cell_altitudes < 0.0),
+            "atmosphere": (
+                (node_altitudes >= 0.0)
+                & (node_altitudes < self.reference_height_m),
+                (cell_altitudes >= 0.0)
+                & (cell_altitudes < self.reference_height_m),
+            ),
+            "ionosphere": (
+                node_altitudes >= self.reference_height_m,
+                cell_altitudes >= self.reference_height_m,
+            ),
+        }
+        for name, (horizontal_er, horizontal_edge, horizontal_hr) in (
+            self._horizontal_regions.items()
+        ):
+            energy = {
+                "er": self._electric_energy_profile(
+                    simulation.er,
+                    self._epsilon_er,
+                    horizontal_er,
+                    self._radial_nodes,
+                ),
+                "et": self._electric_energy_profile(
+                    simulation.et,
+                    self._epsilon_et,
+                    horizontal_edge,
+                    self._radial_cells,
+                ),
+                "hr": self._magnetic_energy_profile(
+                    simulation.hr,
+                    horizontal_hr,
+                    self._radial_cells,
+                ),
+                "ht": self._magnetic_energy_profile(
+                    simulation.ht,
+                    horizontal_edge,
+                    self._radial_nodes,
+                ),
+            }
+            loss = {
+                "er": self._conductive_loss_profile(
+                    simulation.er,
+                    self._sigma_er,
+                    horizontal_er,
+                    self._radial_nodes,
+                ),
+                "et": self._conductive_loss_profile(
+                    simulation.et,
+                    self._sigma_et,
+                    horizontal_edge,
+                    self._radial_cells,
+                ),
+            }
+            scalars[f"energy_horizontal_region/{name}_j"] = float(
+                sum(np.sum(values) for values in energy.values())
+            )
+            scalars[f"conductive_loss_horizontal_region/{name}_w"] = float(
+                np.sum(loss["er"]) + np.sum(loss["et"])
+            )
+            for vertical, (node_mask, cell_mask) in vertical_regions.items():
+                scalars[
+                    f"conductive_loss_horizontal_region/{name}/{vertical}_w"
+                ] = float(
+                    np.sum(loss["er"][node_mask])
+                    + np.sum(loss["et"][cell_mask])
+                )
 
     def _add_region_scalars(
         self,

@@ -17,7 +17,10 @@ from ionosphere_fdtd.mesh import GeodesicMesh, build_geodesic_mesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import GaussianCurrent, geographic_distribution
 
-from ..physics_diagnostics.model import record_er_observations_with_diagnostics
+from ..physics_diagnostics.model import (
+    HorizontalRegion,
+    record_er_observations_with_diagnostics,
+)
 from .materials import ETOPO5Relief, SimpsonTaflove2004Material
 
 PAPER_TIME_STEP_S = 3.0e-6
@@ -70,6 +73,51 @@ PAPER_RECEIVERS = (
     PaperReceiver("B", 43.0, 0.50, "east"),
     PaperReceiver("B′", -137.0, 0.50, "west"),
 )
+
+
+def equatorial_path_diagnostic_regions(
+    simulation: GeodesicFDTD,
+    *,
+    corridor_half_width_deg: float = 10.0,
+    source_exclusion_deg: float = 5.0,
+) -> dict[str, HorizontalRegion]:
+    """Return equal-width east/west masks for the two Figure 7 paths."""
+
+    if not 0.0 < corridor_half_width_deg <= 90.0:
+        raise ValueError("corridor_half_width_deg must be in (0, 90]")
+    if not 0.0 <= source_exclusion_deg < 90.0:
+        raise ValueError("source_exclusion_deg must be in [0, 90)")
+
+    def masks(points: FloatArray) -> tuple[FloatArray, FloatArray]:
+        longitude = np.mod(
+            np.rad2deg(np.arctan2(points[:, 1], points[:, 0])), 360.0
+        )
+        latitude = np.rad2deg(
+            np.arctan2(points[:, 2], np.hypot(points[:, 0], points[:, 1]))
+        )
+        source_longitude = np.mod(PAPER_SOURCE_LONGITUDE_DEG, 360.0)
+        east_distance = np.mod(longitude - source_longitude, 360.0)
+        west_distance = np.mod(source_longitude - longitude, 360.0)
+        latitude_mask = np.abs(latitude) <= corridor_half_width_deg
+        east = (
+            latitude_mask
+            & (east_distance >= source_exclusion_deg)
+            & (east_distance <= 90.0)
+        )
+        west = (
+            latitude_mask
+            & (west_distance >= source_exclusion_deg)
+            & (west_distance <= 90.0)
+        )
+        return east.astype(np.float64), west.astype(np.float64)
+
+    vertex_east, vertex_west = masks(simulation.mesh.vertices)
+    edge_east, edge_west = masks(simulation.mesh.edge_midpoints())
+    face_east, face_west = masks(simulation.mesh.face_centers)
+    return {
+        "east": HorizontalRegion(vertex_east, edge_east, face_east),
+        "west": HorizontalRegion(vertex_west, edge_west, face_west),
+    }
 
 
 @dataclass(frozen=True, slots=True)

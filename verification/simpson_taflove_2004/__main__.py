@@ -31,6 +31,7 @@ from .model import (
     compute_attenuation,
     compute_phase_velocity,
     create_validation_simulation,
+    equatorial_path_diagnostic_regions,
     phase_velocity_metrics,
     record_validation_traces,
     render_figure_7,
@@ -226,6 +227,9 @@ def main(argv: list[str] | None = None) -> int:
             diagnostic_recorder = TensorBoardPhysicsRecorder(
                 simulation,
                 args.tensorboard_log_dir,
+                horizontal_regions=equatorial_path_diagnostic_regions(
+                    simulation
+                ),
                 metadata={
                     "study": "Simpson-Taflove 2004 Figures 7-8",
                     "material": args.material,
@@ -235,6 +239,8 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     "steps": args.steps,
                     "diagnostics_every": args.diagnostics_every,
+                    "diagnostic_corridor_half_width_deg": 10.0,
+                    "diagnostic_source_exclusion_deg": 5.0,
                     "tangential_interface": args.tangential_interface,
                     "tangential_support": args.tangential_support,
                     "minimum_ocean_depth_km": args.minimum_ocean_depth_km,

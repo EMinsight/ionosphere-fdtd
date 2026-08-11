@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from ionosphere_fdtd.solver import GeodesicFDTD
 
-from .model import PhysicsDiagnosticSampler, PhysicsSnapshot
+from .model import HorizontalRegion, PhysicsDiagnosticSampler, PhysicsSnapshot
 
 
 class TensorBoardPhysicsRecorder:
@@ -20,6 +20,7 @@ class TensorBoardPhysicsRecorder:
         log_dir: str | Path,
         *,
         metadata: Mapping[str, Any] | None = None,
+        horizontal_regions: Mapping[str, HorizontalRegion] | None = None,
     ) -> None:
         try:
             from torch.utils.tensorboard import SummaryWriter
@@ -29,7 +30,9 @@ class TensorBoardPhysicsRecorder:
             ) from error
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.sampler = PhysicsDiagnosticSampler(simulation)
+        self.sampler = PhysicsDiagnosticSampler(
+            simulation, horizontal_regions=horizontal_regions
+        )
         self.snapshots: list[PhysicsSnapshot] = []
         self.writer = SummaryWriter(log_dir=str(self.log_dir))
         self.metadata = dict(metadata or {})
