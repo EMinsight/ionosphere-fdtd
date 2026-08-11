@@ -80,6 +80,12 @@ def _parser() -> argparse.ArgumentParser:
         help="NOAA-NGDC big-endian ETOPO5.DAT (required by --material etopo5)",
     )
     parser.add_argument(
+        "--radial-support",
+        choices=("point", "dual-cell"),
+        default="point",
+        help="sample Er material at one vertex or average its dual-cell area",
+    )
+    parser.add_argument(
         "--tangential-interface",
         choices=("point", "fractional"),
         default="point",
@@ -193,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             ),
             ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
             etopo5_path=args.etopo5_path,
+            radial_material_support=args.radial_support,
             tangential_interface_mode=args.tangential_interface,
             tangential_material_support=args.tangential_support,
             minimum_ocean_depth_m=1_000.0 * args.minimum_ocean_depth_km,
@@ -212,8 +219,9 @@ def main(argv: list[str] | None = None) -> int:
         f"minimum_ocean_depth_km={args.minimum_ocean_depth_km:g} "
         "deep_lithosphere_resistivity_ohm_m="
         f"{args.deep_lithosphere_resistivity_ohm_m:g} "
-        f"interface={args.tangential_interface} "
-        f"support={args.tangential_support} "
+        f"radial_support={args.radial_support} "
+        f"tangential_interface={args.tangential_interface} "
+        f"tangential_support={args.tangential_support} "
         f"dt={simulation.time_step_s:.3e}s",
         flush=True,
     )
@@ -241,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
                     "diagnostics_every": args.diagnostics_every,
                     "diagnostic_corridor_half_width_deg": 10.0,
                     "diagnostic_source_exclusion_deg": 5.0,
+                    "radial_support": args.radial_support,
                     "tangential_interface": args.tangential_interface,
                     "tangential_support": args.tangential_support,
                     "minimum_ocean_depth_km": args.minimum_ocean_depth_km,
@@ -370,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
             ionosphere_scale_height_m=1_000.0 * args.ionosphere_scale_height_km,
             dft_window=args.dft_window,
             spectral_window=args.spectral_window,
+            radial_support=args.radial_support,
             tangential_interface=args.tangential_interface,
             tangential_support=args.tangential_support,
             backend=simulation.backend.name,
@@ -421,6 +431,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"--dtype {quote(args.dtype)}",
         f"--dft-window {quote(args.dft_window)}",
         f"--spectral-window {quote(args.spectral_window)}",
+        f"--radial-support {quote(args.radial_support)}",
         f"--tangential-interface {quote(args.tangential_interface)}",
         f"--tangential-support {quote(args.tangential_support)}",
         "--ionosphere-reference-height-km "

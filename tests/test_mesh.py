@@ -120,6 +120,24 @@ def test_dual_areas_equal_explicit_ordered_polygon_fans() -> None:
     )
 
 
+def test_dual_cell_wedge_quadrature_partitions_every_cell() -> None:
+    mesh = build_geodesic_mesh(3)
+    vertices = mesh.edges.ravel()
+    edges = np.repeat(np.arange(mesh.n_edges), 2)
+
+    directions, areas = mesh.dual_cell_wedge_quadrature(vertices, edges)
+    represented = np.bincount(vertices, weights=areas, minlength=mesh.n_vertices)
+
+    assert directions.shape == (2 * mesh.n_edges, 3)
+    np.testing.assert_allclose(np.linalg.norm(directions, axis=1), 1.0)
+    np.testing.assert_allclose(
+        represented,
+        mesh.dual_cell_solid_angles,
+        rtol=0.0,
+        atol=8.0 * np.finfo(np.float64).eps,
+    )
+
+
 def test_default_orientation_places_pentagons_at_geographic_poles() -> None:
     native = build_geodesic_mesh(2, orientation="native")
     polar = build_geodesic_mesh(2)

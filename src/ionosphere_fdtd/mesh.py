@@ -100,6 +100,38 @@ class GeodesicMesh:
             )
         )
 
+    def dual_cell_wedge_quadrature(
+        self,
+        vertex_indices: IntArray,
+        edge_indices: IntArray,
+    ) -> tuple[FloatArray, FloatArray]:
+        """Return one area-weighted quadrature point per dual-cell wedge.
+
+        Each requested vertex-edge incidence defines the spherical triangle
+        bounded by the primal vertex and the circumcenters on either side of
+        the edge. These disjoint wedges exactly partition every polygonal dual
+        cell. The normalized triangle centroid is the quadrature direction and
+        the exact spherical triangle area is its integration weight.
+        """
+
+        vertices = np.asarray(vertex_indices, dtype=np.int64)
+        edges = np.asarray(edge_indices, dtype=np.int64)
+        if vertices.ndim != 1 or edges.shape != vertices.shape:
+            raise ValueError("dual-cell wedge indices must be matching 1-D arrays")
+        if np.any(vertices < 0) or np.any(vertices >= self.n_vertices):
+            raise ValueError("dual-cell wedge vertex index is out of bounds")
+        if np.any(edges < 0) or np.any(edges >= self.n_edges):
+            raise ValueError("dual-cell wedge edge index is out of bounds")
+        if np.any(~np.any(self.edges[edges] == vertices[:, None], axis=1)):
+            raise ValueError("dual-cell wedge vertex must be incident to its edge")
+
+        vertex_points = self.vertices[vertices]
+        left = self.face_centers[self.edge_left_faces[edges]]
+        right = self.face_centers[self.edge_right_faces[edges]]
+        directions = _normalize(vertex_points + left + right)
+        areas = _spherical_triangle_area(vertex_points, left, right)
+        return directions, areas
+
     def face_circulation(self, edge_values: FloatArray) -> FloatArray:
         """Counter-clockwise circulation around every primal triangle."""
 

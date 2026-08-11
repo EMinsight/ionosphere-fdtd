@@ -35,6 +35,7 @@ class SimulationConfig:
     mesh_optimization_steps: int = 0
     mesh_orientation: str = "polar"
     radial_altitudes_m: tuple[float, ...] | None = None
+    radial_material_support: str = "point"
     tangential_material_support: str = "point"
     horizontal_anomaly_mode: str = "point"
     radial_boundary_condition: str = "pec"
@@ -64,6 +65,10 @@ class SimulationConfig:
             raise ValueError("mesh_optimization_steps must be non-negative")
         if self.mesh_orientation not in {"native", "polar"}:
             raise ValueError("mesh_orientation must be 'native' or 'polar'")
+        if self.radial_material_support not in {"point", "dual-cell"}:
+            raise ValueError(
+                "radial_material_support must be 'point' or 'dual-cell'"
+            )
         if self.tangential_material_support not in {"point", "edge-diamond"}:
             raise ValueError(
                 "tangential_material_support must be 'point' or 'edge-diamond'"
@@ -387,13 +392,20 @@ class GeodesicFDTD:
                 ) from error
         else:
             sampling_material = self.material
-        sigma_er, epsilon_r_er = self._validated_material_sample(
-            sampling_material.sample(
-                self.mesh.vertices, self.altitudes_m, self.config.earth_radius_m
-            ),
-            (self.mesh.n_vertices, len(self.altitudes_m)),
-            "radial",
-        )
+        if self.config.radial_material_support == "point":
+            sigma_er, epsilon_r_er = self._validated_material_sample(
+                sampling_material.sample(
+                    self.mesh.vertices,
+                    self.altitudes_m,
+                    self.config.earth_radius_m,
+                ),
+                (self.mesh.n_vertices, len(self.altitudes_m)),
+                "radial",
+            )
+        else:
+            sigma_er, epsilon_r_er = self._dual_cell_material_average(
+                sampling_material
+            )
         if conservative_anomalies:
             anomalies = tuple(material_anomalies)
             fractions_er = tuple(
@@ -488,6 +500,81 @@ class GeodesicFDTD:
         self.sigma_et = sigma_et
         self.epsilon_r_er = epsilon_r_er
         self.epsilon_r_et = epsilon_r_et
+
+    def _dual_cell_material_average(
+        self, sampling_material: Any
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Area-average radial-field material over each polygonal dual cell."""
+
+        vertex_count = self.mesh.n_vertices
+        layer_count = len(self.altitudes_m)
+        maximum_degree = int(np.max(self.mesh.vertex_degree))
+        incidence = np.full(
+            (vertex_count, maximum_degree), -1, dtype=np.int64
+        )
+        incidence_vertices = self.mesh.edges.ravel()
+        incidence_edges = np.repeat(
+            np.arange(self.mesh.n_edges, dtype=np.int64), 2
+        )
+        order = np.argsort(incidence_vertices, kind="stable")
+        sorted_vertices = incidence_vertices[order]
+        counts = self.mesh.vertex_degree
+        starts = np.repeat(
+            np.cumsum(np.r_[0, counts[:-1]], dtype=np.int64), counts
+        )
+        slots = np.arange(len(order), dtype=np.int64) - starts
+        incidence[sorted_vertices, slots] = incidence_edges[order]
+
+        sigma = np.empty((vertex_count, layer_count), dtype=np.float64)
+        epsilon_r = np.empty_like(sigma)
+        target_support_count = 65_536
+        vertices_per_chunk = max(1, target_support_count // maximum_degree)
+        for begin in range(0, vertex_count, vertices_per_chunk):
+            end = min(begin + vertices_per_chunk, vertex_count)
+            chunk_incidence = incidence[begin:end]
+            valid = chunk_incidence >= 0
+            local_vertices = np.broadcast_to(
+                np.arange(end - begin, dtype=np.int64)[:, None],
+                chunk_incidence.shape,
+            )[valid]
+            global_vertices = begin + local_vertices
+            edge_indices = chunk_incidence[valid]
+            directions, wedge_areas = self.mesh.dual_cell_wedge_quadrature(
+                global_vertices, edge_indices
+            )
+            weights = (
+                wedge_areas
+                / self.mesh.dual_cell_solid_angles[global_vertices]
+            )
+            support_sigma, support_epsilon = self._validated_material_sample(
+                sampling_material.sample(
+                    directions,
+                    self.altitudes_m,
+                    self.config.earth_radius_m,
+                ),
+                (len(directions), layer_count),
+                "radial dual-cell support",
+            )
+            chunk_sigma = np.zeros((end - begin, layer_count), dtype=np.float64)
+            chunk_epsilon = np.zeros_like(chunk_sigma)
+            np.add.at(
+                chunk_sigma,
+                local_vertices,
+                weights[:, None] * support_sigma,
+            )
+            np.add.at(
+                chunk_epsilon,
+                local_vertices,
+                weights[:, None] * support_epsilon,
+            )
+            weight_sums = np.bincount(
+                local_vertices, weights=weights, minlength=end - begin
+            )
+            if not np.allclose(weight_sums, 1.0, rtol=0.0, atol=2.0e-12):
+                raise RuntimeError("dual-cell material weights do not close")
+            sigma[begin:end] = chunk_sigma
+            epsilon_r[begin:end] = chunk_epsilon
+        return sigma, epsilon_r
 
     def _prepare_material_coefficients(self) -> None:
         """Build lossy electric-field update coefficients at the selected dt."""

@@ -82,6 +82,8 @@ def test_paper_setup_uses_delta_t_pulse_parameters() -> None:
 def test_reproduction_command_records_all_result_changing_windows() -> None:
     args = verification_parser().parse_args(
         (
+            "--radial-support",
+            "dual-cell",
             "--tangential-interface",
             "fractional",
             "--tangential-support",
@@ -93,6 +95,7 @@ def test_reproduction_command_records_all_result_changing_windows() -> None:
 
     command = _reproduction_command(args)
 
+    assert "--radial-support dual-cell" in command
     assert "--tangential-interface fractional" in command
     assert "--tangential-support edge-diamond" in command
     assert "--spectral-window cosine-tail" in command
@@ -391,6 +394,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
         ionosphere_scale_height_m=1_000.0 / 0.3,
         dft_window="adaptive",
         spectral_window="rectangular",
+        radial_support="point",
         tangential_interface="point",
         tangential_support="point",
         backend="torch",
@@ -422,6 +426,7 @@ def test_markdown_report_records_configuration_results_and_artifacts(tmp_path) -
     assert "9.000 dB/Mm" in text
     assert "`adaptive`" in text
     assert "spectral window | `rectangular`" in text
+    assert "radial support | `point`" in text
     assert "45개 bin" in text
     assert "Bannister (1984)" in text
     assert "daytime phase velocity" in text

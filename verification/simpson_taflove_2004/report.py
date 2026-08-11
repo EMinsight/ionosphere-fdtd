@@ -39,6 +39,7 @@ class ValidationRunSummary:
     ionosphere_scale_height_m: float
     dft_window: str
     spectral_window: str
+    radial_support: str
     tangential_interface: str
     tangential_support: str
     backend: str
@@ -133,6 +134,7 @@ def write_validation_report(
 | 이온층 scale height | {summary.ionosphere_scale_height_m / 1_000.0:g} km |
 | DFT window | `{summary.dft_window}` |
 | spectral window | `{summary.spectral_window}` |
+| radial support | `{summary.radial_support}` |
 | tangential interface | `{summary.tangential_interface}` |
 | tangential support | `{summary.tangential_support}` |
 | backend | `{summary.backend}` |

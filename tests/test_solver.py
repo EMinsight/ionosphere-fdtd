@@ -409,6 +409,9 @@ def test_simulation_config_rejects_unknown_material_support() -> None:
     with pytest.raises(ValueError, match="tangential_material_support"):
         small_config(tangential_material_support="unknown")
 
+    with pytest.raises(ValueError, match="radial_material_support"):
+        small_config(radial_material_support="unknown")
+
 
 def test_simulation_config_rejects_unknown_radial_boundary() -> None:
     with pytest.raises(ValueError, match="radial_boundary_condition"):
@@ -650,6 +653,51 @@ def test_edge_diamond_support_averages_tangential_material() -> None:
     np.testing.assert_allclose(
         simulation.to_numpy(simulation.sigma_et)[:, 0], expected_sigma
     )
+
+
+def test_dual_cell_support_area_averages_radial_material() -> None:
+    class DirectionMaterial(EarthIonosphereMaterial):
+        def sample(
+            self,
+            directions: np.ndarray,
+            altitudes_m: np.ndarray,
+            earth_radius_m: float,
+        ) -> tuple[np.ndarray, np.ndarray]:
+            del earth_radius_m
+            sigma = 1.0e-3 * (2.0 + directions[:, 0, None])
+            sigma = np.broadcast_to(
+                sigma, (len(directions), len(altitudes_m))
+            ).copy()
+            return sigma, np.ones_like(sigma)
+
+    simulation = GeodesicFDTD(
+        config=small_config(radial_material_support="dual-cell"),
+        material=DirectionMaterial(),
+    )
+    mesh = simulation.mesh
+    vertices = mesh.edges.ravel()
+    edges = np.repeat(np.arange(mesh.n_edges), 2)
+    directions, areas = mesh.dual_cell_wedge_quadrature(vertices, edges)
+    weighted_x = np.bincount(
+        vertices,
+        weights=areas * directions[:, 0],
+        minlength=mesh.n_vertices,
+    ) / mesh.dual_cell_solid_angles
+    expected = 1.0e-3 * (2.0 + weighted_x)
+
+    np.testing.assert_allclose(
+        simulation.to_numpy(simulation.sigma_er)[:, 0], expected
+    )
+
+
+def test_dual_cell_support_preserves_uniform_radial_material() -> None:
+    point = GeodesicFDTD(config=small_config())
+    averaged = GeodesicFDTD(
+        config=small_config(radial_material_support="dual-cell")
+    )
+
+    np.testing.assert_allclose(averaged.sigma_er, point.sigma_er)
+    np.testing.assert_allclose(averaged.epsilon_r_er, point.epsilon_r_er)
 
 
 def test_modulated_source_uses_frequency_scaled_default_envelope() -> None:
