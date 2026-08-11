@@ -401,8 +401,12 @@ def main(argv: list[str] | None = None) -> int:
 def _reproduction_command(args: argparse.Namespace) -> str:
     compile_flag = "--torch-compile" if args.torch_compile else "--no-torch-compile"
     quote = shlex.quote
+    tensorboard_dependency = (
+        "--with tensorboard " if args.tensorboard_log_dir is not None else ""
+    )
     parts = [
-        "uv run --extra pytorch --extra visualization python -m "
+        f"uv run {tensorboard_dependency}"
+        "--extra pytorch --extra visualization python -m "
         "verification.simpson_taflove_2004",
         f"--subdivision {args.subdivision}",
         f"--mesh-orientation {quote(args.mesh_orientation)}",

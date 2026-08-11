@@ -100,6 +100,18 @@ def test_reproduction_command_records_all_result_changing_windows() -> None:
     assert "--deep-lithosphere-resistivity-ohm-m 500" in command
 
 
+def test_reproduction_command_adds_tensorboard_dependency() -> None:
+    args = verification_parser().parse_args(
+        ("--tensorboard-log-dir", "/tmp/physics-events")
+    )
+
+    command = _reproduction_command(args)
+
+    assert "uv run --with tensorboard --extra pytorch" in command
+    assert "--tensorboard-log-dir /tmp/physics-events" in command
+    assert "--diagnostics-every 512" in command
+
+
 def test_validation_setup_can_retain_native_orientation() -> None:
     simulation = create_validation_simulation(
         subdivision=1,
