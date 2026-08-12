@@ -82,6 +82,17 @@ error from 2.538 to 5.339 dB/Mm. The subdivision-8 B support is already 88.9%
 ocean by interpolation weight, so coastline aliasing is not the dominant cause
 of the final high-frequency Figure 8 residual.
 
+A coupled radial/temporal refinement study then separated the finite 5 km
+radial spacing from horizontal dispersion. Halving only the time step changes
+the uniform level-5 mean phase-velocity error by `5.05e-8 c`, excluding time
+integration error. Halving radial spacing does not give consistent improvement:
+the mean error improves 5.2% at subdivision 5 but worsens 8.5% at subdivision
+6. In contrast, horizontal refinement from subdivision 5 to 6 reduces the mean
+error by 53.3% on the 5 km radial grid and 46.5% on the 2.5 km grid. A costly
+level-8 radial rerun was therefore rejected by the screening gate. The next
+numerical target is the horizontal isotropic operator, not a smaller time step
+or uniformly finer radial grid.
+
 ## Scope and acceptance criteria
 
 The target study is:
@@ -548,6 +559,55 @@ second order. Because the level-7 maximum directional spread is only 0.295%
 while the maximum mean phase-velocity error remains about 0.051 c, horizontal
 anisotropy alone cannot explain the full high-frequency mismatch.
 
+## Radial and isotropic-dispersion separation
+
+The post-audit screen used the laterally uniform model and the same twelve
+azimuths. A radial refinement factor of two changes 40 cells at 5 km to 80
+cells at 2.5 km. CFL consistency requires `Δt` to change from 3 to 1.5 μs;
+steps and DFT size consequently double to preserve the 75.069 ms observation
+time and 98.304 ms transform window. Source center and width remain fixed in
+physical time, and all cases are evaluated at the same 45 frequencies.
+
+| Subdivision | Radial spacing | `Δt` | Mean / maximum phase error | Mean / maximum azimuth spread | Peak-arrival velocity spread |
+|---:|---:|---:|---:|---:|---:|
+| 5 | 5 km | 3 μs | 0.07537 / 0.17966 c | 5.0419% / 13.7591% | 0.5294% |
+| 5, temporal control | 5 km | 1.5 μs | 0.07537 / 0.17966 c | 5.0419% / 13.7591% | 0.5294% |
+| 5 | 2.5 km | 1.5 μs | 0.07145 / 0.16188 c | 7.1384% / 19.0672% | 0.5477% |
+| 6 | 5 km | 3 μs | 0.03523 / 0.09466 c | 0.4671% / 1.3342% | 0.2454% |
+| 6 | 2.5 km | 1.5 μs | 0.03821 / 0.09096 c | 1.4074% / 10.8257% | 0.2367% |
+
+The temporal control differs from the level-5 baseline by only `5.05e-8 c`
+in mean error and `8.48e-7 c` in maximum error. It also reproduces the
+azimuth-spread values to approximately `3e-7` relative. Temporal dispersion at
+3 μs is therefore negligible over this band.
+
+| Subdivision / radial spacing | 50–200 Hz MAE / maximum | 200–375 Hz MAE / maximum | 375–500 Hz MAE / maximum |
+|---|---:|---:|---:|
+| 5 / 5 km | 0.02707 / 0.04914 c | 0.11099 / 0.17966 c | 0.08451 / 0.17792 c |
+| 5 / 2.5 km | 0.03034 / 0.05189 c | 0.10700 / 0.16188 c | 0.07241 / 0.15571 c |
+| 6 / 5 km | 0.01442 / 0.02084 c | 0.03319 / 0.04498 c | 0.06190 / 0.09466 c |
+| 6 / 2.5 km | 0.01764 / 0.02316 c | 0.03546 / 0.04825 c | 0.06555 / 0.09096 c |
+
+Radial refinement improves the level-5 upper bands but does not preserve that
+trend at level 6. Its adaptive DFT cutoffs also widen from 21,491–21,581 samples
+at 3 μs to 40,918–43,305 samples at 1.5 μs, or 64.47–64.74 ms versus
+61.38–64.96 ms in physical time. Reanalysis with one common 64 ms cutoff still
+increases the level-6 mean/maximum spread from 0.522%/2.818% to
+2.228%/12.346%. The main-pulse arrival spread remains about 0.24%, so the large
+spectral spread comes from direction-dependent late waveform and modal content,
+not from a comparable change in primary arrival speed.
+
+Horizontal refinement is the consistent effect. Subdivision 5→6 reduces mean
+and maximum phase errors by 53.3% and 47.3% at 5 km, and by 46.5% and 43.8% at
+2.5 km. Uniform radial refinement is therefore not promoted to a level-8
+production run: it would cost roughly four times as much, changes the paper's
+specified 5 km discretization, and fails the lower-resolution improvement gate.
+The remaining actionable numerical error is the frequency-dependent isotropic
+part of the horizontal geodesic operator. Correcting it requires a higher-order
+or dispersion-optimized Hodge/curl construction while retaining the grid
+topology; a scalar wave-speed rescaling would not match its frequency
+dependence.
+
 ## Robustness checks
 
 | Check | Result | Interpretation |
@@ -563,6 +623,9 @@ anisotropy alone cannot explain the full high-frequency mismatch.
 | Positive-relief clamp at level 5 | B/B′ restored to −0.414/−0.414 μV/m | Coarse coastline material aliasing is confirmed |
 | Dual-cell `Er` at level 5 | B/B′ remains −0.040/−0.404 μV/m | Area averaging cannot resolve separate coastal fields |
 | Dual-cell `Er` at level 8 | East/west maxima 5.339/1.591 dB/Mm | Overall Figure 8 correction is rejected |
+| `Δt` 3 vs 1.5 μs at level 5 | Mean phase error changes `5.05e-8 c` | Temporal dispersion is not the cause |
+| 5 vs 2.5 km radial spacing | No consistent level-5/6 phase improvement | Uniform radial refinement is rejected |
+| Horizontal level 5→6 refinement | Mean error falls 53.3% / 46.5% on the two radial grids | Horizontal isotropic dispersion dominates |
 
 ## Reproduction commands
 
@@ -656,6 +719,35 @@ for subdivision in 5 6 7; do
 done
 ```
 
+Separate radial, temporal, and horizontal dispersion with matched physical
+observation times:
+
+```bash
+for subdivision in 5 6; do
+  for radial_refinement in 1 2; do
+    time_refinement="${radial_refinement}"
+    steps=$((25023 * time_refinement))
+    uv run --extra pytorch --extra visualization python -m \
+      verification.directional_dispersion \
+      --subdivision "${subdivision}" --steps "${steps}" \
+      --radial-refinement "${radial_refinement}" \
+      --azimuth-step-deg 30 \
+      --backend torch --device cuda:0 --dtype float64 --torch-compile \
+      --synchronize-every 1024 \
+      --output-dir "/tmp/radial-dispersion-l${subdivision}-r${radial_refinement}"
+  done
+done
+
+uv run --extra pytorch --extra visualization python -m \
+  verification.directional_dispersion \
+  --subdivision 5 --steps 50046 \
+  --radial-refinement 1 --time-refinement 2 \
+  --azimuth-step-deg 30 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --synchronize-every 1024 \
+  --output-dir /tmp/radial-dispersion-l5-r1-t2
+```
+
 These commands regenerate per-run figures, compressed traces, metrics, and a
 Markdown report. The consolidated scalar results above remain the archival
 record; generated Simpson–Taflove and directional-dispersion artifacts are not
@@ -682,7 +774,10 @@ The implementation passes structural and qualitative checks:
 - a controlled topography experiment identifies coastline material aliasing
   as the direct cause of the extreme coarse-grid B suppression;
 - conservative dual-cell `Er` averaging reduces point sensitivity but does not
-  repair that coarse-grid receiver or the final level-8 attenuation residual.
+  repair that coarse-grid receiver or the final level-8 attenuation residual;
+- coupled radial/temporal controls exclude time integration and uniform radial
+  refinement as effective corrections, while horizontal refinement produces
+  the dominant consistent phase-error reduction.
 
 It fails exact Figure 7 reproduction because the reconstructed east/west peak
 ordering is reversed and the half-path separation is excessive. It also fails
@@ -697,7 +792,10 @@ latitude–longitude grid and this implementation's geodesic dual grid. The
 coarse-grid receiver anomaly is now localized. Both its subdivision-8 support
 geometry and the completed dual-cell control show that simple material
 coefficient averaging cannot account for the complete high-frequency
-attenuation residual.
+attenuation residual. The radial screen further shows that halving the 5 km
+spacing is neither consistently convergent toward Bannister nor robust in the
+late-window spectrum. The strongest remaining numerical contributor is the
+frequency-dependent isotropic dispersion of the horizontal geodesic operator.
 
 This result must therefore be described as a complete-time, morphologically
 correct Figure 7 reconstruction with failed relative-trace agreement, together
