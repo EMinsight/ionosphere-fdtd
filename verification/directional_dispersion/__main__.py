@@ -68,9 +68,15 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _time_refinement(args: argparse.Namespace) -> int:
+    """Return the explicit temporal refinement or its coupled radial default."""
+
+    return args.time_refinement or args.radial_refinement
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    time_refinement = args.time_refinement or args.radial_refinement
+    time_refinement = _time_refinement(args)
     minimum_steps = PAPER_MINIMUM_SIMULATION_STEPS * time_refinement
     if args.steps is None:
         args.steps = minimum_steps
@@ -164,6 +170,7 @@ def _write_report(
     csv_path: Path,
     figure_path: Path,
 ) -> Path:
+    time_refinement = _time_refinement(args)
     output = args.output_dir / "verification-report.md"
     metric_rows = "\n".join(
         f"| `{name}` | {value:.9g} |" for name, value in metrics.items()

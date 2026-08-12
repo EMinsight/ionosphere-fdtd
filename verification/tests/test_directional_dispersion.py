@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from verification.directional_dispersion.__main__ import _parser
+from verification.directional_dispersion.__main__ import _parser, _time_refinement
 from verification.directional_dispersion.model import (
     compute_directional_phase_velocity,
     destination_direction,
@@ -22,6 +22,7 @@ def test_directional_cli_exposes_coupled_radial_refinement() -> None:
 
     assert args.radial_refinement == 2
     assert args.time_refinement is None
+    assert _time_refinement(args) == 2
     assert args.steps is None
 
 
@@ -32,6 +33,7 @@ def test_directional_cli_can_separate_time_refinement() -> None:
 
     assert args.radial_refinement == 1
     assert args.time_refinement == 2
+    assert _time_refinement(args) == 2
 
 
 def test_cardinal_destinations_follow_requested_great_circle_arcs() -> None:
