@@ -61,9 +61,9 @@ the west mean improves, but both pointwise maxima remain outside tolerance.
 The investigation ruled out floating-point precision, FFT zero-padding, DFT
 cutoff selection, and source-plane rounding as primary causes.
 Uniform-model and azimuthal studies show that spatial dispersion is real and
-convergent. At the paper-scale subdivision-7 geodesic grid, directional
-anisotropy is already small—no more than 0.295% over the evaluated band—so the
-remaining absolute residual also includes isotropic spatial dispersion and
+convergent. At subdivision 8, directional anisotropy is no more than 0.0867%
+over the evaluated band, so the remaining absolute residual also includes
+isotropic spatial dispersion and
 differences in the finite radial and crustal models.
 
 New CUDA `float64` physics diagnostics further narrow the material-driven
@@ -90,8 +90,19 @@ the mean error improves 5.2% at subdivision 5 but worsens 8.5% at subdivision
 6. In contrast, horizontal refinement from subdivision 5 to 6 reduces the mean
 error by 53.3% on the 5 km radial grid and 46.5% on the 2.5 km grid. A costly
 level-8 radial rerun was therefore rejected by the screening gate. The next
-numerical target is the horizontal isotropic operator, not a smaller time step
-or uniformly finer radial grid.
+screen was therefore horizontal refinement, not a smaller time step or
+uniformly finer radial grid.
+
+The direct horizontal level-7 and level-8 runs confirm that refinement removes
+directional error at approximately second order: mean azimuthal spread falls
+from 0.1157% to 0.02422%. The Bannister MAE falls more slowly, from 0.01870 c
+to 0.01418 c. Three-grid extrapolation predicts a level-9 MAE of 0.01294 c and
+a nonzero horizontal-continuum limit of 0.01247 c. Level 9 was not run because
+its 13.40 GiB analytic storage lower bound already exceeds the installed 12
+GiB GPU; the measured level-8 peak projects to approximately 21.3 GiB. Grid
+refinement is therefore an effective correction for anisotropy and part of the
+phase mismatch, but it is not presently supported as a complete explanation
+of the paper mismatch.
 
 ## Scope and acceptance criteria
 
@@ -511,53 +522,87 @@ phase velocity was measured between matched 45° and 90° receivers along 12
 azimuths separated by 30°. The continuum solution is azimuth-independent, so
 deviation from the azimuthal mean isolates grid directionality.
 
-All three runs used 25,023 steps, the same 45 fixed DFT frequencies, compiled
-PyTorch on CUDA, and `float64`. The azimuthal spread is the peak-to-peak phase-
-velocity difference divided by the azimuthal mean. The Bannister columns
-compare the azimuthal mean with equation (4), so they contain both horizontal
-spatial dispersion and finite radial-model error.
+All four runs used 25,023 steps, the same 45 fixed DFT frequencies, compiled
+PyTorch on CUDA, and `float64`. Levels 5–6 are the radial-screen baselines;
+levels 7–8 were rerun at revision `85d311e` so their raw traces and
+per-frequency values use the corrected solver. The azimuthal spread is the
+peak-to-peak phase-velocity difference divided by the azimuthal mean. The
+Bannister columns compare that mean with equation (4), so they contain both
+horizontal spatial dispersion and finite radial/model error. Runtime values
+come from the available RTX 3060 and RTX 2060 SUPER and are not cross-device
+scaling measurements.
 
 | Subdivision | Surface cells | Runtime | DFT cutoff range | Mean spread | Maximum spread (frequency) | Relative RMS | Bannister MAE / maximum (maximum frequency) |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 5 | 10,242 | 53.0 s | 21,463–21,617 | 4.2417% | 12.0832% (406.901 Hz) | 2.4705% | 0.08136 / 0.19170 c (366.211 Hz) |
-| 6 | 40,962 | 190.4 s | 21,486–21,584 | 0.4492% | 1.2344% (498.454 Hz) | 0.1708% | 0.03642 / 0.09781 c (498.454 Hz) |
-| 7 | 163,842 | 797.6 s | 21,506–21,572 | 0.0970% | 0.2947% (498.454 Hz) | 0.0366% | 0.01895 / 0.05096 c (498.454 Hz) |
+| 5 | 10,242 | 33.0 s | 21,407–21,657 | 5.0419% | 13.7591% (498.454 Hz) | 2.0896% | 0.07537 / 0.17966 c (366.211 Hz) |
+| 6 | 40,962 | 118.3 s | 21,491–21,581 | 0.4671% | 1.3342% (498.454 Hz) | 0.1766% | 0.03523 / 0.09466 c (498.454 Hz) |
+| 7 | 163,842 | 467.8 s | 21,508–21,561 | 0.1157% | 0.4789% (498.454 Hz) | 0.04700% | 0.01870 / 0.04920 c (498.454 Hz) |
+| 8 | 655,362 | 1,580.6 s | 21,513–21,556 | 0.02422% | 0.08662% (488.281 Hz) | 0.01001% | 0.01418 / 0.02804 c (488.281 Hz) |
 
 Assuming that each subdivision halves the characteristic horizontal spacing,
-the observed orders for mean spread are 3.24 and 2.21 for level 5→6 and 6→7.
-The corresponding maximum-spread orders are 3.29 and 2.07, and the relative-
-RMS orders are 3.85 and 2.22. Level 5 is outside the asymptotic regime at high
-frequency; the level 6→7 results are consistent with approximately second-
-order directional convergence.
+the observed orders for mean spread are 3.43, 2.01, and 2.26 for levels 5→6,
+6→7, and 7→8. The corresponding maximum-spread orders are 3.37, 1.48, and
+2.47; the relative-RMS orders are 3.56, 1.91, and 2.23. Level 5 is outside the
+asymptotic regime at high frequency. Levels 6–8 are consistent with
+approximately second-order directional convergence despite late-window
+variation in the maximum statistic.
 
 Bandwise mean and maximum spreads make the under-resolution threshold
 explicit:
 
 | Subdivision | 50–200 Hz mean / maximum | 200–375 Hz mean / maximum | 375–500 Hz mean / maximum |
 |---:|---:|---:|---:|
-| 5 | 0.323 / 0.745% | 2.449 / 4.849% | 11.107 / 12.083% |
-| 6 | 0.0649 / 0.140% | 0.373 / 0.685% | 0.992 / 1.234% |
-| 7 | 0.0150 / 0.0321% | 0.0798 / 0.133% | 0.214 / 0.295% |
+| 5 | 0.4518 / 1.1312% | 3.3448 / 7.1391% | 12.5575 / 13.7591% |
+| 6 | 0.09297 / 0.20978% | 0.42829 / 0.70535% | 0.94942 / 1.33419% |
+| 7 | 0.02420 / 0.05126% | 0.09707 / 0.15903% | 0.24561 / 0.47887% |
+| 8 | 0.004879 / 0.01104% | 0.02096 / 0.03658% | 0.05081 / 0.08662% |
 
-Across 50–375 Hz, the level-7 mean and maximum spreads are 0.0494% and
-0.133%. Above 375 Hz they rise to 0.214% and 0.295%. The sharp level-5 branch
-above approximately 400 Hz is therefore an under-resolution effect, while the
-same directional error is strongly suppressed on the paper-scale level-7
-grid.
+Above 375 Hz, the mean/maximum spread falls from 0.949%/1.334% at level 6 to
+0.0508%/0.0866% at level 8. The sharp level-5 branch above approximately 400
+Hz is therefore an under-resolution effect, and ordinary grid refinement
+effectively removes the directional component.
 
-Reanalysis with one common minimum, median, or maximum cutoff for every
-azimuth gives level-6 mean spreads of 0.4409–0.4488% and maxima of
-1.189–1.233%. At level 7 it gives mean spreads of 0.0967–0.0973% and maxima of
-0.2931–0.3122%, compared with adaptive values of 0.0970% and 0.2947%. The
-observed convergence is therefore not an artifact of direction-dependent DFT
-window selection.
+Reanalysis with one common minimum, median, or maximum adaptive cutoff for
+every azimuth gives mean-spread ranges of 0.4678–0.4680%, 0.1154–0.1162%, and
+0.02422–0.02452% at levels 6, 7, and 8. Their maximum-spread ranges are
+1.288–1.334%, 0.4617–0.4969%, and 0.08621–0.08724%. The observed convergence is
+therefore not an artifact of direction-dependent DFT window selection.
 
-The geodesic and merged latitude–longitude grids cannot have identical
-dispersion relations without replacing the horizontal discretization.
-Nevertheless, directional error is measurable and decreases at approximately
-second order. Because the level-7 maximum directional spread is only 0.295%
-while the maximum mean phase-velocity error remains about 0.051 c, horizontal
-anisotropy alone cannot explain the full high-frequency mismatch.
+Directional convergence is not the same as convergence to Bannister. The
+Bannister MAE decreases only by factors corresponding to orders 1.10, 0.91,
+and 0.40 from levels 5→6→7→8. A three-grid fit of
+`E(h) = E∞ + C h^p` gives the following separation of the horizontal
+discretization term from the residual limit:
+
+| Frequency band | Level 6 MAE | Level 7 MAE | Level 8 MAE | Fitted `p` | `E∞` | Predicted level 9 MAE |
+|---|---:|---:|---:|---:|---:|---:|
+| 50–500 Hz | 0.03523 c | 0.01870 c | 0.01418 c | 1.87 | 0.01247 c | 0.01294 c |
+| 375–500 Hz | 0.06190 c | 0.02771 c | 0.01766 c | 1.77 | 0.01349 c | 0.01471 c |
+| 400–500 Hz | 0.06463 c | 0.02921 c | 0.01797 c | 1.66 | 0.01275 c | 0.01441 c |
+
+This extrapolation uses only three horizontal resolutions and is not a direct
+level-9 result. It nevertheless predicts diminishing returns and a nonzero
+approximately 0.0125–0.0135 c limit with the present 5 km radial and analytic
+material model. Thus refinement can remove nearly all grid anisotropy and a
+large part of the phase mismatch, but the available evidence does not support
+the claim that it alone will produce exact agreement with the paper.
+
+A direct level-9 CUDA `float64` run was gated by memory rather than attempted
+to failure. The estimates count all four fields and four electric-update
+coefficient arrays as the analytic lower bound. Measured peaks additionally
+include topology, Hodge factors, observations, and compiled temporaries.
+
+| Subdivision | Surface cells | Analytic persistent lower bound | Measured/projected CUDA peak | Status |
+|---:|---:|---:|---:|---|
+| 7 | 163,842 | 0.84 GiB | 1.44 GiB measured | Direct run complete |
+| 8 | 655,362 | 3.35 GiB | 5.33 GiB measured | Direct run complete |
+| 9 | 2,621,442 | 13.40 GiB | approximately 21.3 GiB projected | Not run: installed GPUs provide at most 12 GiB |
+
+The directional CLI now accepts subdivision 9 so a CUDA accelerator with at
+least approximately 24 GiB can replace the extrapolation with a direct result.
+The geodesic and merged latitude–longitude grids still need not have identical
+finite-resolution dispersion relations, but both should approach their
+respective continuum models under refinement.
 
 ## Radial and isotropic-dispersion separation
 
@@ -602,11 +647,12 @@ and maximum phase errors by 53.3% and 47.3% at 5 km, and by 46.5% and 43.8% at
 2.5 km. Uniform radial refinement is therefore not promoted to a level-8
 production run: it would cost roughly four times as much, changes the paper's
 specified 5 km discretization, and fails the lower-resolution improvement gate.
-The remaining actionable numerical error is the frequency-dependent isotropic
-part of the horizontal geodesic operator. Correcting it requires a higher-order
-or dispersion-optimized Hodge/curl construction while retaining the grid
-topology; a scalar wave-speed rescaling would not match its frequency
-dependence.
+The subsequent levels 7–8 screen confirms that the horizontal directional term
+continues to converge, while the Bannister residual approaches a nonzero
+limit. A higher-order or dispersion-optimized Hodge/curl construction could
+reduce the remaining horizontal term more efficiently while retaining the grid
+topology, but it is no longer justified as a complete correction by itself. A
+scalar wave-speed rescaling would also fail to match the frequency dependence.
 
 ## Robustness checks
 
@@ -625,7 +671,8 @@ dependence.
 | Dual-cell `Er` at level 8 | East/west maxima 5.339/1.591 dB/Mm | Overall Figure 8 correction is rejected |
 | `Δt` 3 vs 1.5 μs at level 5 | Mean phase error changes `5.05e-8 c` | Temporal dispersion is not the cause |
 | 5 vs 2.5 km radial spacing | No consistent level-5/6 phase improvement | Uniform radial refinement is rejected |
-| Horizontal level 5→6 refinement | Mean error falls 53.3% / 46.5% on the two radial grids | Horizontal isotropic dispersion dominates |
+| Horizontal level 5→6 refinement | Mean error falls 53.3% / 46.5% on the two radial grids | Horizontal error is the dominant reducible term on coarse grids |
+| Horizontal levels 6→8 | Mean spread 0.4671%→0.02422%; Bannister MAE 0.03523→0.01418 c | Anisotropy converges; absolute mismatch approaches a nonzero limit |
 
 ## Reproduction commands
 
@@ -707,7 +754,7 @@ Regenerate the directional-dispersion sweep without changing the geodesic
 grid:
 
 ```bash
-for subdivision in 5 6 7; do
+for subdivision in 5 6 7 8; do
   uv run --extra pytorch --extra visualization python -m \
     verification.directional_dispersion \
     --subdivision "${subdivision}" --steps 25023 \
@@ -715,8 +762,21 @@ for subdivision in 5 6 7; do
     --backend torch --device cuda:0 --dtype float64 --torch-compile \
     --synchronize-every 1024 \
     --output-dir \
-      "artifacts/directional-dispersion/uniform-level-${subdivision}-float64-cuda"
+      "/tmp/horizontal-dispersion-level-${subdivision}-float64-cuda"
 done
+```
+
+Subdivision 9 is accepted by the CLI but requires an accelerator with at least
+approximately 24 GiB free for this CUDA `float64` configuration:
+
+```bash
+uv run --extra pytorch --extra visualization python -m \
+  verification.directional_dispersion \
+  --subdivision 9 --steps 25023 \
+  --azimuth-step-deg 30 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --synchronize-every 1024 \
+  --output-dir /tmp/horizontal-dispersion-level-9-float64-cuda
 ```
 
 Separate radial, temporal, and horizontal dispersion with matched physical
@@ -777,7 +837,10 @@ The implementation passes structural and qualitative checks:
   repair that coarse-grid receiver or the final level-8 attenuation residual;
 - coupled radial/temporal controls exclude time integration and uniform radial
   refinement as effective corrections, while horizontal refinement produces
-  the dominant consistent phase-error reduction.
+  the dominant consistent phase-error reduction;
+- direct levels 7–8 show approximately second-order directional convergence,
+  while three-grid extrapolation leaves approximately 0.0125 c of Bannister
+  mismatch in the horizontal-continuum limit.
 
 It fails exact Figure 7 reproduction because the reconstructed east/west peak
 ordering is reversed and the half-path separation is excessive. It also fails
@@ -794,8 +857,10 @@ geometry and the completed dual-cell control show that simple material
 coefficient averaging cannot account for the complete high-frequency
 attenuation residual. The radial screen further shows that halving the 5 km
 spacing is neither consistently convergent toward Bannister nor robust in the
-late-window spectrum. The strongest remaining numerical contributor is the
-frequency-dependent isotropic dispersion of the horizontal geodesic operator.
+late-window spectrum. Horizontal refinement substantially reduces spatial
+dispersion, but its diminishing Bannister improvement indicates that the
+remaining mismatch must also be sought in the finite radial, ionosphere, and
+reference-model assumptions rather than assigned wholly to grid resolution.
 
 This result must therefore be described as a complete-time, morphologically
 correct Figure 7 reconstruction with failed relative-trace agreement, together
