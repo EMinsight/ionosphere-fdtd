@@ -1,3 +1,5 @@
+import importlib.util
+
 import numpy as np
 import pytest
 
@@ -22,6 +24,14 @@ from verification.simpson_taflove_2006.model import (
     save_radar_traces,
 )
 from verification.simpson_taflove_2004.model import ValidationTraces
+
+requires_natural_earth = pytest.mark.skipif(
+    any(
+        importlib.util.find_spec(module) is None
+        for module in ("cartopy", "shapely")
+    ),
+    reason="Natural Earth materials require: uv sync --extra visualization",
+)
 
 
 def test_figure_5_normalization_preserves_four_individual_records() -> None:
@@ -66,6 +76,7 @@ def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:
     assert oil.target_area_m2 == PAPER_OIL_AREA_KM2 * 1.0e6
 
 
+@requires_natural_earth
 def test_conservative_radar_anomaly_preserves_oil_area_on_both_grids() -> None:
     simulation = create_radar_simulation(
         include_oil=True,
@@ -116,6 +127,7 @@ def test_radar_grid_refines_lithosphere_to_1_25_km() -> None:
     assert len(altitudes) - 1 == 43
 
 
+@requires_natural_earth
 def test_short_radar_run_records_three_surface_components() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -146,6 +158,7 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert traces.time_s[1] == pytest.approx(0.5 * simulation.time_step_s)
 
 
+@requires_natural_earth
 def test_radar_setup_can_retain_native_orientation() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -164,6 +177,7 @@ def test_radar_setup_can_retain_native_orientation() -> None:
     assert simulation.mesh.vertex_degree[south] == 6
 
 
+@requires_natural_earth
 def test_radar_source_basis_and_altitude_are_configurable() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -245,6 +259,7 @@ def test_etopo_radar_geometry_can_follow_local_terrain(monkeypatch) -> None:
     ) == pytest.approx(PAPER_OIL_MEDIAN_DEPTH_M)
 
 
+@requires_natural_earth
 def test_local_linear_radar_receiver_reconstructs_target_direction() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -282,6 +297,7 @@ def test_local_linear_radar_receiver_reconstructs_target_direction() -> None:
     assert represented @ target == pytest.approx(1.0, abs=2.0e-3)
 
 
+@requires_natural_earth
 def test_default_radar_receiver_uses_local_linear_support() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -297,6 +313,7 @@ def test_default_radar_receiver_uses_local_linear_support() -> None:
     assert len(np.unique(faces)) == 4
 
 
+@requires_natural_earth
 def test_radar_receiver_interpolates_both_h_components_to_terrain() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -330,6 +347,7 @@ def test_radar_receiver_interpolates_both_h_components_to_terrain() -> None:
             assert represented == pytest.approx(305.0)
 
 
+@requires_natural_earth
 def test_radar_receiver_rejects_unknown_support() -> None:
     simulation = create_radar_simulation(
         include_oil=False,
@@ -344,6 +362,7 @@ def test_radar_receiver_rejects_unknown_support() -> None:
         _surface_h_distributions(simulation, receiver_support="unknown")
 
 
+@requires_natural_earth
 def test_radar_courant_factor_controls_automatic_time_step() -> None:
     conservative = create_radar_simulation(
         include_oil=False,
@@ -416,6 +435,7 @@ def test_radar_perturbation_rejects_incompatible_runs() -> None:
         compute_radar_perturbation(reference, incompatible)
 
 
+@requires_natural_earth
 def test_recorded_radar_pair_has_matching_run_signature() -> None:
     reference_simulation = create_radar_simulation(
         include_oil=False,
@@ -441,6 +461,7 @@ def test_recorded_radar_pair_has_matching_run_signature() -> None:
     assert reference.run_signature == anomaly.run_signature
 
 
+@requires_natural_earth
 def test_radar_trace_archive_preserves_run_signature(tmp_path) -> None:
     simulation = create_radar_simulation(
         include_oil=False,
