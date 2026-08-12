@@ -21,7 +21,17 @@ def test_directional_cli_exposes_coupled_radial_refinement() -> None:
     args = _parser().parse_args(("--radial-refinement", "2"))
 
     assert args.radial_refinement == 2
+    assert args.time_refinement is None
     assert args.steps is None
+
+
+def test_directional_cli_can_separate_time_refinement() -> None:
+    args = _parser().parse_args(
+        ("--radial-refinement", "1", "--time-refinement", "2")
+    )
+
+    assert args.radial_refinement == 1
+    assert args.time_refinement == 2
 
 
 def test_cardinal_destinations_follow_requested_great_circle_arcs() -> None:

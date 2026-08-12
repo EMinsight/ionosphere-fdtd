@@ -43,6 +43,12 @@ def _parser() -> argparse.ArgumentParser:
         default=1,
         help="refine radial spacing and time step by the same integer factor",
     )
+    parser.add_argument(
+        "--time-refinement",
+        type=int,
+        choices=range(1, 9),
+        help="override time/DFT refinement to separate temporal dispersion",
+    )
     parser.add_argument("--azimuth-step-deg", type=int, default=30)
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
@@ -64,13 +70,14 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    minimum_steps = PAPER_MINIMUM_SIMULATION_STEPS * args.radial_refinement
+    time_refinement = args.time_refinement or args.radial_refinement
+    minimum_steps = PAPER_MINIMUM_SIMULATION_STEPS * time_refinement
     if args.steps is None:
         args.steps = minimum_steps
     if args.steps < minimum_steps:
         raise SystemExit(
             f"--steps must be at least {minimum_steps} for radial refinement "
-            f"{args.radial_refinement}"
+            f"{args.radial_refinement} and time refinement {time_refinement}"
         )
     if not 1 <= args.azimuth_step_deg <= 180 or 360 % args.azimuth_step_deg:
         raise SystemExit("--azimuth-step-deg must be a divisor of 360 in [1, 180]")
@@ -80,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         simulation = create_validation_simulation(
             subdivision=args.subdivision,
             radial_cells=PAPER_RADIAL_CELLS * args.radial_refinement,
-            time_step_s=PAPER_TIME_STEP_S / args.radial_refinement,
+            time_step_s=PAPER_TIME_STEP_S / time_refinement,
             material_model="uniform",
             backend=args.backend,
             device=args.device,
@@ -107,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         traces,
         azimuths,
         time_step_s=simulation.time_step_s,
-        n_fft=PAPER_DFT_SIZE * args.radial_refinement,
+        n_fft=PAPER_DFT_SIZE * time_refinement,
     )
     metrics = directional_dispersion_metrics(curves)
     elapsed_s = time.perf_counter() - started
@@ -182,7 +189,9 @@ Generated: {datetime.now().astimezone().isoformat(timespec="seconds")}
 | radial cells | {simulation.config.radial_cells} |
 | radial spacing | {simulation.radial_steps_m[0] / 1_000.0:g} km |
 | time step | {simulation.time_step_s:.9g} s |
-| DFT size | {PAPER_DFT_SIZE * args.radial_refinement:,} |
+| radial refinement | {args.radial_refinement} |
+| time refinement | {time_refinement} |
+| DFT size | {PAPER_DFT_SIZE * time_refinement:,} |
 | material | `uniform` |
 | backend | `{simulation.backend.name}` |
 | device | `{simulation.backend.device}` |
@@ -234,6 +243,8 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         f"--synchronize-every {args.synchronize_every}",
         f"--output-dir {shlex.quote(str(args.output_dir))}",
     ]
+    if args.time_refinement is not None:
+        parts.append(f"--time-refinement {args.time_refinement}")
     if args.torch_threads is not None:
         parts.append(f"--torch-threads {args.torch_threads}")
     return f" {chr(92)}\n  ".join(parts)
