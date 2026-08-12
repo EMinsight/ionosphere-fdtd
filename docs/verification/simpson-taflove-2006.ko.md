@@ -10,9 +10,9 @@
 
 이 연구에서는 현재의 3차원 측지 FDTD 구현이 Simpson, Heikes, Taflove(2006)의 Figures 5, 6, 7을 재현하는지 시험한다. 프로덕션 계산은 NVIDIA CUDA GPU의 PyTorch와 `float64` field를 사용한다.
 
-Figure 5는 출판된 도달 순서, 시점, 오버슈트, 느린 꼬리 형태를 재현하지만 네 상대 진폭을 모두 재현하지는 못한다. 보정한 지리 위치 탐색기는 이전에 겹쳤던 B/B′ 관측을 분리한다. 최종 level-7 polar ETOPO5 실행은 구면에서 Sandia Mesquite의 균일 size-and-shape 목적함수를 사용하며, 약 0.39/0.39 대신 정규화된 원거리 피크 0.31141/0.35571을 얻는다. 이전 one-step smoother의 원거리 경로 상대 RMS 134.5%를 18.5%로 줄였고 두 원거리 꼬리도 서로 일치하지만, 공통 크기는 출판 플롯의 육안 추정치보다 약 40% 낮다. CUDA `float64` 분리 실험에서 고정 깊이 표면은 두 원거리 피크와 동서 대칭을 복원하는 반면 얕은 모든 해양 column에 5-km 해수 셀을 강제해도 영향이 거의 없다. 따라서 남은 불일치는 얕은 수신기 수심만이 아니라 전체 기복/암석권 voxelization과 공개되지 않은 논문의 정확한 Mesquite 구성 및 좌표와 관련된다. Figure 6은 이제 Figure 5와 동일하게 검토된 polar Mesquite 트레이스에서 계산한다. 동/서 평균 절대 오차는 0.921/0.284 dB/Mm, 최대 절대 오차는 3.020/2.125 dB/Mm이다. 두 경로 모두 50–500 Hz에서 논문의 지점별 ±0.5 dB/Mm 주장을 만족하지 못한다.
+Figure 5는 출판된 도달 순서, 시점, 오버슈트, 느린 꼬리 형태를 재현하지만 네 상대 진폭을 모두 재현하지는 못한다. 보정한 지리 위치 탐색기는 이전에 겹쳤던 B/B′ 관측을 분리한다. 최종 level-7 polar ETOPO5 실행은 구면에서 Sandia Mesquite의 균일 size-and-shape 목적함수를 사용하며, 약 0.39/0.39 대신 정규화된 원거리 피크 0.31141/0.35571을 얻는다. 이전 one-step smoother의 원거리 경로 상대 RMS 134.5%를 18.5%로 줄였고 두 원거리 꼬리도 서로 일치하지만 공통 크기는 출판 플롯의 육안 추정치보다 약 40% 낮다. CUDA `float64` 분리 실험에서 고정 깊이 표면은 두 원거리 피크와 동서 대칭을 복원하는 반면 얕은 모든 해양 column에 5-km 해수 셀을 강제해도 영향이 거의 없다. 남은 불일치는 얕은 수신기 수심만이 아니라 전체 기복/암석권 voxelization과 공개되지 않은 논문의 정확한 Mesquite 구성 및 좌표와 관련된다. Figure 6은 이제 Figure 5와 동일하게 검토된 polar Mesquite 트레이스에서 계산한다. 동/서 평균 절대 오차는 0.921/0.284 dB/Mm, 최대 절대 오차는 3.020/2.125 dB/Mm이다. 두 경로 모두 50–500 Hz에서 논문의 지점별 ±0.5 dB/Mm 주장을 만족하지 못한다.
 
-Figure 7 역시 송신기 위치를 반대 반구에서 Clam Lake로 보정한 뒤 주장된 민감도의 방향만 유지한다. `ΔHtan` 중앙값은 −43.25 dB이고 특이하지 않은 sample의 92.47%가 −25 dB 미만이지만, `ΔHr` 중앙값은 +20 dB 부근의 곡선이 아니라 +126.00 dB다. 계산한 방사/접선 중앙 민감도 이점 165.90 dB도 논문의 약 45 dB와 다르다. 정확한 방사 소스 stagger와 지리적 `Hr` 보간은 관측 연산자를 바로잡지만, 거의 0인 기준 `Hr`에서 비롯되는 실패를 해결하지 못한다. 따라서 세 Figure를 하나의 완전한 정량 세트로 재현하지 못했다.
+Figure 7 역시 송신기 위치를 반대 반구에서 Clam Lake로 보정한 뒤 주장된 민감도의 방향만 유지한다. `ΔHtan` 중앙값은 −43.25 dB이고 특이하지 않은 sample의 92.47%가 −25 dB 미만이지만, `ΔHr` 중앙값은 +20 dB 부근의 곡선이 아니라 +126.00 dB다. 계산한 방사/접선 중앙 민감도 이점 165.90 dB도 논문의 약 45 dB와 다르다. 정확한 방사 소스 stagger와 지리적 `Hr` 보간은 관측 연산자를 바로잡지만 거의 0인 기준 `Hr`에서 비롯되는 실패를 해결하지 못한다. 세 Figure를 하나의 완전한 정량 세트로 재현하지는 못했다.
 
 ## 대상 논문과 원자료 기록
 
@@ -39,13 +39,13 @@ Figure 7 역시 송신기 위치를 반대 반구에서 Clam Lake로 보정한 �
 | Figure 7 전체 레이더 민감도 | 아래에 전체 검토 재실행 결과를 보고 | **FAIL** |
 | Figures 5–7 전체 재현 | 모든 Figure에서 하나 이상의 기준 실패 | **FAIL** |
 
-Figure 7 본문과 caption은 정규화 설명이 서로 모순된다. 본문은 차이를 Model-A field의 peak로 나눈다고 하지만, caption은 플롯의 spike가 기준 파형의 zero crossing 때문에 생긴다고 한다. Peak-normalized difference에는 그런 pole이 생길 수 없다. 따라서 검증에서는 caption과 실제 플롯을 따른다.
+Figure 7 본문과 caption은 정규화 설명이 서로 모순된다. 본문은 차이를 Model-A field의 peak로 나눈다고 하지만 caption은 플롯의 spike가 기준 파형의 zero crossing 때문에 생긴다고 한다. Peak-normalized difference에는 그런 pole이 생길 수 없다. 검증에서는 caption과 실제 플롯을 따른다.
 
 ```text
 ΔH(t) = |H_B(t) - H_A(t)| / |H_A(t)|
 ```
 
-스칼라 요약에서는 기준 peak의 `1e-6` 이내 값을 제외하고, 렌더링 곡선에는 zero-crossing spike로 접근하는 부분을 남긴다. “almost every time”의 재현 가능한 스칼라 해석으로, 이 보고서는 특이하지 않은 sample 중 최소 95%가 −25 dB 미만이어야 한다고 정한다.
+스칼라 요약에서는 기준 peak의 `1e-6` 이내 값을 제외하고 렌더링 곡선에는 zero-crossing spike로 접근하는 부분을 남긴다. “almost every time”의 재현 가능한 스칼라 해석으로, 이 보고서는 특이하지 않은 sample 중 최소 95%가 −25 dB 미만이어야 한다고 정한다.
 
 ## 수치 모델
 
@@ -115,13 +115,13 @@ Figure 7 본문과 caption은 정규화 설명이 서로 모순된다. 본문은
 | CUDA float64 compiled smoke | Courant 1.0에서 유한한 10 steps | **PASS** |
 | Persistent / peak compiled GPU memory | 985 MiB / 1.59 GiB | **PASS** |
 
-지상선 소스는 포함 face의 방향을 가진 primal edge 세 개 모두에 projection된다. 각 기여에는 `L/Δl`을 곱하여 표면 edge 하나보다 짧은 선에서도 지정한 `I·L` 전류 모멘트를 보존한다. 세 edge 길이는 55.59, 64.78, 55.59 km이므로 22.5 km 소스가 전체 edge로 조용히 확장되지 않고 실제 subcell로 표현된다. 소스는 −625 m 및 +2,500 m의 tangential-field 평면 사이에서도 0.8/0.2 weight로 adjoint-linear stagger한다. 표면 `Hr` sample은 두 staggered 방사 평면 사이에서 선형 보간하고, 포함 face와 이웃 세 개로 정확한 유전 좌표에서 복원한다. East와 north `Htan`은 주변의 방향을 가진 dual-edge sample을 local least-squares inverse하여 복원하며, 고정된 주 reference polarization을 signed tangential waveform에 사용한다.
+지상선 소스는 포함 face에서 방향이 정해진 primal edge 세 개 모두에 projection된다. 각 기여에는 `L/Δl`을 곱하여 표면 edge 하나보다 짧은 선에서도 지정한 `I·L` 전류 모멘트를 보존한다. 세 edge 길이는 55.59, 64.78, 55.59 km이므로 22.5 km 소스가 전체 edge로 조용히 확장되지 않고 실제 subcell로 표현된다. 소스는 −625 m 및 +2,500 m의 tangential-field 평면 사이에서도 0.8/0.2 weight로 adjoint-linear stagger한다. 표면 `Hr` sample은 두 staggered 방사 평면 사이에서 선형 보간하고, 포함 face와 이웃 세 개로 정확한 유전 좌표에서 복원한다. East와 north `Htan`은 주변에서 방향이 정해진 dual-edge sample을 local least-squares inverse하여 복원하며 고정된 주 reference polarization을 signed tangential waveform에 사용한다.
 
-논문은 Canadian Shield 전도도를 `2.4e-4 S/m`로 제시하지만 정확한 격자 mask는 공개하지 않는다. 따라서 두 모델 모두 Canada 중심의 문서화된 2,500 km cap 근사를 사용한다. 이 선택은 기준/이상체 차이에서 일부 상쇄되지만 재현성 한계로 남는다.
+논문은 Canadian Shield 전도도를 `2.4e-4 S/m`로 제시하지만 정확한 격자 mask는 공개하지 않는다. 두 모델 모두 Canada 중심의 문서화된 2,500 km cap 근사를 사용한다. 이 선택은 기준/이상체 차이에서 일부 상쇄되지만 재현성 한계로 남는다.
 
 ## Figures 5–6 수신점 배치
 
-Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 사용한다. 서경 47° 소스를 기준으로 A와 A′은 동·서쪽 45°, B와 B′은 동·서쪽 90°에 있다. 셀을 식별할 수 있도록 같은 polar orientation과 recursive dual-grid 구조를 지닌 subdivision 4 격자 위에 정확한 좌표를 표시했다. 프로덕션 subdivision 7 격자에는 셀이 163,842개 있으며, 마커를 표시용 격자의 셀 중심으로 옮기지 않았다. Figure 7은 위에 정리한 Clam Lake–Alaska 배치를 별도로 사용하므로 이 지도에는 나타나지 않는다.
+Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 사용한다. 서경 47° 소스를 기준으로 A와 A′은 동·서쪽 45°, B와 B′은 동·서쪽 90°에 있다. 셀을 식별할 수 있도록 같은 polar orientation과 recursive dual-grid 구조를 지닌 subdivision 4 격자 위에 정확한 좌표를 표시했다. 프로덕션 subdivision 7 격자에는 셀이 163,842개 있으며 마커를 표시용 격자의 셀 중심으로 옮기지 않았다. Figure 7은 위에 정리한 Clam Lake–Alaska 배치를 별도로 사용하므로 이 지도에는 나타나지 않는다.
 
 ![Figures 5–6의 측지 dual grid 위 소스와 수신점](images/simpson-taflove-2006-receiver-grid.png)
 
@@ -129,7 +129,7 @@ Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 �
 
 ![출판된 Figure 5와 재현한 Figure 5](images/simpson-taflove-2006-fig-5-comparison.png)
 
-네 수신기 기록을 하나의 공통 정규화로 각각 표시했다. 검토한 Mesquite-optimized ETOPO5 실행에서 A/A′ 피크 시점은 22.548/23.232 ms, B/B′는 44.415/44.037 ms다. 계산 파형은 출판된 도달 순서, 주 펄스, 반대 부호 오버슈트, 뒤따르는 느린 꼬리를 유지한다. 원시 펄스는 음수이며, 비교 패널에서는 출판 플롯에 맞추기 위해 공통 부호 반전을 한 번 적용한다. 그러나 진폭은 여전히 작다. 정규화된 B/B′ 피크는 0.31141/0.35571이고 출판된 두 원거리 기록의 육안 추정치는 약 0.39다.
+네 수신기 기록을 하나의 공통 정규화로 각각 표시했다. 검토한 Mesquite-optimized ETOPO5 실행에서 A/A′ 피크 시점은 22.548/23.232 ms, B/B′는 44.415/44.037 ms다. 계산 파형은 출판된 도달 순서, 주 펄스, 반대 부호 오버슈트, 뒤따르는 느린 꼬리를 유지한다. 원시 펄스는 음수이며 비교 패널에서는 출판 플롯에 맞추기 위해 공통 부호 반전을 한 번 적용한다. 그러나 진폭은 여전히 작다. 정규화된 B/B′ 피크는 0.31141/0.35571이고 출판된 두 원거리 기록의 육안 추정치는 약 0.39다.
 
 | Figure 5 기준 | 출판 결과 | 재현 | 판정 |
 |---|---|---|---:|
@@ -143,7 +143,7 @@ Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 �
 | 전체 정성 형태 | 순서와 특징적 파형 형태 | 필요한 정성 특징 존재 | **PASS** |
 | 정확한 플롯 재현 | 시점, 상대 진폭, 경로 유사성 일치 | 시점은 일치, 진폭과 대칭성은 불일치 | **FAIL** |
 
-따라서 Figure 5는 **형태는 통과하지만 정량적으로 실패**한다. 논문의 세로축이 임의 단위이고 전류 진폭을 제시하지 않으므로 절대 진폭 기준은 사용하지 않는다. 위 실패 기준은 모두 하나의 공통 정규화 이후 상대량만 사용한다.
+Figure 5는 **형태는 통과하지만 정량적으로 실패**한다. 논문의 세로축이 임의 단위이고 전류 진폭을 제시하지 않으므로 절대 진폭 기준은 사용하지 않는다. 위 실패 기준은 모두 하나의 공통 정규화 이후 상대량만 사용한다.
 
 ### 이전 Figure 5 프로덕션 트레이스 대비 변화
 
@@ -181,9 +181,9 @@ Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 �
 | 고정 깊이 Natural Earth 육지/해양 | 0.38240 / 0.38539 | 0.07481 / 0.07466 | 5.2% / 1.9% |
 | ETOPO5 기복 및 대표 암석 프로파일 | 0.11120 / 0.39237 | 0.02238 / 0.06673 | 30.8% / 235.9% |
 
-균일 및 고정 깊이 육지/해양 모델은 출판된 약 0.39의 원거리 피크를 복원하고 동/서 경로를 유사하게 유지한다. ETOPO5와 대표 500/200/500 Ω·m 프로파일을 추가하면 동쪽 B 경로가 강하게 억제되고 B′는 출판 피크 부근에 남는다. 이는 core FDTD update가 아니라 현재 기복/암석권 이산화가 보정 위치 경로 비대칭의 주원인임을 나타낸다. 논문에서 사용한 정확한 Hermance 기반 cellwise conductivity는 구할 수 없다.
+균일 및 고정 깊이 육지/해양 모델은 출판된 약 0.39의 원거리 피크를 복원하고 동/서 경로를 유사하게 유지한다. ETOPO5와 대표 500/200/500 Ω·m 프로파일을 추가하면 동쪽 B 경로가 강하게 억제되고 B′는 출판 피크 부근에 남는다. core FDTD update가 아니라 현재 기복/암석권 이산화가 보정 위치 경로 비대칭의 주원인이다. 논문에서 사용한 정확한 Hermance 기반 cellwise conductivity는 구할 수 없다.
 
-2004 논문의 인용문헌 23과 24로 첨부한 원문을 직접 대조했다. [Hermance Figure 6의 경계](https://doi.org/10.1029/RF001p0190)는 심부 배경을 ≤500 Ω·m로 표시한다. 기존 구현은 Figure 6의 전 지구 영역 어디에도 해당하지 않는 50 Ω·m를 60 km 아래 전체 격자에 적용했다. 심부 배경을 500 Ω·m로 고친 뒤 subdivision-5 CUDA `float64` 트레이스의 상대 RMS 변화는 `2.34e-16`이었고, 보고한 감쇠 지표는 모두 같았다. 물질 해석은 바로잡았지만 이 깊이는 전자기적으로 차폐되므로 Figure 5는 개선되지 않았다.
+2004 논문의 인용문헌 23과 24로 첨부한 원문을 직접 대조했다. [Hermance Figure 6의 경계](https://doi.org/10.1029/RF001p0190)는 심부 배경을 ≤500 Ω·m로 표시한다. 기존 구현은 Figure 6의 전 지구 영역 어디에도 해당하지 않는 50 Ω·m를 60 km 아래 전체 격자에 적용했다. 심부 배경을 500 Ω·m로 고친 뒤 subdivision-5 CUDA `float64` 트레이스의 상대 RMS 변화는 `2.34e-16`이었고 보고한 감쇠 지표는 모두 같았다. 물질 해석은 바로잡았지만 이 깊이는 전자기적으로 차폐되므로 Figure 5는 개선되지 않았다.
 
 전체 subdivision-7 Mesquite CUDA `float64` 재실행은 592.5초 걸렸으며 선별 결과를 확인했다. 기존 프로덕션 트레이스와의 상대 RMS 차이는 `1.05e-15`이다. Figure 5–6의 동/서 평균 오차는 0.921/0.284 dB/Mm, 최대 오차는 3.020/2.125 dB/Mm로 그대로다. 보정 트레이스의 SHA-256은 `7b41ebf8d1cfbf82fe167f71140819d5b56059ee83b420d4b41592951c9007e3`이다. 새로 그린 두 플롯은 기존 raw plot과 픽셀 단위로 같아 published-comparison 이미지는 다시 생성하지 않았다.
 
@@ -197,7 +197,7 @@ Figures 5–6은 2004년 검증과 같은 적도 소스–수신점 배치를 �
 | 이전 native ETOPO5 | 0.97920 / 1.00000 | 0.16425 / 0.35813 | 37.3% / 105.0% |
 | 이전 polar projected-step ETOPO5 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 37.6% / 134.5% |
 
-요청한 source, A, A′, B, B′ 위치의 ETOPO5 고도는 각각 −24, −5,014, −3,041, −207, −4,538 m이다. 5-km 방사 간격에서 해수면 아래 첫 tangential material sample은 −2.5 km다. 따라서 얕은 207-m B 해양 아래는 암석, 깊은 B′ 해양 아래는 물로 표본화한다. 처음에는 이것이 얕은 물 point sampling이 지배적임을 시사했다. 그러나 이후 conservative test에서 4,258개 edge column을 바꾸어 5-km 표면 물 셀 하나를 보존했어도 B/B′는 0.04585/0.40613에서 0.04580/0.40605로만 변했다. 고정 깊이 대조군은 양의 육지 기복도 평탄화하고 다른 해안선을 사용했다. 그러므로 전체 표면 기하 표현을 propagation update와 분리하지만 실패를 수신기 수심만으로 돌릴 수는 없다.
+요청한 source, A, A′, B, B′ 위치의 ETOPO5 고도는 각각 −24, −5,014, −3,041, −207, −4,538 m이다. 5-km 방사 간격에서 해수면 아래 첫 tangential material sample은 −2.5 km다. 얕은 207-m B 해양 아래는 암석, 깊은 B′ 해양 아래는 물로 표본화한다. 처음에는 이것이 얕은 물 point sampling이 지배적임을 시사했다. 그러나 이후 conservative test에서 4,258개 edge column을 바꾸어 5-km 표면 물 셀 하나를 보존했어도 B/B′는 0.04585/0.40613에서 0.04580/0.40605로만 변했다. 고정 깊이 대조군은 양의 육지 기복도 평탄화하고 다른 해안선을 사용했다. 그 대조군은 전체 표면 기하 표현을 propagation update와 분리하지만 실패를 수신기 수심만으로 돌릴 근거는 되지 못한다.
 
 #### 방사 결합은 논문의 의도적인 thin-shell 근사
 
@@ -205,7 +205,7 @@ Taflove and Hagness Chapter 3 Section 3.6.8과 제공된 2006 논문을 검토�
 
 구현도 같은 단순 방사 차분을 사용한다. 두꺼운 shell의 완전한 spherical curl에는 `(1/r) ∂(rEt)/∂r`와 `(1/r) ∂(rHt)/∂r`가 들어가지만 이를 추가하면 대상 알고리즘과 달라진다. 논문은 약 6,371 km의 Earth radius 주변 200-km 영역을 locally prismatic Yee cell stack으로 취급한다. 이는 재현에서 실수로 누락한 것이 아니라 의도적인 thin-shell 근사다.
 
-수치 점검으로 subdivision-5 ETOPO5 쌍에서 방사 차분만 radius-weighted 형태로 교체했다. 두 실행 모두 CUDA `float64`, 40,000 steps를 사용했다. 정규화한 4-trace RMS 변화는 `3.39e-6`, 공통 절대 피크 변화는 0.053%뿐이었고 피크 시점은 그대로였으며 far/near ratio는 0.386870128에서 0.386869895로 변했다. 따라서 다른 응용에서 연속체 구면 형식을 선호하더라도 radial metric weighting은 Figure 5 불일치를 설명할 수 없다.
+수치 점검으로 subdivision-5 ETOPO5 쌍에서 방사 차분만 radius-weighted 형태로 교체했다. 두 실행 모두 CUDA `float64`, 40,000 steps를 사용했다. 정규화한 4-trace RMS 변화는 `3.39e-6`, 공통 절대 피크 변화는 0.053%뿐이었고 피크 시점은 그대로였으며 far/near ratio는 0.386870128에서 0.386869895로 변했다. 다른 응용에서 연속체 구면 형식을 선호하더라도 radial metric weighting은 Figure 5 불일치를 설명할 수 없다.
 
 #### 보정한 polar orientation 기준선
 
@@ -222,7 +222,7 @@ Taflove and Hagness Chapter 3 Section 3.6.8과 제공된 2006 논문을 검토�
 
 #### 제약된 격자 품질과 고정 깊이 gate
 
-Reference 13은 세분화한 측지 격자 smoothing에 Mesquite를 사용했다고 하지만 목적함수 weight나 최종 좌표를 공개하지 않는다. 따라서 결정론적 근사를 opt-in 실험으로 추가했다. 두 극점을 포함한 pentagonal anchor 12개를 고정하고 unit sphere에 projected step을 적용하여 great-circle edge-length variance를 최소화한다. Subdivision 5의 한 step은 edge-length CV를 0.06503에서 0.06082, triangle-area CV를 0.08644에서 0.07911, dual-cell-area CV를 0.08133에서 0.07714, adjacent dual-area-jump RMS를 0.03235에서 0.02524로 줄인다. 최악의 상대 adjacent jump도 0.11071에서 0.08294로 감소한다.
+Reference 13은 세분화한 측지 격자 smoothing에 Mesquite를 사용했다고 하지만 목적함수 weight나 최종 좌표를 공개하지 않는다. 결정론적 근사는 opt-in 실험으로 추가했다. 두 극점을 포함한 pentagonal anchor 12개를 고정하고 unit sphere에 projected step을 적용하여 great-circle edge-length variance를 최소화한다. Subdivision 5의 한 step은 edge-length CV를 0.06503에서 0.06082, triangle-area CV를 0.08644에서 0.07911, dual-cell-area CV를 0.08133에서 0.07714, adjacent dual-area-jump RMS를 0.03235에서 0.02524로 줄인다. 최악의 상대 adjacent jump도 0.11071에서 0.08294로 감소한다.
 
 첫 propagation gate는 고정 5-km Natural Earth 해양 모델을 사용하여 이웃 수평 sample 사이에서 수심이 바뀌지 않게 했다. 두 계산 모두 보정 polar orientation, subdivision 5, 40,000 steps, CUDA `float64`, 공통 4-trace normalization을 사용했다.
 
@@ -231,7 +231,7 @@ Reference 13은 세분화한 측지 격자 smoothing에 Mesquite를 사용했다
 | 0 steps | 1.00000 / 0.99338 | 0.39728 / 0.39777 | 0.07752 / 0.07737 | 0.9% / 0.6% |
 | 1 projected step | 1.00000 / 0.99660 | 0.39700 / 0.39769 | 0.07732 / 0.07717 | 0.7% / 0.6% |
 
-두 격자 모두 출판된 원거리 피크 크기를 복원하며 동/서 경로가 거의 같다. 품질 step은 근거리 경로 일치를 약간 개선하지만 원거리 응답에는 실질적 영향이 없다. 따라서 고정 깊이 gate를 통과한다. Polar geodesic FDTD propagation 자체는 Figure 5 진폭과 대칭을 만들 수 있고 mesh smoothing만으로 ETOPO5 실패를 맞출 수는 없다.
+두 격자 모두 출판된 원거리 피크 크기를 복원하며 동/서 경로가 거의 같다. 품질 step은 근거리 경로 일치를 약간 개선하지만 원거리 응답에는 실질적 영향이 없다. 고정 깊이 gate는 통과한다. Polar geodesic FDTD propagation 자체는 Figure 5 진폭과 대칭을 만들 수 있고 mesh smoothing만으로 ETOPO5 실패를 맞출 수는 없다.
 
 대응하는 ETOPO5 재실행은 다음 gate를 통과하지 못한다.
 
@@ -241,7 +241,7 @@ Reference 13은 세분화한 측지 격자 smoothing에 Mesquite를 사용했다
 | ETOPO5, 1 projected step | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
 | 고정 깊이, 1 projected step | 1.00000 / 0.99660 | 0.39700 / 0.39769 | 0.07732 / 0.07717 | 0.7% / 0.6% |
 
-더 매끄러운 격자는 매우 작은 기준값에 비해 B를 13.6% 높이지만, B는 여전히 B′보다 88.7%, 출판된 약 0.39 피크보다 88.2% 낮다. 도달 이동은 0.192 ms에 불과하다. 이 근사를 subdivision 7로 승격할 근거가 부족하다. 제어된 고정 깊이 대 ETOPO5 대비는 전체 표면 기하 voxelization을 더 분리해 조사할 필요를 보여준다.
+더 매끄러운 격자는 매우 작은 기준값에 비해 B를 13.6% 높이지만 B는 여전히 B′보다 88.7%, 출판된 약 0.39 피크보다 88.2% 낮다. 도달 이동은 0.192 ms에 불과하다. 이 근사를 subdivision 7로 승격할 근거가 부족하다. 제어된 고정 깊이 대 ETOPO5 대비를 보면 전체 표면 기하 voxelization을 더 분리해 조사해야 한다.
 
 #### 보존적 얕은 해양 voxelization
 
@@ -252,7 +252,7 @@ Opt-in conservative rasterization은 실제 해안선, 더 깊은 수심, 양의
 | 정확한 기복 | 0.97231 / 1.00000 | 0.04585 / 0.40613 | 0.00964 / 0.06858 | 34.0% / 734.0% |
 | 최소 5-km 해양 column | 0.97081 / 1.00000 | 0.04580 / 0.40605 | 0.00966 / 0.06863 | 34.1% / 734.5% |
 
-파형은 사실상 동일하다. 이전 고정 깊이 비교는 얕은 물 깊이만 분리한 것이 아니며, 양의 육지 기복을 해수면으로 평탄화하고 다른 Natural Earth 해안선도 사용했다. 강한 대비는 207-m 수신기 수심만이 아니라 전체 표면 기하 voxelization 때문에 생긴다. Conservative ocean occupancy는 Figure 5 보정으로 채택하지 않고 명시적 진단으로만 남긴다.
+파형은 사실상 동일하다. 이전 고정 깊이 비교는 얕은 물 깊이만 분리하지 않았으며 양의 육지 기복을 해수면으로 평탄화하고 다른 Natural Earth 해안선도 사용했다. 강한 대비는 207-m 수신기 수심만이 아니라 전체 표면 기하 voxelization 때문에 생긴다. Conservative ocean occupancy는 Figure 5 보정으로 채택하지 않고 명시적 진단으로만 남긴다.
 
 #### 표면 해상도 수렴 screen
 
@@ -270,7 +270,7 @@ Opt-in conservative rasterization은 실제 해안선, 더 깊은 수심, 양의
 
 후속 작업에서는 프로젝트 내부 one-step smoother를 공개된 최신 upstream Sandia Mesquite snapshot인 version 2.99 commit `7ae51c8e8617c67e63018c8a7effc0f5455f58b4`로 교체했다. [공식 Sandia archive](https://github.com/sandialabs/mesquite)에서 source를 다운로드하고 중첩 archive를 SHA-256으로 고정한다. Mesquite는 저장소에 복사하지 않고 외부 LGPL dependency로 유지한다.
 
-논문은 Laplace 일관성을 위해 cell 면적과 위치를 모두 선택했다고 한다. 따라서 scale-invariant shape-only 목적함수는 예비 screen에서 Laplace 오차는 줄였지만 cell-area 및 edge-length variation을 키워 제외했다. 프로덕션 adapter는 `SphericalDomain`에서 Mesquite의 uniform ideal triangle size-and-shape target `TShapeSizeB1`을 `PMeanP(1)`로 aggregate하고 `TrustRegion`으로 최소화한다. Mesquite `FeasibleNewton` 구현은 실제 planar XY mesh용으로 문서화되어 구면에서는 사용하지 않는다. Dual이 polar pentagon인 두 vertex만 고정하고 나머지는 이동할 수 있다. Connectivity, vertex order, primal triangular cell, geodesic dual-grid 구현은 그대로다. 목적함수에는 ETOPO5 elevation, source/receiver coordinate, waveform metric이 들어가지 않는다.
+논문은 Laplace 일관성을 위해 cell 면적과 위치를 모두 선택했다고 한다. scale-invariant shape-only 목적함수는 예비 screen에서 Laplace 오차는 줄였지만 cell-area 및 edge-length variation을 키워 제외했다. 프로덕션 adapter는 `SphericalDomain`에서 Mesquite의 uniform ideal triangle size-and-shape target `TShapeSizeB1`을 `PMeanP(1)`로 aggregate하고 `TrustRegion`으로 최소화한다. Mesquite `FeasibleNewton` 구현은 실제 planar XY mesh용으로 문서화되어 구면에서는 사용하지 않는다. Dual이 polar pentagon인 두 vertex만 고정하고 나머지는 이동할 수 있다. Connectivity, vertex order, primal triangular cell, geodesic dual-grid 구현은 그대로다. 목적함수에는 ETOPO5 elevation, source/receiver coordinate, waveform metric이 들어가지 않는다.
 
 Subdivision 7 검토 재실행에서 optimizer는 165.7 s에 수렴했다. 최대 great-circle vertex displacement는 0.015475 rad, Earth radius에서 98.6 km였다. 보고한 모든 지표가 개선됐다.
 
@@ -302,7 +302,7 @@ Laplace test는 FDTD curl과 같은 primal/dual metric factor가 유도한 circu
 | Projected step / 7 | 0.96355 / 1.00000 | 0.14159 / 0.35471 | 0.02820 / 0.05904 | 37.6% / 134.5% |
 | Mesquite / 7 | 0.97143 / 1.00000 | 0.31148 / 0.35580 | 0.06093 / 0.05922 | 37.4% / 18.5% |
 
-이는 실질적인 개선이며 Laplace 일관성이 Maxwell propagation에도 이롭다는 Reference 13의 주장을 뒷받침한다. 특히 두 원거리 꼬리는 이제 상대 2.9%로 일치하고 level-7 B 피크는 2.20배 높아진다. 그러나 Figure 5 정량 통과는 아니다. 원거리 피크는 출판 플롯의 육안 목표보다 약 20% 및 9% 낮고 두 원거리 꼬리는 약 40% 낮으며 근거리 경로 RMS는 37.4%다. 2006년에 사용한 정확한 Mesquite 목적함수 parameter와 최종 좌표는 공개되지 않았으므로, 현재 결과는 좌표 동일성을 주장하는 것이 아니라 재현 가능한 복원이다.
+이는 실질적인 개선이며 Laplace 일관성이 Maxwell propagation에도 이롭다는 Reference 13의 주장을 뒷받침한다. 특히 두 원거리 꼬리는 이제 상대 2.9%로 일치하고 level-7 B 피크는 2.20배 높아진다. 그러나 Figure 5 정량 통과는 아니다. 원거리 피크는 출판 플롯의 육안 목표보다 약 20% 및 9% 낮고 두 원거리 꼬리는 약 40% 낮으며 근거리 경로 RMS는 37.4%다. 2006년에 사용한 정확한 Mesquite 목적함수 parameter와 최종 좌표는 공개되지 않았으므로 현재 결과는 좌표 동일성을 주장하는 것이 아니라 재현 가능한 복원이다.
 
 #### 전도도 프로파일 민감도
 
@@ -316,11 +316,11 @@ Laplace test는 FDTD curl과 같은 primal/dual metric factor가 유도한 circu
 | Scale height 3.00 km | 0.94433 / 1.00000 | 0.11603 / 0.40923 | 0.03407 / 0.03343 | 0.02646 / 0.08270 |
 | Scale height 3.67 km | 0.95584 / 1.00000 | 0.10687 / 0.37727 | 0.03455 / 0.03569 | 0.01977 / 0.05715 |
 
-전리층 변화는 예상 방향으로 B′를 바꾸지만 모든 사례에서 B가 강하게 억제된다. 3.00-km scale height도 B를 0.11120에서 0.11603으로만 높이면서 B′는 출판 육안 추정치를 넘긴다. 따라서 표준 70-km/3.33-km Bannister profile을 유지한다. Parameter tuning으로 경로 선택적인 surface-geometry discretization error를 고칠 수 없다.
+전리층 변화는 예상 방향으로 B′를 바꾸지만 모든 사례에서 B가 강하게 억제된다. 3.00-km scale height도 B를 0.11120에서 0.11603으로만 높이면서 B′는 출판 육안 추정치를 넘긴다. 표준 70-km/3.33-km Bannister profile을 유지한다. Parameter tuning으로 경로 선택적인 surface-geometry discretization error를 고칠 수 없다.
 
 #### Fractional 방사 interface 실험
 
-Opt-in material 실험에서 tangential-field midpoint sampling을 모든 방사 셀의 air/water/rock 두께 산술 평균으로 교체했다. 이는 정적 sheet conductance를 보존하지만 얇고 전도성이 높은 해수층의 주파수 의존 surface impedance는 보존하지 않는다. 보정 위치 CUDA `float64` 실행은 그 한계를 보여준다.
+Opt-in material 실험에서 tangential-field midpoint sampling을 모든 방사 셀의 air/water/rock 두께 산술 평균으로 교체했다. 이는 정적 sheet conductance를 보존하지만 얇고 전도성이 높은 해수층의 주파수 의존 surface impedance는 보존하지 않는다. 보정 위치 CUDA `float64` 실행에서 그 한계가 드러난다.
 
 | 표면 subdivision | 표면 근처 방사 간격 | Interface | B / B′ 피크 | 0.12 s B / B′ 꼬리 |
 |---:|---:|---|---:|---:|
@@ -331,9 +331,9 @@ Opt-in material 실험에서 tangential-field midpoint sampling을 모든 방사
 | 4 | 250 m | Point | 0.30031 / 0.47117 | 0.06764 / 0.09794 |
 | 4 | 250 m | Fractional | 0.26909 / 0.47164 | 0.04666 / 0.09775 |
 
-250-m 방사 간격에서 point와 fractional 네 기록 파형은 RMS 6.15% 차이가 나고 B′ 피크는 비슷하며 B는 약 10% 다르다. 그러나 5-km 간격에서는 산술 fractional averaging이 B를 원래 point material보다 더 억제할 수 있다. 따라서 프로덕션 모델로 채택하지 않고 subdivision 7로 승격하지 않는다. 기능은 명시적 진단으로만 남기며 point sampling을 기본값으로 유지한다.
+250-m 방사 간격에서 point와 fractional 네 기록 파형은 RMS 6.15% 차이가 나고 B′ 피크는 비슷하며 B는 약 10% 다르다. 그러나 5-km 간격에서는 산술 fractional averaging이 B를 원래 point material보다 더 억제할 수 있다. 프로덕션 모델로는 채택하지 않고 subdivision 7로도 승격하지 않는다. 기능은 명시적 진단으로만 남기며 point sampling을 기본값으로 유지한다.
 
-표면 subdivision을 4에서 5로 바꾸면 point-sampled B 피크가 0.29043에서 0.11120으로 이동하며, subdivision 4의 방사 세분화보다 영향이 훨씬 크다. 이는 수평 bathymetry/material aliasing이 다음 보정 대상임을 재확인한다. 올바른 subcell model은 방사 깊이의 bulk conductivity만이 아니라 각 수평 support에서 완전한 lossy update 또는 surface impedance를 평균해야 한다.
+표면 subdivision을 4에서 5로 바꾸면 point-sampled B 피크가 0.29043에서 0.11120으로 이동하며, subdivision 4의 방사 세분화보다 영향이 훨씬 크다. 수평 bathymetry/material aliasing이 다음 보정 대상이라는 점을 재확인한 결과다. 올바른 subcell model은 방사 깊이의 bulk conductivity만이 아니라 각 수평 support에서 완전한 lossy update 또는 surface impedance를 평균해야 한다.
 
 #### 측지 edge-support 물질 quadrature
 
@@ -346,7 +346,7 @@ Opt-in material 실험에서 tangential-field midpoint sampling을 모든 방사
 | 5 | Edge midpoint | 0.11120 / 0.39237 | 0.02238 / 0.06673 |
 | 5 | Edge diamond | 0.11150 / 0.39270 | 0.02244 / 0.06695 |
 
-B 피크는 subdivision 4에서 0.5%, subdivision 5에서 0.3%만 변한다. 따라서 한 edge support의 local quadrature는 subdivision에 따른 큰 경로 차이를 제거하지 못하며 level 7로 승격하지 않는다. 남은 alias는 전역적이다. 서로 다른 표면 refinement가 binary 5-km water/rock column의 서로 다른 연속 경로로 파를 전달한다. 이 column을 바꾸어 논문을 재현하려면 공개되지 않은 정확한 optimized cell coordinate 또는 명시적으로 공개한 ocean-column approximation이 필요하며, local metric correction으로는 불가능하다. 이후 공식 Mesquite 복원은 이 alias를 크게 줄이지만 제거하지는 않는다.
+B 피크는 subdivision 4에서 0.5%, subdivision 5에서 0.3%만 변한다. 한 edge support의 local quadrature는 subdivision에 따른 큰 경로 차이를 제거하지 못하며 level 7로 승격하지 않는다. 남은 alias는 전역적이다. 서로 다른 표면 refinement가 binary 5-km water/rock column의 서로 다른 연속 경로로 파를 전달한다. 이 column을 바꾸어 논문을 재현하려면 공개되지 않은 정확한 optimized cell coordinate 또는 명시적으로 공개한 ocean-column approximation이 필요하며 local metric correction으로는 불가능하다. 이후 공식 Mesquite 복원은 이 alias를 크게 줄이지만 제거하지는 않는다.
 
 ## Figure 6: 주간 감쇠
 
@@ -359,7 +359,7 @@ B 피크는 subdivision 4에서 0.5%, subdivision 5에서 0.3%만 변한다. 따
 | A–B, east | 0.921 dB/Mm | 3.020 dB/Mm | 437.419 Hz | **FAIL** |
 | A′–B′, west | 0.284 dB/Mm | 2.125 dB/Mm | 498.454 Hz | **FAIL** |
 
-서쪽 곡선은 평균적으로 출판 추세를 따르지만 대역 상단에서 지점별 허용 오차를 위반한다. 동쪽 곡선은 ETOPO5 point-sampled material이 B를 억제하여 체계적으로 감쇠가 과도하다. 고정 깊이 Natural Earth material에서는 동/서 평균 오차가 0.423/0.425 dB/Mm가 되고 두 경로가 거의 같아지지만 최대 오차는 2.933/4.370 dB/Mm로 남는다. 따라서 수심 이산화는 큰 동서 분리를 설명하고, 남은 상위 대역 진동은 2004 검증에 기록한 고주파 공간 분산 잔차와 부합한다.
+서쪽 곡선은 평균적으로 출판 추세를 따르지만 대역 상단에서 지점별 허용 오차를 위반한다. 동쪽 곡선은 ETOPO5 point-sampled material이 B를 억제하여 체계적으로 감쇠가 과도하다. 고정 깊이 Natural Earth material에서는 동/서 평균 오차가 0.423/0.425 dB/Mm가 되고 두 경로가 거의 같아지지만 최대 오차는 2.933/4.370 dB/Mm로 남는다. 수심 이산화는 큰 동서 분리를 설명하고 남은 상위 대역 진동은 2004 검증에 기록한 고주파 공간 분산 잔차와 부합한다.
 
 이전에 기록한 native-grid Figure 6 결과와 비교하면, 검토한 공통 트레이스의 동쪽 MAE는 2.064에서 0.921 dB/Mm, 최대는 5.026에서 3.020 dB/Mm로 개선된다. 서쪽 MAE는 0.277에서 0.284 dB/Mm로, 최대는 1.650에서 2.125 dB/Mm로 악화된다. 이는 solver만의 깨끗한 비교가 아니라 구성 일관성 개선이다. 이전 Mesquite 트레이스를 같은 적응 절차로 재분석하면 0.914/2.976 및 0.276/1.990 dB/Mm이므로, 고정 mesh와 분석 설정에서는 검토한 solver 변경이 Figure 6 정확도를 개선하지 않는다.
 
@@ -375,7 +375,7 @@ B 피크는 subdivision 4에서 0.5%, subdivision 5에서 0.3%만 변한다. 따
 | 10% cosine tail | 4.518 / 7.056 dB/Mm | 2.596 / 8.184 dB/Mm |
 | 20% cosine tail | 4.566 / 8.405 dB/Mm | 2.358 / 7.031 dB/Mm |
 
-어떤 taper도 지점별 최대 오차를 개선하지 않으며, 긴 taper일수록 물리적으로 분리된 펄스를 더 왜곡한다. Rectangular window를 유지하고 terminal DFT leakage를 Figure 6 잔차의 주원인에서 제외한다.
+어떤 taper도 지점별 최대 오차를 개선하지 않으며 긴 taper일수록 물리적으로 분리된 펄스를 더 왜곡한다. Rectangular window를 유지하고 terminal DFT leakage를 Figure 6 잔차의 주원인에서 제외한다.
 
 ## Figure 7: 유전 레이더 응답
 
@@ -383,7 +383,7 @@ B 피크는 subdivision 4에서 0.5%, subdivision 5에서 0.3%만 변한다. 따
 
 원래 프로덕션 실행은 Clam Lake 송신기를 대척점 46.46° S, 89.15° E에 배치했고 유전 수신기는 요청한 Alaska 위치에 남겼다. 그 결과는 폐기했다. 아래 패널과 지표는 완전한 보정 위치 기준/이상체 쌍을 사용한다.
 
-검토한 tangential curve의 중앙값은 −43.253 dB로 기준 zero crossing을 제외하면 대체로 −25 dB보다 훨씬 낮지만, 특이하지 않은 sample 중 −25 dB 미만인 비율은 92.469%다. 중앙 억제 기준은 통과하나 “almost every time”을 95%로 해석한 보고서 기준에는 미달한다.
+검토한 tangential curve의 중앙값은 −43.253 dB로 기준 zero crossing을 제외하면 대체로 −25 dB보다 훨씬 낮지만 특이하지 않은 sample 중 −25 dB 미만인 비율은 92.469%다. 중앙 억제 기준은 통과하나 “almost every time”을 95%로 해석한 보고서 기준에는 미달한다.
 
 Radial curve는 출판 스케일이나 형태를 재현하지 못한다. 거의 전체 window에서 플롯의 +30 dB 상한보다 높으며 중앙값 +126.000 dB, 95th percentile +147.896 dB다. 방사/접선 중앙 이점은 약 45 dB가 아니라 165.903 dB다.
 
@@ -407,7 +407,7 @@ Radial curve는 출판 스케일이나 형태를 재현하지 못한다. 거의 
 
 보정된 짧은 propagation path는 폐기된 대척점 실행보다 기준 tangential field를 세 자릿수 이상 높인다. 검토 쌍에서 radial scattered-field peak는 tangential scattered-field peak보다 7.90 dB 강하다. 겉으로 보이는 radial advantage는 기준 `Hr`가 radial scattered field보다 약 6자릿수 작은 데서 지배된다. Caption의 pointwise normalization 대신 본문의 peak normalization을 적용하면 `ΔHtan` −41.787 dB, `ΔHr` +129.430 dB가 되어 어느 해석에서도 출판된 +20 dB 스케일을 재현하지 못한다.
 
-Figure 7은 **정량 실패**지만, 매설 전도도 이상체가 주된 tangential reference field를 약하게 교란하면서 radial magnetic component를 만들 수 있다는 점은 정성적으로 확인한다.
+Figure 7은 **정량 실패**지만 매설 전도도 이상체가 주된 tangential reference field를 약하게 교란하면서 radial magnetic component를 만들 수 있다는 점은 정성적으로 확인한다.
 
 ### 이전 Figure 7 프로덕션 쌍 대비 변화
 
@@ -424,7 +424,7 @@ Tangential median과 실행 시간은 개선됐지만 radial mismatch와 tangent
 
 ### 프로덕션 실행 후 정확성 및 불확실성 gate
 
-원래 tangential ground-line deposition은 요청한 0-m source를 Figure 7 subgrid에서 표면 아래 625 m에 있는 최근접 TE-r midpoint에 맞췄다. 이제 −625-m와 +2,500-m 평면 사이에서 0.8/0.2 weight로 adjoint radial interpolation하여 정확한 고도와 전류 모멘트를 모두 보존한다. Subdivision-5 paired test는 이것이 필요한 정확성 수정이지만 radar discrepancy 원인은 아님을 보여준다.
+원래 tangential ground-line deposition은 요청한 0-m source를 Figure 7 subgrid에서 표면 아래 625 m에 있는 최근접 TE-r midpoint에 맞췄다. 이제 −625-m와 +2,500-m 평면 사이에서 0.8/0.2 weight로 adjoint radial interpolation하여 정확한 고도와 전류 모멘트를 모두 보존한다. Subdivision-5 paired test에서 이것은 필요한 정확성 수정이지만 radar discrepancy의 원인은 아니었다.
 
 | Source / receiver / Shield | Peak-normalized `ΔHr` | Median pointwise `ΔHr` | Median advantage | 기준 `Hr` 피크 |
 |---|---:|---:|---:|---:|
@@ -450,7 +450,7 @@ Subdivision 5에서 containing-face `Hr` sample을 정확한 유전 좌표의 fo
 | North + east | −66.515 dB | +70.511 dB | +3.590 dB |
 | North − east | −46.585 dB | +71.865 dB | −6.878 dB |
 
-모든 basis에서 절대 scattered component는 약 7 dB 이내이며 서로 비슷하다는 논문의 설명과 부합한다. Source polarity는 tangential cancellation을 통해 겉보기 advantage를 크게 바꾸지만 네 radial 결과 모두 논문의 약 +20 dB보다 50 dB 이상 높다. 따라서 source convention은 공개된 불확실성으로 유지하고 fit parameter로 사용하지 않는다.
+모든 basis에서 절대 scattered component는 약 7 dB 이내이며 서로 비슷하다는 논문의 설명과 부합한다. Source polarity는 tangential cancellation을 통해 겉보기 advantage를 크게 바꾸지만 네 radial 결과 모두 논문의 약 +20 dB보다 50 dB 이상 높다. source convention은 공개된 불확실성으로 유지하고 fit parameter로 사용하지 않는다.
 
 ## 실패 분석과 수정 작업
 
@@ -465,19 +465,19 @@ Subdivision 5에서 containing-face `Hr` sample을 정확한 유전 좌표의 fo
 7. 논문의 정확한 Mesquite coordinate와 objective parameter는 공개되지 않았다. 최신 공개 Mesquite 2.99 snapshot을 offline optimizer로 통합했다. Uniform spherical size-and-shape objective는 두 polar pentagon만 고정하면서 추적한 모든 mesh-quality 및 Laplace metric을 개선한다. ETOPO5, source, receiver, waveform 정보는 사용하지 않는다. 최적화 coordinate archive는 각 FDTD 실행 전에 검증하고 topology 변경 없이 모든 geometry를 다시 만든다.
 8. Figure 7은 이전에 ETOPO5 기복이 활성화되어도 source, receiver, buried body를 sea level 기준으로 배치했다. 기본값은 이제 세 요소 모두 local terrain을 일관되게 기준으로 하며 명시적인 sea-level placement는 제어 비교로 남긴다.
 9. Binary point sampling은 명목 4,800 km² oil body를 level 7에서 7,013.6 km²로 만들고 낮은 level에서는 완전히 사라지게 했다. 기본 conservative rasterizer는 TM dual cell과 TE edge diamond에서 각각 4,800 km²를 보존한 뒤 radial cell-overlap fraction을 적용한다. Point sampling은 명시적 대조 모드로 남긴다.
-10. Radial boundary를 명시적으로 PEC로 식별하고, 회귀 테스트에서 ghost-cell curl, second-order conductive decay, stiff-loss passivity, native/polar TM·TE CFL spectrum을 각각 검증한다.
-11. Magnetic timestamp에 half-step offset을 포함하고 archive를 atomic write하며, reference/anomaly 비교는 mesh coordinate, material, source, backend, dtype, configuration이 들어간 canonical run signature가 일치해야 한다.
+10. Radial boundary를 명시적으로 PEC로 식별하고 회귀 테스트에서 ghost-cell curl, second-order conductive decay, stiff-loss passivity, native/polar TM·TE CFL spectrum을 각각 검증한다.
+11. Magnetic timestamp에 half-step offset을 포함하고 archive를 atomic write하며 reference/anomaly 비교는 mesh coordinate, material, source, backend, dtype, configuration이 들어간 canonical run signature가 일치해야 한다.
 12. CUDA dual-cell circulation은 atomic scatter accumulation 대신 고정 degree-five/six incidence sum을 사용한다. 반복한 compiled float64 실행에서 네 field array가 bitwise identical이다.
-13. Dense edge-by-layer metric tensor를 separable spherical metric factor로 교체했다. Subdivision 5, radial cell 24개에서 RTX 3060 persistent allocation은 방정식을 바꾸지 않고 89.4에서 38.0 MB로 줄며, 120-step float64 비교는 roundoff scale에서만 다르다.
+13. Dense edge-by-layer metric tensor를 separable spherical metric factor로 교체했다. Subdivision 5, radial cell 24개에서 RTX 3060 persistent allocation은 방정식을 바꾸지 않고 89.4에서 38.0 MB로 줄며 120-step float64 비교는 roundoff scale에서만 다르다.
 14. 정확한 ETOPO5 pole sample은 이제 해당 latitude row 평균을 사용하여 polar pentagon의 정의되지 않은 longitude dependency를 제거한다. 공식 south-pole row 평균은 2,810.375 m다.
 
 지리 보정 전에 수행한 coarse source-deposition 및 resolution 진단은 구현 테스트로 git history에 남기지만 대척 송신기를 사용했으므로 수치 radar metric은 이 보고서에서 제외한다. 최종 Figure 7 판정은 새 paper-scale corrected-location pair만 사용한다.
 
 보관한 level-7 프로덕션 쌍은 binary point sampling을 사용하여 선택한 dual cell 두 개의 합계 면적이 기하학적 4,800 km²가 아니라 7,013.6 km²였다. 현재 기본값은 이를 fractional area support로 교체했다. 같은 TM cell 두 개와 TE support 다섯 개를 선택하지만 fractional occupancy를 부여하여 각 staggered grid의 적분 면적을 정확히 4,800 km²로 만든다. 재귀적으로 subdivide한 geodesic topology를 바꾸거나 conductivity를 tuning하지 않고 공개된 수평 면적 오차를 해결한다.
 
-보정한 Figure 7 절대 field는 solver가 radial scattered field를 실제 생성함을 보여준다. 검토한 conservative-area pair에서 그 peak는 tangential scattered-field peak보다 7.90 dB 크지만, 보고된 165.90 dB normalized advantage는 거의 0인 reference `Hr`로 나눈 값이 지배한다. 논문은 차이가 정확한 optimized cell position, ground-line phase/deposition, Canadian Shield mask, conductivity realization, oil-body voxelization, 또는 내부적으로 모순된 normalization description 중 어디서 생기는지 판단할 정보를 충분히 제공하지 않는다. 어떤 입력도 문서화되지 않은 방식으로 tuning하지 않았다.
+보정한 Figure 7 절대 field에서 solver는 radial scattered field를 실제로 만든다. 검토한 conservative-area pair에서 그 peak는 tangential scattered-field peak보다 7.90 dB 크지만, 보고된 165.90 dB normalized advantage는 거의 0인 reference `Hr`로 나눈 값이 지배한다. 논문은 차이가 정확한 optimized cell position, ground-line phase/deposition, Canadian Shield mask, conductivity realization, oil-body voxelization, 또는 내부적으로 모순된 normalization description 중 어디서 생기는지 판단할 정보를 충분히 제공하지 않는다. 어떤 입력도 문서화되지 않은 방식으로 tuning하지 않았다.
 
-Figures 5–6에서 고정 깊이 material은 동서 대칭을 복원하지만 지점별 고주파 감쇠 허용 오차는 해결하지 못한다. Float64 precision, DFT zero-padding, source staggering, radial metric weighting, horizontal refinement는 이 연구와 2004 campaign에서 이미 분리해 시험했다. 현재 geodesic dual grid는 유지해야 하며 논문의 정확한 Hermance-derived 3-D conductivity realization은 공개되지 않았다. 따라서 최종 bathymetry 및 고주파 불일치는 tuning하여 없애지 않고 보고한다.
+Figures 5–6에서 고정 깊이 material은 동서 대칭을 복원하지만 지점별 고주파 감쇠 허용 오차는 해결하지 못한다. Float64 precision, DFT zero-padding, source staggering, radial metric weighting, horizontal refinement는 이 연구와 2004 campaign에서 이미 분리해 시험했다. 현재 geodesic dual grid는 유지해야 하며 논문의 정확한 Hermance-derived 3-D conductivity realization은 공개되지 않았다. 최종 bathymetry 및 고주파 불일치는 tuning하여 없애지 않고 보고한다.
 
 ## 재현 명령
 
@@ -544,7 +544,7 @@ Figure 7 paired run은 다음과 같다.
 
 ## 재현성 한계
 
-- NOAA ETOPO5 기복은 보관 파일 및 2004 보고서에 기록한 checksum과 정확히 일치하지만, 논문의 완전한 3차원 Hermance conductivity mapping은 구할 수 없다.
+- NOAA ETOPO5 기복은 보관 파일 및 2004 보고서에 기록한 checksum과 정확히 일치하지만 논문의 완전한 3차원 Hermance conductivity mapping은 구할 수 없다.
 - 정확한 Canadian Shield 경계와 oil-field footprint shape는 공개되지 않았다. 구현은 전자에 공개한 cap, 후자에 원형 equal-area footprint를 사용한다. Conservative fractional rasterization은 두 electric-field grid에서 공개된 4,800 km² 면적을 보존하지만 공개되지 않은 footprint shape를 복원할 수 없다.
 - 논문은 optimized geodesic grid를 사용한다. 요구에 따라 이 프로젝트는 기존의 recursively subdivided geodesic dual-grid topology를 유지한다. Rigid polar orientation은 pentagonal cell center를 두 지리 극점에 둔다. 고정된 Mesquite 2.99 복원은 구면에서 문서화된 uniform size-and-shape objective를 사용하고 두 vertex를 고정한다. 논문은 정확한 Mesquite objective parameter, constraint, termination criterion, final coordinate를 공개하지 않으므로 복원한 vertex가 논문 격자와 동일하다고 가정할 수 없다.
 - Figure 7은 source phase, Gaussian center time, formal error norm을 정의하지 않는다. 시뮬레이션은 envelope center보다 Gaussian `1/e` half-width 세 개 앞에서 시작하며 표시 시간은 그 center 기준이다.
@@ -556,4 +556,4 @@ Figure 7 paired run은 다음과 같다.
 
 수정 작업으로 재사용 가능하고 시험된 기능들을 확보했다. 물리적으로 scale된 horizontal ground-line source, CUDA-native radial/tangential magnetic recording, ETOPO5 layered material의 buried anomaly, 보호된 water layer, polar pentagon alignment, 고정 Sandia Mesquite build와 spherical size-and-shape optimization pipeline, Laplace-consistency metric, conservative ocean-column diagnostic, conservative buried-body support, terrain-relative radar geometry, deterministic CUDA circulation, 명시적 PEC/CFL/loss invariant, 재현 가능한 Figure 5–7 analysis CLI가 포함된다. Precision, time-step stability, source moment, radial metric weighting, ionosphere-profile sensitivity를 시험했다. Geographic locator 결함을 수정했고 geographic, terrain-reference, conservative-area 보정의 영향을 받는 모든 paper-scale production trace를 다시 계산했다.
 
-Figure 5에서 고정 깊이 geometry는 대칭을 복원한다. 공식 Mesquite optimization은 ETOPO5 결과를 실질적으로 개선하여 level-7 원거리 경로 RMS 차이를 134.5%에서 18.5%로 줄이고 B를 0.14159에서 0.31148로 높이며 거의 2차인 `l=1` Laplace convergence를 복원한다. 그러나 37.4% 근거리 경로 불일치나 약 40% 낮은 원거리 꼬리는 해결하지 못한다. 산술 radial fraction, local edge-support quadrature, conservative 5-km ocean occupancy도 충분하지 않다. 따라서 전체 ETOPO5 surface/lithosphere voxelization과 복원 격자 및 공개되지 않은 논문 전용 optimized coordinate의 차이가 가장 강하게 확인된 한계다. 얕은 수심만이 지배 원인이라는 가설은 더 이상 지지되지 않는다. Frequency-dependent ground surface impedance는 필수 geodesic grid를 유지하면서 물리적 수렴을 개선할 수 있지만, 논문이 발표한 bulk-cell algorithm과 달라진다. Figure 6에는 알려진 고주파 spatial-dispersion residual도 남아 있다. Figure 7은 optimized cell position, 정확한 3-D lithosphere conductivity, Canadian Shield mask, 정확한 oil-field footprint shape, source phase/deposition, 일관된 normalization definition처럼 논문에서 복원할 수 없는 입력의 제약을 받는다. 보정된 지리 `Hr` receiver도 subdivisions 5와 7에서 반대 방향으로 변하여, 잔차가 제거 가능한 face-center observation artifact가 아님을 확인한다. 문서화되지 않은 tuning으로 출판 Figure 7 값에 강제로 맞추는 것은 유효한 검증이 아니다.
+Figure 5에서 고정 깊이 geometry는 대칭을 복원한다. 공식 Mesquite optimization은 ETOPO5 결과를 실질적으로 개선하여 level-7 원거리 경로 RMS 차이를 134.5%에서 18.5%로 줄이고 B를 0.14159에서 0.31148로 높이며 거의 2차인 `l=1` Laplace convergence를 복원한다. 그러나 37.4% 근거리 경로 불일치나 약 40% 낮은 원거리 꼬리는 해결하지 못한다. 산술 radial fraction, local edge-support quadrature, conservative 5-km ocean occupancy도 충분하지 않다. 전체 ETOPO5 surface/lithosphere voxelization과 복원 격자 및 공개되지 않은 논문 전용 optimized coordinate의 차이가 가장 강하게 확인된 한계다. 얕은 수심만이 지배 원인이라는 가설은 더 이상 지지되지 않는다. Frequency-dependent ground surface impedance는 필수 geodesic grid를 유지하면서 물리적 수렴을 개선할 수 있지만, 논문이 발표한 bulk-cell algorithm과 달라진다. Figure 6에는 알려진 고주파 spatial-dispersion residual도 남아 있다. Figure 7은 optimized cell position, 정확한 3-D lithosphere conductivity, Canadian Shield mask, 정확한 oil-field footprint shape, source phase/deposition, 일관된 normalization definition처럼 논문에서 복원할 수 없는 입력의 제약을 받는다. 보정된 지리 `Hr` receiver도 subdivisions 5와 7에서 반대 방향으로 변하여 잔차가 제거 가능한 face-center observation artifact가 아님을 확인한다. 문서화되지 않은 tuning으로 출판 Figure 7 값에 강제로 맞추는 것은 유효한 검증이 아니다.
