@@ -604,6 +604,48 @@ The geodesic and merged latitude–longitude grids still need not have identical
 finite-resolution dispersion relations, but both should approach their
 respective continuum models under refinement.
 
+## Same-resolution Mesquite control
+
+The subdivision-8 polar grid was optimized without changing its 655,362 cells,
+connectivity, radial grid, or two polar pentagon centers. The pinned Sandia
+Mesquite 2.99 adapter used the same uniform spherical size-and-shape objective
+as the 2006 verification: `TShapeSizeB1`, aggregated by `PMeanP(1)` and
+minimized by `TrustRegion`. Optimization took 667.3 s, moved a vertex by at
+most 0.015512 rad, and produced coordinate SHA-256
+`4128445eff7255239ac8a300ea325e77332b091aba93fca774362ba3cc3f4e22`.
+
+| Subdivision-8 mesh metric | Original polar mesh | Mesquite | Reduction |
+|---|---:|---:|---:|
+| Primal-edge length CV | 0.065027 | 0.042253 | 35.0% |
+| Primal-face area CV | 0.086445 | 0.062416 | 27.8% |
+| Dual-cell area CV | 0.085796 | 0.062410 | 27.3% |
+| Adjacent dual-area jump RMS | 0.012193 | 0.001874 | 84.6% |
+| Maximum adjacent dual-area jump | 0.121132 | 0.075813 | 37.4% |
+| Relative Laplace error, real `l=1` harmonic | `2.4784e-5` | `2.7100e-6` | 89.1% |
+| Relative Laplace error, real `l=2` harmonic | `2.6779e-4` | `1.0758e-4` | 59.8% |
+
+The uniform-model CUDA `float64` control then changed only those coordinates.
+Its adaptive cutoffs, 21,514–21,555, closely match the original
+21,513–21,556 range.
+
+| Subdivision-8 uniform metric | Original polar mesh | Mesquite | Change |
+|---|---:|---:|---:|
+| Bannister MAE, 50–500 Hz | 0.01417971 c | 0.01417758 c | −0.0150% |
+| Bannister maximum error | 0.02803688 c | 0.02798620 c | −0.181% |
+| Bannister MAE, 400–500 Hz | 0.01797263 c | 0.01796371 c | −0.0496% |
+| Mean azimuth spread | 0.024223% | 0.027638% | +14.1% |
+| Maximum azimuth spread | 0.086622% | 0.088630% | +2.32% |
+
+Using one common minimum, median, or maximum cutoff gives original MAE
+0.0141710–0.0141796 c and Mesquite MAE 0.0141694–0.0141775 c. The corresponding
+mean-spread ranges are 0.02422–0.02451% and 0.02751–0.02764%. The negligible
+phase improvement and increased spread are therefore not adaptive-window
+artifacts. Mesquite strongly improves static mesh and Laplace metrics, but at
+this already fine resolution it does not materially improve uniform Maxwell
+dispersion. An ETOPO5 production control remains necessary because moving the
+same vertices also changes terrain and coastline voxelization, an effect not
+present in this uniform test.
+
 ## Radial and isotropic-dispersion separation
 
 The post-audit screen used the laterally uniform model and the same twelve
@@ -673,6 +715,7 @@ scalar wave-speed rescaling would also fail to match the frequency dependence.
 | 5 vs 2.5 km radial spacing | No consistent level-5/6 phase improvement | Uniform radial refinement is rejected |
 | Horizontal level 5→6 refinement | Mean error falls 53.3% / 46.5% on the two radial grids | Horizontal error is the dominant reducible term on coarse grids |
 | Horizontal levels 6→8 | Mean spread 0.4671%→0.02422%; Bannister MAE 0.03523→0.01418 c | Anisotropy converges; absolute mismatch approaches a nonzero limit |
+| Level-8 Mesquite coordinates | Laplace `l=1` error −89.1%; Bannister MAE −0.0150%; mean spread +14.1% | Static quality improves, but uniform Maxwell dispersion does not materially improve |
 
 ## Reproduction commands
 
@@ -764,6 +807,28 @@ for subdivision in 5 6 7 8; do
     --output-dir \
       "/tmp/horizontal-dispersion-level-${subdivision}-float64-cuda"
 done
+```
+
+Build the pinned Mesquite adapter, optimize the subdivision-8 coordinates, and
+repeat the same-resolution uniform control:
+
+```bash
+python verification/mesh_optimization/tools/build.py \
+  --build-dir build/mesquite
+
+python -m verification.mesh_optimization \
+  --subdivision 8 --orientation polar --fixed-vertices poles \
+  --executable build/mesquite/bin/ionosphere-mesquite-optimize \
+  --movement-tolerance 1e-10 --max-iterations 200 --timeout 1800 \
+  --output /tmp/ionosphere-mesquite-level-8.npz
+
+uv run --extra pytorch --extra visualization python -m \
+  verification.directional_dispersion \
+  --subdivision 8 --steps 25023 --azimuth-step-deg 30 \
+  --mesh-coordinates /tmp/ionosphere-mesquite-level-8.npz \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --synchronize-every 1024 \
+  --output-dir /tmp/horizontal-dispersion-level-8-mesquite
 ```
 
 Subdivision 9 is accepted by the CLI but requires an accelerator with at least

@@ -326,6 +326,32 @@ Level-9 CUDA `float64` 실행은 메모리 부족을 일으키기 전에 선별 
 
 추후 약 24 GiB 이상의 CUDA GPU에서 외삽값을 직접 검증할 수 있도록 방향 분산 CLI가 subdivision 9를 받도록 확장했다. 측지 격자와 merged latitude–longitude 격자는 유한 해상도에서 서로 다른 분산 관계를 가질 수 있지만, 세분화하면 각각의 연속체 모델에 접근해야 한다.
 
+## 동일 해상도 Mesquite 대조 실험
+
+Subdivision-8 polar grid의 셀 655,362개, connectivity, 방사 격자, 두 극점의 오각형 중심을 유지하면서 좌표만 최적화했다. 고정한 Sandia Mesquite 2.99 adapter는 2006 검증과 같은 구면 uniform size-and-shape 목적함수를 사용한다. `TShapeSizeB1`을 `PMeanP(1)`로 aggregate하고 `TrustRegion`으로 최소화했다. 최적화에는 667.3초가 걸렸고 최대 vertex 이동은 0.015512 rad였다. 좌표 SHA-256은 `4128445eff7255239ac8a300ea325e77332b091aba93fca774362ba3cc3f4e22`다.
+
+| Subdivision-8 격자 지표 | 원래 polar mesh | Mesquite | 감소 |
+|---|---:|---:|---:|
+| Primal-edge length CV | 0.065027 | 0.042253 | 35.0% |
+| Primal-face area CV | 0.086445 | 0.062416 | 27.8% |
+| Dual-cell area CV | 0.085796 | 0.062410 | 27.3% |
+| Adjacent dual-area jump RMS | 0.012193 | 0.001874 | 84.6% |
+| 최대 adjacent dual-area jump | 0.121132 | 0.075813 | 37.4% |
+| 실수 `l=1` 조화함수의 상대 Laplace 오차 | `2.4784e-5` | `2.7100e-6` | 89.1% |
+| 실수 `l=2` 조화함수의 상대 Laplace 오차 | `2.6779e-4` | `1.0758e-4` | 59.8% |
+
+이어 균일 모델 CUDA `float64` 대조 실험에서는 이 좌표만 바꿨다. 적응형 절단 범위는 21,514–21,555로 원래 격자의 21,513–21,556과 거의 같다.
+
+| Subdivision-8 균일 모델 지표 | 원래 polar mesh | Mesquite | 변화 |
+|---|---:|---:|---:|
+| Bannister MAE, 50–500 Hz | 0.01417971 c | 0.01417758 c | −0.0150% |
+| Bannister 최대 오차 | 0.02803688 c | 0.02798620 c | −0.181% |
+| Bannister MAE, 400–500 Hz | 0.01797263 c | 0.01796371 c | −0.0496% |
+| 평균 방위각 spread | 0.024223% | 0.027638% | +14.1% |
+| 최대 방위각 spread | 0.086622% | 0.088630% | +2.32% |
+
+모든 방위각에 공통인 최소, 중앙, 최대 절단 지점을 쓰면 원래 격자의 MAE는 0.0141710–0.0141796 c, Mesquite 격자는 0.0141694–0.0141775 c다. 평균 spread 범위는 각각 0.02422–0.02451%, 0.02751–0.02764%다. 따라서 미미한 위상 개선과 spread 증가는 적응형 window에서 생긴 현상이 아니다. Mesquite는 정적 격자 및 Laplace 지표를 크게 개선하지만, 이미 해상도가 높은 현재 격자에서는 균일 Maxwell 분산을 의미 있게 개선하지 못했다. 다만 같은 vertex 이동이 지형과 해안 voxelization도 바꾸므로, 균일 실험에 없는 이 효과를 확인하려면 ETOPO5 프로덕션 대조 실험이 필요하다.
+
 ## 방사 및 등방 분산 분리
 
 구현 감사 이후의 선별 실험에는 횡방향 균일 모델과 같은 방위각 12개를 사용했다. 방사 refinement factor 2는 5 km 셀 40개를 2.5 km 셀 80개로 바꾼다. CFL 조건을 지키기 위해 `Δt`도 3 μs에서 1.5 μs로 줄였다. 관측 물리시간 75.069 ms와 변환 창 98.304 ms를 유지하도록 steps와 DFT 크기를 함께 두 배로 늘렸다. 소스 중심과 폭은 물리시간 기준으로 고정했고, 모든 실행을 같은 주파수 45개에서 평가했다.
@@ -370,6 +396,7 @@ Level-9 CUDA `float64` 실행은 메모리 부족을 일으키기 전에 선별 
 | 방사 간격 5 대 2.5 km | Level 5/6 위상오차가 일관되게 개선되지 않음 | 균일 방사 세분화를 제외함 |
 | 수평 subdivision 5→6 | 두 방사 격자에서 평균 오차 53.3% / 46.5% 감소 | 조격자에서 수평 오차가 가장 크게 줄일 수 있는 항임 |
 | 수평 levels 6→8 | 평균 spread 0.4671%→0.02422%, Bannister MAE 0.03523→0.01418 c | 방향 오차는 수렴하지만 절대 불일치는 0이 아닌 극한에 접근함 |
+| Level-8 Mesquite 좌표 | Laplace `l=1` 오차 −89.1%, Bannister MAE −0.0150%, 평균 spread +14.1% | 정적 품질은 개선되지만 균일 Maxwell 분산은 의미 있게 개선되지 않음 |
 
 ## 재현 명령
 
@@ -457,6 +484,27 @@ for subdivision in 5 6 7 8; do
     --output-dir \
       "/tmp/horizontal-dispersion-level-${subdivision}-float64-cuda"
 done
+```
+
+고정된 Mesquite adapter를 build하고 subdivision-8 좌표를 최적화한 뒤, 같은 해상도의 균일 대조 실험을 실행한다.
+
+```bash
+python verification/mesh_optimization/tools/build.py \
+  --build-dir build/mesquite
+
+python -m verification.mesh_optimization \
+  --subdivision 8 --orientation polar --fixed-vertices poles \
+  --executable build/mesquite/bin/ionosphere-mesquite-optimize \
+  --movement-tolerance 1e-10 --max-iterations 200 --timeout 1800 \
+  --output /tmp/ionosphere-mesquite-level-8.npz
+
+uv run --extra pytorch --extra visualization python -m \
+  verification.directional_dispersion \
+  --subdivision 8 --steps 25023 --azimuth-step-deg 30 \
+  --mesh-coordinates /tmp/ionosphere-mesquite-level-8.npz \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --synchronize-every 1024 \
+  --output-dir /tmp/horizontal-dispersion-level-8-mesquite
 ```
 
 방향 분산 CLI는 subdivision 9를 지원한다. 이 CUDA `float64` 구성으로 실행하려면 여유 메모리가 약 24 GiB 이상인 GPU가 필요하다.
