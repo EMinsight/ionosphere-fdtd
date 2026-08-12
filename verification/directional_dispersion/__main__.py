@@ -16,6 +16,7 @@ from ionosphere_fdtd.backends import BackendUnavailableError
 from ionosphere_fdtd.solver import GeodesicFDTD
 
 from ..common.archive import save_npz_atomic
+from ..mesh_optimization.mesquite import load_optimized_mesh
 from ..simpson_taflove_2004.model import (
     PAPER_DFT_SIZE,
     PAPER_MINIMUM_SIMULATION_STEPS,
@@ -50,6 +51,11 @@ def _parser() -> argparse.ArgumentParser:
         help="override time/DFT refinement to separate temporal dispersion",
     )
     parser.add_argument("--azimuth-step-deg", type=int, default=30)
+    parser.add_argument(
+        "--mesh-coordinates",
+        type=Path,
+        help="validated NPZ coordinates produced by verification.mesh_optimization",
+    )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
     parser.add_argument(
@@ -89,6 +95,17 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--azimuth-step-deg must be a divisor of 360 in [1, 180]")
     azimuths = np.arange(0.0, 360.0, args.azimuth_step_deg)
     started = time.perf_counter()
+    optimized_mesh = None
+    mesh_metadata = None
+    if args.mesh_coordinates is not None:
+        try:
+            optimized_mesh, mesh_metadata = load_optimized_mesh(
+                args.mesh_coordinates,
+                expected_subdivision=args.subdivision,
+                expected_orientation="polar",
+            )
+        except (OSError, KeyError, ValueError) as error:
+            raise SystemExit(str(error)) from error
     try:
         simulation = create_validation_simulation(
             subdivision=args.subdivision,
@@ -100,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             dtype=args.dtype,
             compile_step=args.torch_compile,
             torch_threads=args.torch_threads,
+            mesh=optimized_mesh,
         )
     except (BackendUnavailableError, ImportError, ValueError) as error:
         raise SystemExit(str(error)) from error
@@ -107,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
         f"grid={simulation.mesh.n_vertices:,}x{simulation.config.radial_cells} "
         f"azimuths={len(azimuths)} backend={simulation.backend.name} "
         f"device={simulation.backend.device} dtype={simulation.backend.dtype_name} "
+        f"mesh_coordinates={args.mesh_coordinates or 'generated'} "
         f"dt={simulation.time_step_s:.3e}s",
         flush=True,
     )
@@ -149,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         trace_path,
         csv_path,
         figure_path,
+        mesh_metadata,
     )
     print(f"traces: {trace_path}")
     print(f"csv: {csv_path}")
@@ -169,6 +189,7 @@ def _write_report(
     trace_path: Path,
     csv_path: Path,
     figure_path: Path,
+    mesh_metadata: Mapping[str, object] | None,
 ) -> Path:
     time_refinement = _time_refinement(args)
     output = args.output_dir / "verification-report.md"
@@ -176,6 +197,14 @@ def _write_report(
         f"| `{name}` | {value:.9g} |" for name, value in metrics.items()
     )
     cutoff_values = tuple(int(value) for value in truncations.values())
+    mesh_rows = "| mesh coordinates | generated recursive grid |"
+    if mesh_metadata is not None:
+        mesh_rows = (
+            f"| mesh coordinates | `{args.mesh_coordinates}` |\n"
+            "| mesh optimizer | `Sandia Mesquite` |\n"
+            f"| mesh objective | `{mesh_metadata['optimizer_reported_objective']}` |\n"
+            f"| mesh coordinate SHA-256 | `{mesh_metadata['vertices_sha256']}` |"
+        )
     report = f"""# Geodesic grid directional-dispersion measurement
 
 Generated: {datetime.now().astimezone().isoformat(timespec="seconds")}
@@ -193,6 +222,7 @@ Generated: {datetime.now().astimezone().isoformat(timespec="seconds")}
 | Git revision | `{_git_revision()}` |
 | subdivision | {args.subdivision} |
 | surface cells | {simulation.mesh.n_vertices:,} |
+{mesh_rows}
 | radial cells | {simulation.config.radial_cells} |
 | radial spacing | {simulation.radial_steps_m[0] / 1_000.0:g} km |
 | time step | {simulation.time_step_s:.9g} s |
@@ -252,6 +282,8 @@ def _reproduction_command(args: argparse.Namespace) -> str:
     ]
     if args.time_refinement is not None:
         parts.append(f"--time-refinement {args.time_refinement}")
+    if args.mesh_coordinates is not None:
+        parts.append(f"--mesh-coordinates {shlex.quote(str(args.mesh_coordinates))}")
     if args.torch_threads is not None:
         parts.append(f"--torch-threads {args.torch_threads}")
     return f" {chr(92)}\n  ".join(parts)

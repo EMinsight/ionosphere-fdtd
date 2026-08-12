@@ -42,6 +42,13 @@ def test_directional_cli_accepts_level_nine_for_large_gpus() -> None:
     assert args.subdivision == 9
 
 
+def test_directional_cli_accepts_optimized_mesh_coordinates(tmp_path) -> None:
+    coordinates = tmp_path / "mesh.npz"
+    args = _parser().parse_args(("--mesh-coordinates", str(coordinates)))
+
+    assert args.mesh_coordinates == coordinates
+
+
 def test_cardinal_destinations_follow_requested_great_circle_arcs() -> None:
     source = geographic_direction(0.0, -47.0)
     north = destination_direction(source, 0.0, 45.0)
