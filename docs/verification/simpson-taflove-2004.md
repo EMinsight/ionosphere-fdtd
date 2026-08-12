@@ -74,10 +74,13 @@ receiver-support cell whose ETOPO5 surface is 30 m above sea level even though
 the exact B coordinate is 207 m below sea level. Clamping positive relief only
 as a diagnostic restores the B/B′ pair, which identifies coarse horizontal and
 vertical material aliasing at the coastline. This is evidence for conservative
-material-volume averaging, not justification for removing real topography.
-The subdivision-8 B support is already 88.9% ocean by interpolation weight, so
-this diagnosis identifies an important contributor but does not by itself
-resolve the final high-frequency Figure 8 residual.
+material integration, not justification for removing real topography. The
+resulting dual-cell area average was implemented and tested at both
+subdivisions 5 and 8. It reduces point-sampling sensitivity but does not restore
+the weak level-5 B receiver and worsens the level-8 A–B maximum attenuation
+error from 2.538 to 5.339 dB/Mm. The subdivision-8 B support is already 88.9%
+ocean by interpolation weight, so coastline aliasing is not the dominant cause
+of the final high-frequency Figure 8 residual.
 
 ## Scope and acceptance criteria
 
@@ -415,9 +418,63 @@ explain the greater east-path attenuation. The evidence supports two separate
 remaining effects: point-sampled topography can overstate the influence of
 coastal land in a 5 km radial cell, while the 400–500 Hz residual also contains
 the independently measured isotropic spatial dispersion and differences from
-the paper's grid and material data. The appropriate implementation experiment
-is conservative or fractional material averaging over each `Er` radial
-control volume while preserving the actual relief.
+the paper's grid and material data.
+
+### Conservative dual-cell material experiment
+
+An opt-in `dual-cell` support now area-averages `Er` material properties over
+the actual polygon associated with each radial degree of freedom. Every dual
+cell is partitioned into five or six disjoint spherical wedges. The method
+samples relief once at each normalized wedge centroid and uses the exact wedge
+solid angle as its weight. The weights close to one within `2e-12`, and a
+uniform-material regression is identical to point support. This is a
+conservative first-order quadrature, not a conformal split of the field degree
+of freedom at the coastline.
+
+At subdivision 5, only 15.72% of the dominant B cell's wedge area is strictly
+above sea level. Area averaging therefore changes its sea-level material from
+pure rock (`0.002 S/m`, `εr = 10`) to `3.143e-4 S/m`, `εr = 2.415` without
+altering the relief. That reduction is still strongly conductive at the
+3 μs time step and cannot represent separate land and ocean fields in one
+`Er` degree of freedom.
+
+| Subdivision-5 support | B / B′ negative peak | Half-path east/west RMS | Global sampled loss | East/west corridor loss |
+|---|---:|---:|---:|---:|
+| Point `Er`, point `Et` | −0.0402 / −0.4065 μV/m | 8.649 | 0.61005 mJ | 1.0279 |
+| Dual-cell `Er`, point `Et` | −0.0397 / −0.4043 μV/m | 8.716 | 0.60968 mJ | 1.0009 |
+| Dual-cell `Er`, fractional edge-diamond `Et` | −0.0343 / −0.3347 μV/m | 8.637 | 1.54744 mJ | 1.0760 |
+
+The `Er` area average makes pathwise loss more symmetric but leaves the B
+suppression unchanged. Adding the existing fractional radial-interface and
+edge-diamond `Et` averages reduces both half-path amplitudes and more than
+doubles sampled global loss, so that combination is also rejected as a
+Figure 7 correction.
+
+The complete subdivision-8 CUDA `float64` control retained point `Et` support
+and changed only `Er` from point to dual-cell averaging. Its dominant B support
+cell, carrying 88.8889% receiver weight, has six ocean wedge samples; the
+remaining 11.1111%-weight cell is 68.11% land by wedge area. The 35,000-step
+run completed in 2,713.7 seconds with finite fields throughout.
+
+| Subdivision-8 metric | Point `Er` production | Dual-cell `Er` control | Change |
+|---|---:|---:|---:|
+| A/A′ relative RMS | 37.895% | 38.247% | worse |
+| B/B′ relative RMS | 30.458% | 30.369% | negligible improvement |
+| A / A′ peak step | 7,491 / 7,721 | 7,492 / 7,724 | +1 / +3 steps |
+| B / B′ peak step | 14,803 / 14,667 | 14,806 / 14,672 | +3 / +5 steps |
+| A–B attenuation MAE / maximum | 1.104 / 2.538 dB/Mm | 1.160 / 5.339 dB/Mm | worse |
+| A′–B′ attenuation MAE / maximum | 0.242 / 3.258 dB/Mm | 0.235 / 1.591 dB/Mm | better, still FAIL |
+
+The west attenuation maximum improves but remains above its 1.0 dB/Mm limit,
+while the east maximum more than doubles. Figure 7 separation is effectively
+unchanged. The dual-cell method is therefore retained as an explicit material
+integration option but is not adopted as the production verification default.
+The negative result rules out point-to-area coefficient averaging as the
+missing Figure 7/8 correction. A true coastal subcell method would need
+separate field freedom on the two sides of the coastline; for the final
+level-8 frequency residual, reducing the independently observed isotropic
+spatial dispersion has higher priority because the dominant B support is
+already entirely ocean.
 
 ## Staggered source-placement check
 
@@ -504,6 +561,8 @@ anisotropy alone cannot explain the full high-frequency mismatch.
 | Logged vs unlogged CUDA compiled | Bitwise-identical fields and traces | TensorBoard observation is non-perturbing |
 | ETOPO5 east/west corridor loss | Ratio 1.0279 despite tenfold B suppression | Bulk east-path conductive loss is not the cause |
 | Positive-relief clamp at level 5 | B/B′ restored to −0.414/−0.414 μV/m | Coarse coastline material aliasing is confirmed |
+| Dual-cell `Er` at level 5 | B/B′ remains −0.040/−0.404 μV/m | Area averaging cannot resolve separate coastal fields |
+| Dual-cell `Er` at level 8 | East/west maxima 5.339/1.591 dB/Mm | Overall Figure 8 correction is rejected |
 
 ## Reproduction commands
 
@@ -548,6 +607,7 @@ uv run --with tensorboard --extra pytorch --extra visualization python -m \
   verification.simpson_taflove_2004 \
   --subdivision 5 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --radial-support dual-cell \
   --deep-lithosphere-resistivity-ohm-m 500 \
   --backend torch --device cuda:0 --dtype float64 --torch-compile \
   --dft-window adaptive \
@@ -559,6 +619,25 @@ uv run --with tensorboard --extra pytorch --extra visualization python -m \
 
 uv run --with tensorboard tensorboard \
   --logdir /tmp/ionosphere-diagnostics
+```
+
+Run the complete subdivision-8 dual-cell control by changing the subdivision,
+sampling cadence, and output locations:
+
+```bash
+uv run --with tensorboard --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
+  --subdivision 8 --mesh-orientation polar --steps 35000 \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --radial-support dual-cell \
+  --deep-lithosphere-resistivity-ohm-m 500 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
+  --diagnostics-every 1024 --synchronize-every 1024 \
+  --tensorboard-log-dir /tmp/ionosphere-diagnostics/st2004-l8-dual/events \
+  --output-dir /tmp/ionosphere-diagnostics/st2004-l8-dual
 ```
 
 Regenerate the directional-dispersion sweep without changing the geodesic
@@ -601,7 +680,9 @@ The implementation passes structural and qualitative checks:
 - field-energy and conductive-loss localization exclude numerical instability
   and excessive bulk east-path absorption;
 - a controlled topography experiment identifies coastline material aliasing
-  as the direct cause of the extreme coarse-grid B suppression.
+  as the direct cause of the extreme coarse-grid B suppression;
+- conservative dual-cell `Er` averaging reduces point sensitivity but does not
+  repair that coarse-grid receiver or the final level-8 attenuation residual.
 
 It fails exact Figure 7 reproduction because the reconstructed east/west peak
 ordering is reversed and the half-path separation is excessive. It also fails
@@ -613,8 +694,9 @@ finite 5 km radial discretization, point-sampled coastal material volumes,
 unavailable local crustal structures from the conceptual Hermance section,
 and the unavoidable difference between the paper's adaptive merged
 latitude–longitude grid and this implementation's geodesic dual grid. The
-coarse-grid receiver anomaly is now localized, but the subdivision-8 support
-geometry shows that it cannot account for the complete high-frequency
+coarse-grid receiver anomaly is now localized. Both its subdivision-8 support
+geometry and the completed dual-cell control show that simple material
+coefficient averaging cannot account for the complete high-frequency
 attenuation residual.
 
 This result must therefore be described as a complete-time, morphologically
