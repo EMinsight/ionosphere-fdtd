@@ -36,6 +36,12 @@ def test_directional_cli_can_separate_time_refinement() -> None:
     assert _time_refinement(args) == 2
 
 
+def test_directional_cli_accepts_level_nine_for_large_gpus() -> None:
+    args = _parser().parse_args(("--subdivision", "9"))
+
+    assert args.subdivision == 9
+
+
 def test_cardinal_destinations_follow_requested_great_circle_arcs() -> None:
     source = geographic_direction(0.0, -47.0)
     north = destination_direction(source, 0.0, 45.0)

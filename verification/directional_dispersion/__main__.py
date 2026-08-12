@@ -34,7 +34,7 @@ from .model import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--subdivision", type=int, choices=range(0, 9), default=7)
+    parser.add_argument("--subdivision", type=int, choices=range(0, 10), default=7)
     parser.add_argument("--steps", type=int)
     parser.add_argument(
         "--radial-refinement",
