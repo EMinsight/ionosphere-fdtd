@@ -48,6 +48,8 @@ Figure 8에서 동일한 트레이스로 계산한 평균 절대 감쇠 오차�
 
 수평 level 7과 8을 직접 실행한 결과, 평균 방위각 spread는 0.1157%에서 0.02422%로 줄어 약 2차 방향 수렴을 확인했다. 그러나 Bannister MAE는 0.01870 c에서 0.01418 c로 더 느리게 감소했다. 세 격자 외삽은 level-9 MAE를 0.01294 c, 수평 연속격자 극한을 0.01247 c로 예측한다. Level 9는 상주 배열의 이론적 하한만 13.40 GiB여서 설치된 12 GiB GPU에 들어가지 않는다. Level-8 실측 피크로부터 예상한 필요량은 약 21.3 GiB다. 따라서 격자 세분화는 방향 오차와 위상 불일치의 일부를 고치는 데 효과가 있지만, 논문과의 불일치 전체를 설명한다고 볼 근거는 아직 없다.
 
+같은 revision의 subdivision-8에서 Mesquite ETOPO5 대조 실험을 실행해 지형 voxel 효과를 따로 확인했다. Mesquite 좌표에서는 약한 B 피크의 크기가 11.5% 커지고 1/2 경로의 동서 RMS 차이가 30.46%에서 21.20%로 줄었다. A–B 감쇠 MAE와 최댓값도 각각 17.2%와 13.3% 감소했다. 그러나 A′–B′ 값은 각각 1.9%와 2.9% 악화됐다. 두 그림 모두 합격 기준을 충족하지 못했고, 두 동서 피크 크기의 순서도 여전히 반대다. 따라서 최적화 좌표는 프로덕션 결과에 적용하지 않고 재현 가능한 대조 조건으로 남긴다.
+
 ## 범위와 합격 기준
 
 대상 연구는 다음과 같다.
@@ -352,6 +354,22 @@ Subdivision-8 polar grid의 셀 655,362개, connectivity, 방사 격자, 두 극
 
 모든 방위각에 공통인 최소, 중앙, 최대 절단 지점을 쓰면 원래 격자의 MAE는 0.0141710–0.0141796 c, Mesquite 격자는 0.0141694–0.0141775 c다. 평균 spread 범위는 각각 0.02422–0.02451%, 0.02751–0.02764%다. 따라서 미미한 위상 개선과 spread 증가는 적응형 window에서 생긴 현상이 아니다. Mesquite는 정적 격자 및 Laplace 지표를 크게 개선하지만, 이미 해상도가 높은 현재 격자에서는 균일 Maxwell 분산을 의미 있게 개선하지 못했다. 다만 같은 vertex 이동이 지형과 해안 voxelization도 바꾸므로, 균일 실험에 없는 이 효과를 확인하려면 ETOPO5 프로덕션 대조 실험이 필요하다.
 
+ETOPO5 대조 실험은 현재 revision에서 같은 GPU로 두 번 실행했으며 mesh 좌표만 바꿨다. Native trace SHA-256 `147b4756b11c25f11b63825a381afe9fc17e747dbc2a33910c7a36060946d5e1`은 보관한 프로덕션 trace와 정확히 일치했다. 따라서 중간 solver 변경은 이 비교에 영향을 주지 않는다. Mesquite trace SHA-256은 `33df8aed8721676e9dc9ed7ad444182715e49174b7646499b067e1f162ac502a`다.
+
+| Subdivision-8 ETOPO5 지표 | Native polar mesh | Mesquite | 변화 |
+|---|---:|---:|---:|
+| A/A′ 상대 RMS | 37.895% | 37.826% | 상대 −0.18% |
+| B/B′ 상대 RMS | 30.458% | 21.196% | 상대 −30.4% |
+| A / A′ 피크 step | 7,491 / 7,721 | 7,491 / 7,720 | 0 / −1 steps |
+| B / B′ 피크 step | 14,803 / 14,667 | 14,797 / 14,666 | −6 / −1 steps |
+| A / A′ 피크 | −1.1431 / −1.1852 μV/m | −1.1435 / −1.1840 μV/m | 거의 같음 |
+| B / B′ 피크 | −0.3162 / −0.4186 μV/m | −0.3524 / −0.4186 μV/m | B 크기 +11.5% |
+| A–B 감쇠 MAE / 최대 | 1.104 / 2.538 dB/Mm | 0.914 / 2.201 dB/Mm | −17.2% / −13.3% |
+| A′–B′ 감쇠 MAE / 최대 | 0.242 / 3.258 dB/Mm | 0.247 / 3.351 dB/Mm | +1.9% / +2.9% |
+| FDTD 실행 시간 | 2,134.6 s | 2,136.3 s | 비슷함 |
+
+네 trace 전체의 상대 RMS 변화는 2.94%지만 변화는 B에 집중된다. A, A′, B′는 각각 0.073%, 0.154%, 0.052%만 달라졌지만 B는 11.46% 변했다. 균일 모델에서 차이가 거의 없었다는 사실까지 고려하면, 이 개선은 Maxwell 분산 감소가 아니라 동쪽 1/2 경로 수신점 부근의 ETOPO5 지형·해안 voxelization 변화에서 나왔다. 동서 피크 크기 순서가 두 쌍 모두 여전히 반대이므로 Figure 7은 FAIL이다. Mesquite의 Figure 8 최대오차도 2.201 및 3.351 dB/Mm로 0.5 및 1.0 dB/Mm 한계를 넘으므로 FAIL이다. 한 경로는 개선되고 다른 경로는 악화됐기 때문에 native polar grid를 기준 프로덕션 결과로 유지하며 출판 플롯 비교 이미지도 교체하지 않는다.
+
 ## 방사 및 등방 분산 분리
 
 구현 감사 이후의 선별 실험에는 횡방향 균일 모델과 같은 방위각 12개를 사용했다. 방사 refinement factor 2는 5 km 셀 40개를 2.5 km 셀 80개로 바꾼다. CFL 조건을 지키기 위해 `Δt`도 3 μs에서 1.5 μs로 줄였다. 관측 물리시간 75.069 ms와 변환 창 98.304 ms를 유지하도록 steps와 DFT 크기를 함께 두 배로 늘렸다. 소스 중심과 폭은 물리시간 기준으로 고정했고, 모든 실행을 같은 주파수 45개에서 평가했다.
@@ -397,6 +415,7 @@ Subdivision-8 polar grid의 셀 655,362개, connectivity, 방사 격자, 두 극
 | 수평 subdivision 5→6 | 두 방사 격자에서 평균 오차 53.3% / 46.5% 감소 | 조격자에서 수평 오차가 가장 크게 줄일 수 있는 항임 |
 | 수평 levels 6→8 | 평균 spread 0.4671%→0.02422%, Bannister MAE 0.03523→0.01418 c | 방향 오차는 수렴하지만 절대 불일치는 0이 아닌 극한에 접근함 |
 | Level-8 Mesquite 좌표 | Laplace `l=1` 오차 −89.1%, Bannister MAE −0.0150%, 평균 spread +14.1% | 정적 품질은 개선되지만 균일 Maxwell 분산은 의미 있게 개선되지 않음 |
+| Level-8 Mesquite ETOPO5 | B 크기 +11.5%, 동쪽 최대 −13.3%, 서쪽 최대 +2.9% | 국소 voxelization은 개선되지만 Figure 7–8 전체 보정안에서는 제외함 |
 
 ## 재현 명령
 
@@ -507,6 +526,23 @@ uv run --extra pytorch --extra visualization python -m \
   --output-dir /tmp/horizontal-dispersion-level-8-mesquite
 ```
 
+같은 좌표로 ETOPO5 프로덕션 대조 실험을 실행한다.
+
+```bash
+uv run --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
+  --subdivision 8 --mesh-orientation polar --steps 35000 \
+  --mesh-coordinates /tmp/ionosphere-mesquite-level-8.npz \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --deep-lithosphere-resistivity-ohm-m 500 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
+  --synchronize-every 1024 \
+  --output-dir /tmp/st2004-level-8-mesquite-etopo5-35000
+```
+
 방향 분산 CLI는 subdivision 9를 지원한다. 이 CUDA `float64` 구성으로 실행하려면 여유 메모리가 약 24 GiB 이상인 GPU가 필요하다.
 
 ```bash
@@ -565,7 +601,10 @@ uv run --extra pytorch --extra visualization python -m \
 - 보존적 dual-cell `Er` 평균은 점 표본 민감도를 줄이지만 조격자 수신값과 최종 level-8 감쇠 잔차를 고치지 못한다.
 - 방사·시간 대조 실험에서 시간 적분과 균일 방사 세분화는 효과적인 보정안에서 제외했고, 수평 세분화가 일관되게 가장 큰 위상오차 감소를 보였다.
 - Levels 7–8 직접 실행에서 방향 오차가 약 2차로 수렴했지만, 세 격자 외삽에서는 수평 연속격자 극한에도 Bannister 오차가 약 0.0125 c 남았다.
+- 같은 해상도의 Mesquite 좌표는 정적 격자 품질과 동쪽 경로의 국소 ETOPO5 수신값을 개선하지만, 균일 Maxwell 분산과 양쪽 감쇠 경로를 함께 개선하지는 못한다.
 
 복원한 동/서 피크 순서가 반대이고 1/2 경로 분리가 과도하므로 Figure 7의 정확한 재현에는 실패한다. 또한 subdivision 8의 최대 감쇠 오차가 2.538 및 3.258 dB/Mm로 요구 한계 0.5 및 1.0 dB/Mm를 넘으므로 Figure 8도 실패한다. 잔차는 400–500 Hz에서 지배적이다. 가능한 원인은 등방성 고주파 공간 분산, 유한한 5 km 방사 이산화, 점 표본화한 해안 물질 체적, Hermance 개념 단면에서 사용할 수 없는 국소 지각 구조, 그리고 논문의 adaptive merged latitude–longitude grid와 현재 구현의 geodesic dual grid 사이의 불가피한 차이다. 조격자 수신점 이상은 이제 위치를 특정했다. Subdivision-8 지지 기하와 완료한 dual-cell 대조 실험을 함께 보면, 단순한 물질 계수 평균으로는 고주파 감쇠 잔차 전체를 설명할 수 없다. 방사 선별 실험에서도 5 km 간격을 절반으로 줄인 결과가 Bannister 기준으로 일관되게 수렴하지 않았고 후기 파형 스펙트럼의 강건성도 낮아졌다. 수평 세분화는 공간 분산을 크게 줄이지만 Bannister 기준의 개선 폭은 점차 작아진다. 따라서 남은 불일치를 모두 격자 해상도 탓으로 돌릴 수 없으며, 유한 방사 격자와 전리층 및 기준 모델의 가정도 함께 점검해야 한다.
+
+Mesquite 대조 실험은 좌표 최적화가 국소적으로 aliasing된 지형 voxel을 개선할 수 있지만, 분산이나 감쇠를 전반적으로 보정하지는 못한다는 점도 확인했다.
 
 따라서 이 결과는 Figure 7의 전체 시간 범위를 포괄하며 형태는 올바르지만 상대 트레이스 일치에는 실패한 복원과, Figure 8의 엄격한 지점별 재현 실패로 기술해야 한다. Figures 7과 8의 정확한 재현에 성공했다고 기술해서는 안 된다.

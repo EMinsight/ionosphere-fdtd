@@ -104,6 +104,15 @@ refinement is therefore an effective correction for anisotropy and part of the
 phase mismatch, but it is not presently supported as a complete explanation
 of the paper mismatch.
 
+A same-revision subdivision-8 Mesquite ETOPO5 control isolates a separate
+terrain-voxel effect. Mesquite raises the weak B peak magnitude by 11.5% and
+reduces the half-path east–west RMS separation from 30.46% to 21.20%. It also
+reduces the A–B attenuation MAE and maximum by 17.2% and 13.3%, respectively,
+but worsens the A′–B′ values by 1.9% and 2.9%. Both figures still fail their
+acceptance criteria, and both east/west peak-magnitude orderings remain
+reversed. The optimized coordinates are therefore retained as a reproducible
+control rather than adopted for the production result.
+
 ## Scope and acceptance criteria
 
 The target study is:
@@ -646,6 +655,36 @@ dispersion. An ETOPO5 production control remains necessary because moving the
 same vertices also changes terrain and coastline voxelization, an effect not
 present in this uniform test.
 
+The ETOPO5 control used two current-revision runs on the same GPU and changed
+only the mesh coordinates. The native trace SHA-256,
+`147b4756b11c25f11b63825a381afe9fc17e747dbc2a33910c7a36060946d5e1`,
+exactly matches the archived production trace, excluding intervening solver
+changes from the comparison. The Mesquite trace SHA-256 is
+`33df8aed8721676e9dc9ed7ad444182715e49174b7646499b067e1f162ac502a`.
+
+| Subdivision-8 ETOPO5 metric | Native polar mesh | Mesquite | Change |
+|---|---:|---:|---:|
+| A/A′ relative RMS | 37.895% | 37.826% | −0.18% relative |
+| B/B′ relative RMS | 30.458% | 21.196% | −30.4% relative |
+| A / A′ peak step | 7,491 / 7,721 | 7,491 / 7,720 | 0 / −1 steps |
+| B / B′ peak step | 14,803 / 14,667 | 14,797 / 14,666 | −6 / −1 steps |
+| A / A′ peak | −1.1431 / −1.1852 μV/m | −1.1435 / −1.1840 μV/m | nearly unchanged |
+| B / B′ peak | −0.3162 / −0.4186 μV/m | −0.3524 / −0.4186 μV/m | B magnitude +11.5% |
+| A–B attenuation MAE / maximum | 1.104 / 2.538 dB/Mm | 0.914 / 2.201 dB/Mm | −17.2% / −13.3% |
+| A′–B′ attenuation MAE / maximum | 0.242 / 3.258 dB/Mm | 0.247 / 3.351 dB/Mm | +1.9% / +2.9% |
+| FDTD wall time | 2,134.6 s | 2,136.3 s | comparable |
+
+The full four-trace change is 2.94% relative RMS, but it is localized: A, A′,
+and B′ change by only 0.073%, 0.154%, and 0.052%, while B changes by 11.46%.
+Together with the negligible uniform-model effect, this identifies changed
+ETOPO5 terrain/coastline voxelization near the east half-path receiver rather
+than reduced Maxwell dispersion. Figure 7 remains a FAIL because both
+east/west peak-magnitude orderings are still reversed. Figure 8 also remains a
+FAIL: the Mesquite maxima, 2.201 and 3.351 dB/Mm, exceed the 0.5 and 1.0 dB/Mm
+limits. Because one path improves and the other worsens, the native polar grid
+remains the authoritative production result and the published-comparison
+images are not replaced.
+
 ## Radial and isotropic-dispersion separation
 
 The post-audit screen used the laterally uniform model and the same twelve
@@ -716,6 +755,7 @@ scalar wave-speed rescaling would also fail to match the frequency dependence.
 | Horizontal level 5→6 refinement | Mean error falls 53.3% / 46.5% on the two radial grids | Horizontal error is the dominant reducible term on coarse grids |
 | Horizontal levels 6→8 | Mean spread 0.4671%→0.02422%; Bannister MAE 0.03523→0.01418 c | Anisotropy converges; absolute mismatch approaches a nonzero limit |
 | Level-8 Mesquite coordinates | Laplace `l=1` error −89.1%; Bannister MAE −0.0150%; mean spread +14.1% | Static quality improves, but uniform Maxwell dispersion does not materially improve |
+| Level-8 Mesquite ETOPO5 | B magnitude +11.5%; east max −13.3%; west max +2.9% | Local voxelization improves, but the full Figure 7–8 correction is rejected |
 
 ## Reproduction commands
 
@@ -831,6 +871,23 @@ uv run --extra pytorch --extra visualization python -m \
   --output-dir /tmp/horizontal-dispersion-level-8-mesquite
 ```
 
+Run the same-coordinate ETOPO5 production control:
+
+```bash
+uv run --extra pytorch --extra visualization python -m \
+  verification.simpson_taflove_2004 \
+  --subdivision 8 --mesh-orientation polar --steps 35000 \
+  --mesh-coordinates /tmp/ionosphere-mesquite-level-8.npz \
+  --material etopo5 --etopo5-path data/ETOPO5.DAT \
+  --deep-lithosphere-resistivity-ohm-m 500 \
+  --backend torch --device cuda:0 --dtype float64 --torch-compile \
+  --dft-window adaptive \
+  --ionosphere-reference-height-km 70 \
+  --ionosphere-scale-height-km 3.3333333333333335 \
+  --synchronize-every 1024 \
+  --output-dir /tmp/st2004-level-8-mesquite-etopo5-35000
+```
+
 Subdivision 9 is accepted by the CLI but requires an accelerator with at least
 approximately 24 GiB free for this CUDA `float64` configuration:
 
@@ -906,6 +963,9 @@ The implementation passes structural and qualitative checks:
 - direct levels 7–8 show approximately second-order directional convergence,
   while three-grid extrapolation leaves approximately 0.0125 c of Bannister
   mismatch in the horizontal-continuum limit.
+- same-resolution Mesquite coordinates improve static mesh quality and the
+  local east-path ETOPO5 receiver, but do not improve uniform Maxwell
+  dispersion or both attenuation paths together.
 
 It fails exact Figure 7 reproduction because the reconstructed east/west peak
 ordering is reversed and the half-path separation is excessive. It also fails
@@ -926,6 +986,9 @@ late-window spectrum. Horizontal refinement substantially reduces spatial
 dispersion, but its diminishing Bannister improvement indicates that the
 remaining mismatch must also be sought in the finite radial, ionosphere, and
 reference-model assumptions rather than assigned wholly to grid resolution.
+The Mesquite control further shows that coordinate optimization can improve a
+locally aliased terrain voxel without providing a general dispersion or
+attenuation correction.
 
 This result must therefore be described as a complete-time, morphologically
 correct Figure 7 reconstruction with failed relative-trace agreement, together
