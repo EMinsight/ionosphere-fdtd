@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from verification.directional_dispersion.__main__ import _parser
 from verification.directional_dispersion.model import (
     compute_directional_phase_velocity,
     destination_direction,
@@ -14,6 +15,13 @@ from verification.simpson_taflove_2004.model import (
     create_validation_simulation,
 )
 from ionosphere_fdtd.sources import geographic_direction
+
+
+def test_directional_cli_exposes_coupled_radial_refinement() -> None:
+    args = _parser().parse_args(("--radial-refinement", "2"))
+
+    assert args.radial_refinement == 2
+    assert args.steps is None
 
 
 def test_cardinal_destinations_follow_requested_great_circle_arcs() -> None:

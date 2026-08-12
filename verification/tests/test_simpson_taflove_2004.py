@@ -132,6 +132,25 @@ def test_validation_setup_can_retain_native_orientation() -> None:
     assert simulation.mesh.vertex_degree[south] == 6
 
 
+def test_validation_setup_supports_cfl_safe_radial_refinement() -> None:
+    simulation = create_validation_simulation(
+        subdivision=1,
+        radial_cells=80,
+        time_step_s=0.5 * PAPER_TIME_STEP_S,
+        material_model="uniform",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+    )
+
+    assert simulation.config.radial_cells == 80
+    np.testing.assert_allclose(simulation.radial_steps_m, 2_500.0)
+    assert simulation.time_step_s == pytest.approx(1.5e-6)
+    assert simulation.source.center_time_s == pytest.approx(
+        PAPER_SOURCE_CENTER_STEPS * PAPER_TIME_STEP_S
+    )
+
+
 def test_equatorial_diagnostic_corridors_are_disjoint_and_symmetric() -> None:
     simulation = create_validation_simulation(
         subdivision=3,
@@ -153,6 +172,8 @@ def test_equatorial_diagnostic_corridors_are_disjoint_and_symmetric() -> None:
         assert np.count_nonzero(east) == pytest.approx(
             np.count_nonzero(west), rel=0.12
         )
+
+
 def test_validation_setup_accepts_external_mesh() -> None:
     mesh = build_geodesic_mesh(1, optimization_steps=1)
     simulation = create_validation_simulation(

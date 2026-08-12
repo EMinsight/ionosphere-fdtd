@@ -194,6 +194,8 @@ def _natural_earth_geometry() -> tuple[Any, Any]:
 def create_validation_simulation(
     *,
     subdivision: int = 7,
+    radial_cells: int = PAPER_RADIAL_CELLS,
+    time_step_s: float = PAPER_TIME_STEP_S,
     material_model: str = "natural-earth",
     backend: str = "torch",
     device: str = "auto",
@@ -261,11 +263,11 @@ def create_validation_simulation(
     return GeodesicFDTD(
         config=SimulationConfig(
             subdivision=subdivision,
-            radial_cells=PAPER_RADIAL_CELLS,
+            radial_cells=radial_cells,
             minimum_altitude_m=-100_000.0,
             maximum_altitude_m=100_000.0,
             courant_factor=0.4,
-            time_step_s=PAPER_TIME_STEP_S,
+            time_step_s=time_step_s,
             mesh_orientation=mesh_orientation,
             mesh_optimization_steps=mesh_optimization_steps,
             radial_material_support=radial_material_support,

@@ -17,7 +17,10 @@ from ionosphere_fdtd.solver import GeodesicFDTD
 
 from ..common.archive import save_npz_atomic
 from ..simpson_taflove_2004.model import (
+    PAPER_DFT_SIZE,
     PAPER_MINIMUM_SIMULATION_STEPS,
+    PAPER_RADIAL_CELLS,
+    PAPER_TIME_STEP_S,
     create_validation_simulation,
 )
 from .model import (
@@ -32,7 +35,14 @@ from .model import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--subdivision", type=int, choices=range(0, 9), default=7)
-    parser.add_argument("--steps", type=int, default=PAPER_MINIMUM_SIMULATION_STEPS)
+    parser.add_argument("--steps", type=int)
+    parser.add_argument(
+        "--radial-refinement",
+        type=int,
+        choices=range(1, 9),
+        default=1,
+        help="refine radial spacing and time step by the same integer factor",
+    )
     parser.add_argument("--azimuth-step-deg", type=int, default=30)
     parser.add_argument("--backend", choices=("numpy", "torch"), default="torch")
     parser.add_argument("--device", default="auto")
@@ -54,9 +64,13 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.steps < PAPER_MINIMUM_SIMULATION_STEPS:
+    minimum_steps = PAPER_MINIMUM_SIMULATION_STEPS * args.radial_refinement
+    if args.steps is None:
+        args.steps = minimum_steps
+    if args.steps < minimum_steps:
         raise SystemExit(
-            f"--steps must be at least {PAPER_MINIMUM_SIMULATION_STEPS}"
+            f"--steps must be at least {minimum_steps} for radial refinement "
+            f"{args.radial_refinement}"
         )
     if not 1 <= args.azimuth_step_deg <= 180 or 360 % args.azimuth_step_deg:
         raise SystemExit("--azimuth-step-deg must be a divisor of 360 in [1, 180]")
@@ -65,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         simulation = create_validation_simulation(
             subdivision=args.subdivision,
+            radial_cells=PAPER_RADIAL_CELLS * args.radial_refinement,
+            time_step_s=PAPER_TIME_STEP_S / args.radial_refinement,
             material_model="uniform",
             backend=args.backend,
             device=args.device,
@@ -77,7 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"grid={simulation.mesh.n_vertices:,}x{simulation.config.radial_cells} "
         f"azimuths={len(azimuths)} backend={simulation.backend.name} "
-        f"device={simulation.backend.device} dtype={simulation.backend.dtype_name}",
+        f"device={simulation.backend.device} dtype={simulation.backend.dtype_name} "
+        f"dt={simulation.time_step_s:.3e}s",
         flush=True,
     )
     traces = record_directional_traces(
@@ -90,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         traces,
         azimuths,
         time_step_s=simulation.time_step_s,
+        n_fft=PAPER_DFT_SIZE * args.radial_refinement,
     )
     metrics = directional_dispersion_metrics(curves)
     elapsed_s = time.perf_counter() - started
@@ -162,6 +180,9 @@ Generated: {datetime.now().astimezone().isoformat(timespec="seconds")}
 | subdivision | {args.subdivision} |
 | surface cells | {simulation.mesh.n_vertices:,} |
 | radial cells | {simulation.config.radial_cells} |
+| radial spacing | {simulation.radial_steps_m[0] / 1_000.0:g} km |
+| time step | {simulation.time_step_s:.9g} s |
+| DFT size | {PAPER_DFT_SIZE * args.radial_refinement:,} |
 | material | `uniform` |
 | backend | `{simulation.backend.name}` |
 | device | `{simulation.backend.device}` |
@@ -204,6 +225,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
         "verification.directional_dispersion",
         f"--subdivision {args.subdivision}",
         f"--steps {args.steps}",
+        f"--radial-refinement {args.radial_refinement}",
         f"--azimuth-step-deg {args.azimuth_step_deg}",
         f"--backend {shlex.quote(args.backend)}",
         f"--device {shlex.quote(args.device)}",
