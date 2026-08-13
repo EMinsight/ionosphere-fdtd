@@ -15,6 +15,10 @@ from verification.simpson_taflove_2004.model import (
     create_validation_simulation,
 )
 from ionosphere_fdtd.sources import geographic_direction
+from verification.propagation_constant.model import (
+    fit_propagation_constants,
+    record_multi_receiver_traces,
+)
 
 
 def test_directional_cli_exposes_coupled_radial_refinement() -> None:
@@ -82,6 +86,43 @@ def test_short_directional_record_has_near_far_pair_per_azimuth() -> None:
 
     assert traces.er_v_m.shape == (4, 4)
     assert traces.labels == ("near-00", "far-00", "near-01", "far-01")
+
+
+def test_short_multi_receiver_record_has_distance_order() -> None:
+    simulation = create_validation_simulation(
+        subdivision=0, material_model="uniform", backend="numpy",
+        dtype="float64", compile_step=False,
+    )
+    traces = record_multi_receiver_traces(
+        simulation, azimuths_deg=(0.0,), receiver_arcs_deg=(30.0, 60.0, 90.0), steps=2,
+    )
+    assert traces.er_v_m.shape == (3, 3)
+    assert traces.labels == ("az-00-r-00", "az-00-r-01", "az-00-r-02")
+
+
+def test_multi_receiver_fit_recovers_known_propagation_constant() -> None:
+    count = 25_024
+    steps = np.arange(count)
+    arcs = np.asarray((30.0, 45.0, 60.0, 75.0, 90.0))
+    distances = np.deg2rad(arcs) * 6_371_000.0
+    delay_per_m = 1.0 / (0.9 * 299_792_458.0)
+    traces_by_receiver = []
+    for arc, distance in zip(arcs, distances):
+        center = 2_000.0 + distance * delay_per_m / PAPER_TIME_STEP_S
+        amplitude = np.exp(-2.0e-8 * distance) / np.sqrt(np.sin(np.deg2rad(arc)))
+        traces_by_receiver.append(-amplitude * np.exp(-((steps - center) / 500.0) ** 2))
+    traces = ValidationTraces(
+        time_steps=steps, time_s=steps * PAPER_TIME_STEP_S,
+        er_v_m=np.column_stack(traces_by_receiver),
+        labels=tuple(f"az-00-r-{index:02d}" for index in range(len(arcs))),
+    )
+    fit = fit_propagation_constants(
+        traces, (0.0,), arcs, truncations=dict.fromkeys(traces.labels, count),
+    )
+    expected_attenuation = 2.0e-8 * 20.0 / np.log(10.0) * 1.0e6
+    np.testing.assert_allclose(fit.attenuation_db_per_mm, expected_attenuation, rtol=2e-3)
+    np.testing.assert_allclose(fit.phase_velocity_fraction_c, 0.9, rtol=2e-3)
+    assert np.max(fit.complex_residual_rms) < 2e-3
 
 
 def test_directional_phase_velocity_recovers_isotropic_delay() -> None:
