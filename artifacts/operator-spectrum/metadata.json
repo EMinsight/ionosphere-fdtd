@@ -1,0 +1,89 @@
+{
+  "git_revision": "63455d4-dirty",
+  "degree_min": 1,
+  "degree_max": 100,
+  "frequency_mapping": {
+    "50_hz_degree": 8.557847548837147,
+    "500_hz_degree": 75.56590100636664,
+    "formula": "l = 2*pi*f*R / v_Bannister(f)"
+  },
+  "modes_per_degree": [
+    "real Y_l^0",
+    "real Y_l^l",
+    "imag Y_l^l"
+  ],
+  "mesquite": {
+    "6": {
+      "path": "artifacts/operator-spectrum/mesquite-level-6.npz",
+      "vertices_sha256": "f1a42b70b60fa01e3c75d4132b0a56d677648d27204b511bd43dfd354387da76",
+      "objective": "uniform-shape-size:TShapeSizeB1:PMeanP(1)"
+    },
+    "7": {
+      "path": "artifacts/operator-spectrum/mesquite-level-7.npz",
+      "vertices_sha256": "c5736acfb24f1e9e7c97e5ade78c5f4c9ddeb30859aba6ead1502781091cac47",
+      "objective": "uniform-shape-size:TShapeSizeB1:PMeanP(1)"
+    },
+    "8": {
+      "path": "artifacts/operator-spectrum/mesquite-level-8.npz",
+      "vertices_sha256": "4128445eff7255239ac8a300ea325e77332b091aba93fca774362ba3cc3f4e22",
+      "objective": "uniform-shape-size:TShapeSizeB1:PMeanP(1)"
+    }
+  },
+  "summary": {
+    "native-l6": {
+      "physical_degree_eigenvalue_mae": 0.04735853387297746,
+      "physical_degree_wavenumber_mae": 0.024140861310048986,
+      "upper_elf_wavenumber_mae": 0.051906691652754744,
+      "degree_76_wavenumber_error": -0.06410228574536248,
+      "degree_76_eigenfunction_residual": 0.014108879677702567
+    },
+    "native-l7": {
+      "physical_degree_eigenvalue_mae": 0.012173783051249467,
+      "physical_degree_wavenumber_mae": 0.006116680440884912,
+      "upper_elf_wavenumber_mae": 0.01322117756787095,
+      "degree_76_wavenumber_error": -0.01639403972299125,
+      "degree_76_eigenfunction_residual": 0.004655786820486382
+    },
+    "native-l8": {
+      "physical_degree_eigenvalue_mae": 0.003064840838986043,
+      "physical_degree_wavenumber_mae": 0.0015342971798222448,
+      "upper_elf_wavenumber_mae": 0.003320702659821422,
+      "degree_76_wavenumber_error": -0.004121771771040598,
+      "degree_76_eigenfunction_residual": 0.001521716570105438
+    },
+    "mesquite-l6": {
+      "physical_degree_eigenvalue_mae": 0.047544857691681604,
+      "physical_degree_wavenumber_mae": 0.02423787604008326,
+      "upper_elf_wavenumber_mae": 0.05211404908198783,
+      "degree_76_wavenumber_error": -0.06433390969371411,
+      "degree_76_eigenfunction_residual": 0.005344572345447232
+    },
+    "mesquite-l7": {
+      "physical_degree_eigenvalue_mae": 0.01221957621254425,
+      "physical_degree_wavenumber_mae": 0.0061398101399188915,
+      "upper_elf_wavenumber_mae": 0.013270036375109704,
+      "degree_76_wavenumber_error": -0.0164482267654803,
+      "degree_76_eigenfunction_residual": 0.0014221450689769306
+    },
+    "mesquite-l8": {
+      "physical_degree_eigenvalue_mae": 0.0030764784827943953,
+      "physical_degree_wavenumber_mae": 0.0015401307619339263,
+      "upper_elf_wavenumber_mae": 0.003333008823963527,
+      "degree_76_wavenumber_error": -0.004135428706105726,
+      "degree_76_eigenfunction_residual": 0.000362166717754165
+    }
+  },
+  "estimated_orders": {
+    "native": {
+      "6_to_7_physical_mean": 1.9878744995150852,
+      "7_to_8_physical_mean": 1.9969763044277087,
+      "7_to_8_upper_elf_mean": 1.9934243055051553
+    },
+    "mesquite": {
+      "6_to_7_physical_mean": 1.9881141756678442,
+      "7_to_8_physical_mean": 1.9969357768000526,
+      "7_to_8_upper_elf_mean": 1.993408247819446
+    }
+  },
+  "elapsed_s": 383.5365372209926
+}
