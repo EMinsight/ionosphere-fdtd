@@ -412,7 +412,7 @@ def _reproduction_command(args: argparse.Namespace) -> str:
     compile_flag = "--torch-compile" if args.torch_compile else "--no-torch-compile"
     quote = shlex.quote
     tensorboard_dependency = (
-        "--with tensorboard " if args.tensorboard_log_dir is not None else ""
+        "--extra tensorboard " if args.tensorboard_log_dir is not None else ""
     )
     parts = [
         f"uv run {tensorboard_dependency}"

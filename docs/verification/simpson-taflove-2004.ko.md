@@ -201,7 +201,7 @@ Level 6→7 및 7→8에서 최대 위상 속도 오차의 관측 차수는 A–
 
 ## TensorBoard 물리 진단
 
-진단 실행은 검증 workflow와 같은 solver update를 사용하며 CUDA device에서 reduction을 수행한다. Field norm, finite flag, 양수인 이산 staggered-field energy, 방사 영역별 및 동·서 적도 회랑별 전도 전력, 소스 timing, 수신값, 처리량, CUDA memory를 기록한다. 정확한 표본값은 `physics-diagnostics.npz`에도 저장하며 TensorBoard는 대화형 표시 수단일 뿐이다. Staggered energy는 비교용 진단값이며 동일 시각의 정확한 보존 Hamiltonian이라고 주장하지 않는다.
+진단 실행은 검증 workflow와 같은 solver update를 사용하며 CUDA device에서 reduction을 수행한다. Field norm, finite flag, 양수인 이산 staggered-field energy, 방사 영역별 및 동·서 적도 회랑별 전도 전력, 소스 timing, 수신값, 처리량, CUDA memory를 기록한다. 정확한 표본값은 `physics-diagnostics.npz`에도 저장하며 TensorBoard는 대화형 표시 수단일 뿐이다. Recorder는 TensorBoardX를 사용해 backend와 무관한 event file을 기록한다. Staggered energy는 비교용 진단값이며 동일 시각의 정확한 보존 Hamiltonian이라고 주장하지 않는다.
 
 ### Backend 및 관측기 대조 실험
 
@@ -454,7 +454,7 @@ uv run --extra pytorch --extra visualization python -m \
 정확한 표본 archive를 남기면서 subdivision-5 ETOPO5 물리 대조 실험을 TensorBoard에 기록한다.
 
 ```bash
-uv run --with tensorboard --extra pytorch --extra visualization python -m \
+uv run --extra tensorboard --extra pytorch --extra visualization python -m \
   verification.simpson_taflove_2004 \
   --subdivision 5 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
@@ -468,14 +468,14 @@ uv run --with tensorboard --extra pytorch --extra visualization python -m \
   --tensorboard-log-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5/events \
   --output-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5
 
-uv run --with tensorboard tensorboard \
+uv run --extra tensorboard tensorboard \
   --logdir /tmp/ionosphere-diagnostics
 ```
 
 Subdivision, 표본 간격, 출력 위치를 바꾸어 전체 subdivision-8 dual-cell 대조 실험을 실행한다.
 
 ```bash
-uv run --with tensorboard --extra pytorch --extra visualization python -m \
+uv run --extra tensorboard --extra pytorch --extra visualization python -m \
   verification.simpson_taflove_2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \

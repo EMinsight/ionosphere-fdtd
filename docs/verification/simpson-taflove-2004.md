@@ -381,6 +381,7 @@ flags, a positive discrete staggered-field energy, conductive power by radial
 region and east/west equatorial corridor, source timing, receiver values,
 throughput, and CUDA memory. Exact sampled values are also written to
 `physics-diagnostics.npz`; TensorBoard is only the interactive view. The
+recorder uses TensorBoardX to write backend-independent event files. The
 staggered energy is a comparison diagnostic rather than a claim of an exact
 same-time conserved Hamiltonian.
 
@@ -796,7 +797,7 @@ Record the subdivision-5 ETOPO5 physics controls in TensorBoard while retaining
 the exact sampled archive:
 
 ```bash
-uv run --with tensorboard --extra pytorch --extra visualization python -m \
+uv run --extra tensorboard --extra pytorch --extra visualization python -m \
   verification.simpson_taflove_2004 \
   --subdivision 5 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \
@@ -810,7 +811,7 @@ uv run --with tensorboard --extra pytorch --extra visualization python -m \
   --tensorboard-log-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5/events \
   --output-dir /tmp/ionosphere-diagnostics/st2004-l5-etopo5
 
-uv run --with tensorboard tensorboard \
+uv run --extra tensorboard tensorboard \
   --logdir /tmp/ionosphere-diagnostics
 ```
 
@@ -818,7 +819,7 @@ Run the complete subdivision-8 dual-cell control by changing the subdivision,
 sampling cadence, and output locations:
 
 ```bash
-uv run --with tensorboard --extra pytorch --extra visualization python -m \
+uv run --extra tensorboard --extra pytorch --extra visualization python -m \
   verification.simpson_taflove_2004 \
   --subdivision 8 --mesh-orientation polar --steps 35000 \
   --material etopo5 --etopo5-path data/ETOPO5.DAT \

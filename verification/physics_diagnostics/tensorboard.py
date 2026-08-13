@@ -23,10 +23,11 @@ class TensorBoardPhysicsRecorder:
         horizontal_regions: Mapping[str, HorizontalRegion] | None = None,
     ) -> None:
         try:
-            from torch.utils.tensorboard import SummaryWriter
+            from tensorboardX import SummaryWriter
         except ImportError as error:
             raise ImportError(
-                "TensorBoard diagnostics require: python -m pip install tensorboard"
+                "TensorBoard diagnostics require the 'tensorboard' extra: "
+                "python -m pip install '.[tensorboard]'"
             ) from error
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)

@@ -110,7 +110,7 @@ def test_reproduction_command_adds_tensorboard_dependency() -> None:
 
     command = _reproduction_command(args)
 
-    assert "uv run --with tensorboard --extra pytorch" in command
+    assert "uv run --extra tensorboard --extra pytorch" in command
     assert "--tensorboard-log-dir /tmp/physics-events" in command
     assert "--diagnostics-every 512" in command
 
