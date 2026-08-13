@@ -1,0 +1,18 @@
+{
+  "git_revision": "11d4f71-dirty",
+  "scope": "cell-centered conservative horizontal TM operator screen; not full 3-D Maxwell propagation",
+  "frequency_hz": 400.0,
+  "sectoral_harmonic_degree": 61,
+  "merge_rule": "power-of-two east-west merging when cos(latitude) crosses successive halves",
+  "periodic_longitude": true,
+  "cell_counts": [
+    39830,
+    159830,
+    638550,
+    2556310
+  ],
+  "area_closure_relative": 1.1102230246251565e-16,
+  "observed_order": 1.9987723422253343,
+  "level_9_error_ratio_merged_to_geodesic": 1.3913472257621786,
+  "elapsed_s": 11.04314135099412
+}
