@@ -42,6 +42,7 @@ class SimulationConfig:
     loss_integration: str = "exponential"
     radial_grid_policy: str = "smooth"
     geometry_mode: str = "full-spherical"
+    compress_uniform_material_coefficients: bool = False
 
     def __post_init__(self) -> None:
         integer_controls = {
@@ -597,10 +598,28 @@ class GeodesicFDTD:
             ca_et, cb_et = self._exponential_loss_coefficients(
                 sigma_et, epsilon_et
             )
+        if self.config.compress_uniform_material_coefficients:
+            ca_er = self._uniform_radial_profile(ca_er, "radial electric")
+            cb_er = self._uniform_radial_profile(cb_er, "radial electric")
+            ca_et = self._uniform_radial_profile(ca_et, "tangential electric")
+            cb_et = self._uniform_radial_profile(cb_et, "tangential electric")
         self._ca_er = self.backend.asarray(ca_er)
         self._cb_er = self.backend.asarray(cb_er)
         self._ca_et = self.backend.asarray(ca_et)
         self._cb_et = self.backend.asarray(cb_et)
+
+    @staticmethod
+    def _uniform_radial_profile(
+        values: NDArray[np.float64], label: str
+    ) -> NDArray[np.float64]:
+        """Return one broadcast row after proving exact horizontal uniformity."""
+
+        profile = values[:1]
+        if not np.array_equal(values, np.broadcast_to(profile, values.shape)):
+            raise ValueError(
+                f"cannot compress horizontally varying {label} coefficients"
+            )
+        return profile
 
     def _exponential_loss_coefficients(
         self, sigma: NDArray[np.float64], epsilon: NDArray[np.float64]
@@ -731,8 +750,13 @@ class GeodesicFDTD:
         self.er += magnetic_circulation
         if current_density is not None:
             vertices, layers, _ = self._source_distribution
+            coefficient_vertices = (
+                0
+                if self.config.compress_uniform_material_coefficients
+                else vertices
+            )
             self.er[vertices, layers] -= (
-                self._cb_er[vertices, layers] * current_density
+                self._cb_er[coefficient_vertices, layers] * current_density
             )
 
         surface_gradient_hr = self.backend.dual_edge_difference(self.hr)
@@ -753,7 +777,12 @@ class GeodesicFDTD:
                 / self._radial_midpoints[layers]
                 / self._radial_steps[layers]
             )
-            self.et[edges, layers] -= self._cb_et[edges, layers] * current_density
+            coefficient_edges = (
+                0 if self.config.compress_uniform_material_coefficients else edges
+            )
+            self.et[edges, layers] -= (
+                self._cb_et[coefficient_edges, layers] * current_density
+            )
 
     def diagnostics(self) -> dict[str, float | int | str]:
         """Return inexpensive scalar diagnostics without saving field data."""

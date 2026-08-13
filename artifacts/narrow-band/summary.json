@@ -1,0 +1,49 @@
+{
+  "frequency_hz": 400.0,
+  "runs": [
+    {
+      "subdivision": 7,
+      "attenuation_db_per_mm": 7.326282382989126,
+      "phase_velocity_fraction_c": 0.848985906013241,
+      "complex_residual_rms": 0.014966800120858223,
+      "runtime_s": 616.5778397140093,
+      "peak_device_memory_bytes": 604761088,
+      "time_step_s": 3e-06
+    },
+    {
+      "subdivision": 8,
+      "attenuation_db_per_mm": 7.15032136386949,
+      "phase_velocity_fraction_c": 0.8559468483743514,
+      "complex_residual_rms": 0.003468971361842568,
+      "runtime_s": 413.1169354079757,
+      "peak_device_memory_bytes": 1800006144,
+      "time_step_s": 3e-06
+    },
+    {
+      "subdivision": 9,
+      "attenuation_db_per_mm": 7.108970495777067,
+      "phase_velocity_fraction_c": 0.8576611444154011,
+      "complex_residual_rms": 0.000990316555863357,
+      "runtime_s": 1991.5883592129976,
+      "peak_device_memory_bytes": 7164262912,
+      "time_step_s": 2.9e-06
+    }
+  ],
+  "second_order_level_9_prediction": {
+    "attenuation_db_per_mm": 7.106331109089581,
+    "phase_velocity_fraction_c": 0.857687083964629
+  },
+  "direct_minus_prediction": {
+    "attenuation_db_per_mm": 0.0026393866874858674,
+    "phase_velocity_fraction_c": -2.5939549227915748e-05
+  },
+  "observed_order_7_to_9": {
+    "attenuation": 2.08926634029227,
+    "phase_velocity": 2.0216663596612867
+  },
+  "bannister": {
+    "attenuation_db_per_mm": 7.0550024613138005,
+    "phase_velocity_fraction_c": 0.8731318772324824,
+    "direct_level_9_velocity_residual_fraction_c": -0.015470732817081334
+  }
+}

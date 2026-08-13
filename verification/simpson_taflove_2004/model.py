@@ -217,6 +217,7 @@ def create_validation_simulation(
         REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M
     ),
     mesh: GeodesicMesh | None = None,
+    compress_uniform_material_coefficients: bool = False,
 ) -> GeodesicFDTD:
     """Create the paper's 200-km radial domain, pulse, and 3-µs time step."""
 
@@ -274,6 +275,9 @@ def create_validation_simulation(
             tangential_material_support=tangential_material_support,
             loss_integration="trapezoidal",
             geometry_mode="thin-shell",
+            compress_uniform_material_coefficients=(
+                compress_uniform_material_coefficients
+            ),
         ),
         material=material,
         source=source,

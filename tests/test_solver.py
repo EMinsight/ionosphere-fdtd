@@ -700,6 +700,20 @@ def test_dual_cell_support_preserves_uniform_radial_material() -> None:
     np.testing.assert_allclose(averaged.epsilon_r_er, point.epsilon_r_er)
 
 
+def test_uniform_material_coefficients_can_be_broadcast_from_one_row() -> None:
+    regular = GeodesicFDTD(config=small_config(), dtype="float64")
+    compressed = GeodesicFDTD(
+        config=small_config(compress_uniform_material_coefficients=True),
+        dtype="float64",
+    )
+    assert compressed._ca_er.shape[0] == 1
+    assert compressed._cb_et.shape[0] == 1
+    regular.step(3)
+    compressed.step(3)
+    np.testing.assert_allclose(compressed.er, regular.er)
+    np.testing.assert_allclose(compressed.et, regular.et)
+
+
 def test_modulated_source_uses_frequency_scaled_default_envelope() -> None:
     source = GaussianCurrent(carrier_frequency_hz=20.0, peak_current_a=1.0)
     assert source.current_a(0.1, 1.0e-6) == pytest.approx(1.0)
