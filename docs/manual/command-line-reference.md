@@ -13,7 +13,7 @@ The principal option groups are:
 
 | Group | Options |
 |---|---|
-| Work | `--steps`, `--report-every` |
+| Work | `--steps`, `--report-every`, `--resume`, `--checkpoint`, `--checkpoint-every` |
 | Grid | `--subdivision`, `--radial-cells`, `--surface-step`, `--courant` |
 | Backend | `--backend`, `--device`, `--dtype`, `--torch-compile`, `--torch-threads` |
 | Source | `--source-current`, `--source-length`, `--source-frequency`, `--source-center`, `--source-width`, `--source-latitude`, `--source-longitude` |
@@ -38,6 +38,32 @@ uv run ionosphere \
 
 The enlarged anomaly is a numerical demonstration, not the published radar
 geometry.
+
+## Checkpoints and restart
+
+Write a final checkpoint and refresh it every 1,000 completed steps:
+
+```bash
+uv run ionosphere \
+  --steps 10000 --checkpoint run.npz --checkpoint-every 1000
+```
+
+Resume the embedded model and field state for 5,000 additional steps:
+
+```bash
+uv run ionosphere --resume run.npz --steps 5000 --checkpoint run.npz
+```
+
+`--steps` always means additional steps. On resume, the checkpoint owns the
+grid, material, source, time step, and current step count. Backend options may
+be changed, so a NumPy checkpoint can be resumed with, for example,
+`--backend torch --device cuda`. With `--dtype auto`, restart preserves the
+stored dtype; an explicit `--dtype` converts fields to that precision.
+
+Checkpoint updates are atomic: the completed temporary archive replaces the
+destination only after it has been written successfully. `--checkpoint-every`
+requires `--checkpoint`, and the final state is always written even when the
+requested step count is not an exact checkpoint interval.
 
 ## Visualization runner
 

@@ -14,6 +14,7 @@ sampling, and two- and three-dimensional visualization.
 - Full-spherical radial curls and conservative CFL selection
 - Exponential conductive integration with a legacy trapezoidal option
 - Configurable geodesic and radial grids, materials, sources, and anomalies
+- Portable, versioned checkpoints with cross-backend restart
 - Surface maps, radial sections, receiver traces, interactive 3-D views, and animations
 - Analytic Maxwell verification and Simpson–Taflove reproduction workflows
 

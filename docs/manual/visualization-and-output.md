@@ -87,3 +87,26 @@ section = sample_radial_section(
 
 Call `simulation.to_numpy(field)` before passing backend-native arrays to other
 host plotting or serialization libraries.
+
+## Portable checkpoint files
+
+The Python API stores complete restartable results in a compressed, versioned
+NPZ file:
+
+```python
+simulation.step(10_000)
+simulation.save_checkpoint("run.npz")
+
+restored = GeodesicFDTD.load_checkpoint(
+    "run.npz", backend="torch", device="cuda"
+)
+restored.step(5_000)
+```
+
+The archive contains JSON metadata, exact mesh vertices, all four evolving
+fields, the simulation clock, configuration, material, and source. Loading
+uses `allow_pickle=False`; checkpoint files never execute serialized Python
+objects. Format version 1 supports `EarthIonosphereMaterial`,
+`GaussianCurrent`, and `TangentialGaussianCurrent`. Models containing external
+callables, including `LayeredEarthIonosphereMaterial` terrain samplers, are
+rejected at save time because those callables cannot be portably reconstructed.

@@ -1,0 +1,274 @@
+"""Portable, versioned NPZ checkpoints for FDTD simulations."""
+
+from __future__ import annotations
+
+import json
+import os
+import tempfile
+from dataclasses import asdict, replace
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from .materials import EarthIonosphereMaterial, SphericalAnomaly
+from .mesh import build_geodesic_mesh_from_vertices
+from .sources import GaussianCurrent, TangentialGaussianCurrent
+
+CHECKPOINT_FORMAT = "ionosphere-fdtd-checkpoint"
+CHECKPOINT_VERSION = 1
+
+
+class CheckpointError(ValueError):
+    """Raised when a checkpoint is unsupported, corrupt, or inconsistent."""
+
+
+def save_checkpoint(simulation: Any, path: str | Path) -> Path:
+    """Atomically save a portable checkpoint and return its path.
+
+    The NPZ file contains JSON metadata plus host NumPy copies of the mesh and
+    four evolving fields. It never stores pickled Python objects.
+    """
+
+    destination = Path(path)
+    metadata = _metadata(simulation)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    arrays = {
+        "metadata": np.asarray(
+            json.dumps(metadata, default=_json_default, sort_keys=True)
+        ),
+        "mesh_vertices": np.asarray(simulation.mesh.vertices, dtype=np.float64),
+        "er": simulation.to_numpy(simulation.er),
+        "et": simulation.to_numpy(simulation.et),
+        "hr": simulation.to_numpy(simulation.hr),
+        "ht": simulation.to_numpy(simulation.ht),
+    }
+    temporary_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            delete=False,
+        ) as temporary:
+            temporary_name = temporary.name
+            np.savez_compressed(temporary, **arrays)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_name, destination)
+    finally:
+        if temporary_name is not None and os.path.exists(temporary_name):
+            os.unlink(temporary_name)
+    return destination
+
+
+def load_checkpoint(
+    path: str | Path,
+    *,
+    backend: str = "numpy",
+    device: str = "auto",
+    dtype: str | None = None,
+    compile_step: bool = False,
+    torch_threads: int | None = None,
+) -> Any:
+    """Restore a checkpoint, optionally on a different backend or device."""
+
+    from .solver import GeodesicFDTD, SimulationConfig
+
+    source_path = Path(path)
+    try:
+        with np.load(source_path, allow_pickle=False) as archive:
+            required = {"metadata", "mesh_vertices", "er", "et", "hr", "ht"}
+            missing = required.difference(archive.files)
+            if missing:
+                raise CheckpointError(
+                    f"checkpoint is missing arrays: {', '.join(sorted(missing))}"
+                )
+            metadata = _read_metadata(archive["metadata"])
+            vertices = np.array(archive["mesh_vertices"], dtype=np.float64, copy=True)
+            fields = {
+                name: np.array(archive[name], copy=True)
+                for name in ("er", "et", "hr", "ht")
+            }
+    except CheckpointError:
+        raise
+    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        raise CheckpointError(
+            f"cannot read checkpoint {source_path}: {error}"
+        ) from error
+
+    try:
+        config_values = dict(metadata["simulation_config"])
+        if config_values["radial_altitudes_m"] is not None:
+            config_values["radial_altitudes_m"] = tuple(
+                config_values["radial_altitudes_m"]
+            )
+        config = SimulationConfig(**config_values)
+        mesh = build_geodesic_mesh_from_vertices(
+            config.subdivision,
+            vertices,
+            orientation=config.mesh_orientation,
+            normalize_vertices=False,
+        )
+        material = _deserialize_material(metadata["material"])
+        source = _deserialize_source(metadata["source"])
+    except CheckpointError:
+        raise
+    except (KeyError, TypeError, ValueError, RuntimeError) as error:
+        raise CheckpointError(f"invalid checkpoint model metadata: {error}") from error
+    selected_dtype = dtype or str(metadata["runtime"]["dtype"])
+    construction_config = replace(
+        config, mesh_relaxations=0, mesh_optimization_steps=0
+    )
+    simulation = GeodesicFDTD(
+        construction_config,
+        material=material,
+        source=source,
+        mesh=mesh,
+        backend=backend,
+        device=device,
+        dtype=selected_dtype,
+        compile_step=compile_step,
+        torch_threads=torch_threads,
+    )
+    simulation.config = config
+    expected_shapes = {
+        name: tuple(getattr(simulation, name).shape)
+        for name in ("er", "et", "hr", "ht")
+    }
+    for name, values in fields.items():
+        if values.shape != expected_shapes[name]:
+            raise CheckpointError(
+                f"checkpoint field {name} has shape {values.shape}, "
+                f"expected {expected_shapes[name]}"
+            )
+        if not np.issubdtype(values.dtype, np.floating):
+            raise CheckpointError(f"checkpoint field {name} must be floating point")
+        if not np.all(np.isfinite(values)):
+            raise CheckpointError(f"checkpoint field {name} contains non-finite values")
+        setattr(simulation, name, simulation.backend.asarray(values))
+
+    steps = metadata["state"]["steps"]
+    if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
+        raise CheckpointError("checkpoint step count must be a non-negative integer")
+    saved_time_step = float(metadata["state"]["time_step_s"])
+    if not np.isclose(
+        saved_time_step, simulation.time_step_s, rtol=0.0, atol=1.0e-15
+    ):
+        raise CheckpointError(
+            "checkpoint time step is inconsistent with the reconstructed model"
+        )
+    saved_time = float(metadata["state"]["time_s"])
+    expected_time = steps * saved_time_step
+    if not np.isfinite(saved_time) or not np.isclose(
+        saved_time, expected_time, rtol=1.0e-12, atol=1.0e-15
+    ):
+        raise CheckpointError("checkpoint time is inconsistent with its step count")
+    simulation.steps = steps
+    simulation.time_s = expected_time
+    return simulation
+
+
+def _metadata(simulation: Any) -> dict[str, Any]:
+    if not isinstance(simulation.material, EarthIonosphereMaterial):
+        raise CheckpointError(
+            "checkpoints currently support EarthIonosphereMaterial only"
+        )
+    if simulation.source is not None and not isinstance(
+        simulation.source, (GaussianCurrent, TangentialGaussianCurrent)
+    ):
+        raise CheckpointError(
+            "checkpoints currently support GaussianCurrent and "
+            "TangentialGaussianCurrent sources only"
+        )
+    return {
+        "format": CHECKPOINT_FORMAT,
+        "version": CHECKPOINT_VERSION,
+        "simulation_config": asdict(simulation.config),
+        "material": _serialize_material(simulation.material),
+        "source": _serialize_source(simulation.source),
+        "state": {
+            "steps": simulation.steps,
+            "time_s": simulation.time_s,
+            "time_step_s": simulation.time_step_s,
+        },
+        "runtime": {
+            "backend": simulation.backend.name,
+            "device": simulation.backend.device,
+            "dtype": simulation.backend.dtype_name,
+            "compiled": simulation.compiled,
+        },
+    }
+
+
+def _read_metadata(value: np.ndarray) -> dict[str, Any]:
+    if value.shape != () or value.dtype.kind not in {"U", "S"}:
+        raise CheckpointError("checkpoint metadata must be a scalar string")
+    metadata = json.loads(str(value.item()))
+    if not isinstance(metadata, dict):
+        raise CheckpointError("checkpoint metadata must be a JSON object")
+    if metadata.get("format") != CHECKPOINT_FORMAT:
+        raise CheckpointError("file is not an ionosphere-fdtd checkpoint")
+    if metadata.get("version") != CHECKPOINT_VERSION:
+        raise CheckpointError(
+            f"unsupported checkpoint version {metadata.get('version')!r}; "
+            f"expected {CHECKPOINT_VERSION}"
+        )
+    required = {"simulation_config", "material", "source", "state", "runtime"}
+    missing = required.difference(metadata)
+    if missing:
+        raise CheckpointError(
+            f"checkpoint metadata is missing: {', '.join(sorted(missing))}"
+        )
+    return metadata
+
+
+def _serialize_material(material: EarthIonosphereMaterial) -> dict[str, Any]:
+    values = asdict(material)
+    values["anomalies"] = [asdict(anomaly) for anomaly in material.anomalies]
+    return {"type": "EarthIonosphereMaterial", "parameters": values}
+
+
+def _deserialize_material(data: Any) -> EarthIonosphereMaterial:
+    if not isinstance(data, dict) or data.get("type") != "EarthIonosphereMaterial":
+        raise CheckpointError("checkpoint material type is unsupported")
+    values = dict(data.get("parameters", {}))
+    try:
+        values["anomalies"] = tuple(
+            SphericalAnomaly(**item) for item in values.get("anomalies", ())
+        )
+        return EarthIonosphereMaterial(**values)
+    except (TypeError, ValueError) as error:
+        raise CheckpointError(f"invalid checkpoint material: {error}") from error
+
+
+def _serialize_source(source: Any) -> dict[str, Any] | None:
+    if source is None:
+        return None
+    return {"type": type(source).__name__, "parameters": asdict(source)}
+
+
+def _deserialize_source(data: Any) -> GaussianCurrent | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise CheckpointError("checkpoint source metadata must be an object")
+    source_types = {
+        "GaussianCurrent": GaussianCurrent,
+        "TangentialGaussianCurrent": TangentialGaussianCurrent,
+    }
+    try:
+        source_type = source_types[data["type"]]
+        values = dict(data.get("parameters", {}))
+        for name in ("azimuths_deg", "line_lengths_m"):
+            if name in values and values[name] is not None:
+                values[name] = tuple(values[name])
+        return source_type(**values)
+    except (KeyError, TypeError, ValueError) as error:
+        raise CheckpointError(f"invalid checkpoint source: {error}") from error
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"cannot encode {type(value).__name__} in checkpoint metadata")

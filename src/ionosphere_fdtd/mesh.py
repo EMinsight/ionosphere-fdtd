@@ -204,13 +204,15 @@ def build_geodesic_mesh_from_vertices(
     vertices: FloatArray,
     *,
     orientation: str = "polar",
+    normalize_vertices: bool = True,
 ) -> GeodesicMesh:
     """Build the standard topology using externally optimized coordinates.
 
     The coordinates must correspond, in the original vertex order, to the
     recursively subdivided icosahedron at ``subdivision``. Small radial drift
-    introduced by mesh-file serialization is normalized away, but inputs that
-    are not already on the unit sphere are rejected.
+    introduced by mesh-file serialization is normalized away by default, but
+    inputs that are not already on the unit sphere are rejected. Checkpoint
+    restoration can disable normalization to preserve exact saved coordinates.
     """
 
     if subdivision < 0:
@@ -230,8 +232,11 @@ def build_geodesic_mesh_from_vertices(
     radii = np.linalg.norm(coordinates, axis=1)
     if not np.allclose(radii, 1.0, rtol=0.0, atol=1.0e-7):
         raise ValueError("optimized vertices must lie on the unit sphere")
+    assembled_vertices = (
+        coordinates / radii[:, None] if normalize_vertices else coordinates.copy()
+    )
     return _assemble_geodesic_mesh(
-        coordinates / radii[:, None],
+        assembled_vertices,
         faces,
         subdivision,
         require_well_centered=True,

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import numpy as np
 
 from .backends import BackendUnavailableError
+from .checkpoint import CheckpointError
 from .materials import EarthIonosphereMaterial, SphericalAnomaly
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import (
@@ -19,6 +21,17 @@ from .sources import (
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--steps", type=int, default=100)
+    parser.add_argument(
+        "--resume", type=Path, help="resume model and fields from an NPZ checkpoint"
+    )
+    parser.add_argument(
+        "--checkpoint", type=Path, help="write a final NPZ checkpoint to this path"
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        help="also update --checkpoint after this many completed steps",
+    )
     parser.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
     parser.add_argument(
         "--device",
@@ -82,6 +95,10 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--steps must be non-negative")
     if args.report_every <= 0:
         raise SystemExit("--report-every must be positive")
+    if args.checkpoint_every is not None and args.checkpoint_every <= 0:
+        raise SystemExit("--checkpoint-every must be positive")
+    if args.checkpoint_every is not None and args.checkpoint is None:
+        raise SystemExit("--checkpoint-every requires --checkpoint")
     if args.surface_step is not None and args.surface_step <= 0.0:
         raise SystemExit("--surface-step must be positive")
     if args.anomaly_radius_km <= 0.0:
@@ -116,35 +133,45 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
     try:
-        simulation = GeodesicFDTD(
-            config=SimulationConfig(
-                subdivision=args.subdivision,
-                radial_cells=actual_radial_cells,
-                courant_factor=args.courant,
-                radial_altitudes_m=radial_altitudes,
-                radial_grid_policy=(
-                    "allow-abrupt" if radial_altitudes is not None else "smooth"
+        if args.resume is not None:
+            simulation = GeodesicFDTD.load_checkpoint(
+                args.resume,
+                backend=args.backend,
+                device=args.device,
+                dtype=None if args.dtype == "auto" else args.dtype,
+                compile_step=args.torch_compile,
+                torch_threads=args.torch_threads,
+            )
+        else:
+            simulation = GeodesicFDTD(
+                config=SimulationConfig(
+                    subdivision=args.subdivision,
+                    radial_cells=actual_radial_cells,
+                    courant_factor=args.courant,
+                    radial_altitudes_m=radial_altitudes,
+                    radial_grid_policy=(
+                        "allow-abrupt" if radial_altitudes is not None else "smooth"
+                    ),
                 ),
-            ),
-            material=EarthIonosphereMaterial(anomalies=anomalies),
-            source=GaussianCurrent(
-                latitude_deg=args.source_latitude,
-                longitude_deg=args.source_longitude,
-                peak_current_a=args.source_current,
-                vertical_element_length_m=args.source_length,
-                carrier_frequency_hz=args.source_frequency,
-                center_time_s=args.source_center,
-                one_over_e_half_width_s=args.source_width,
-            ),
-            backend=args.backend,
-            device=args.device,
-            dtype=args.dtype,
-            compile_step=args.torch_compile,
-            torch_threads=args.torch_threads,
-        )
-    except BackendUnavailableError as error:
+                material=EarthIonosphereMaterial(anomalies=anomalies),
+                source=GaussianCurrent(
+                    latitude_deg=args.source_latitude,
+                    longitude_deg=args.source_longitude,
+                    peak_current_a=args.source_current,
+                    vertical_element_length_m=args.source_length,
+                    carrier_frequency_hz=args.source_frequency,
+                    center_time_s=args.source_center,
+                    one_over_e_half_width_s=args.source_width,
+                ),
+                backend=args.backend,
+                device=args.device,
+                dtype=args.dtype,
+                compile_step=args.torch_compile,
+                torch_threads=args.torch_threads,
+            )
+    except (BackendUnavailableError, CheckpointError, OSError) as error:
         raise SystemExit(str(error)) from error
-    if args.oil_anomaly:
+    if args.oil_anomaly and args.resume is None:
         anomaly = anomalies[0]
         points = np.concatenate(
             (simulation.mesh.vertices, simulation.mesh.edge_midpoints()), axis=0
@@ -184,12 +211,30 @@ def main(argv: list[str] | None = None) -> int:
         f"dt={simulation.time_step_s:.6e} s "
         f"(conservative limit), field memory={simulation.memory_bytes / 2**20:.2f} MiB"
     )
-    for start in range(0, args.steps, args.report_every):
-        simulation.step(min(args.report_every, args.steps - start))
-        values = simulation.diagnostics()
-        print(
-            f"step={values['step']:6d} t={values['time_s']:.6e} s "
-            f"|Er|max={values['max_abs_er_v_m']:.6e} V/m "
-            f"|H|max={max(values['max_abs_hr_a_m'], values['max_abs_ht_a_m']):.6e} A/m"
-        )
+    completed = 0
+    while completed < args.steps:
+        until_report = args.report_every - completed % args.report_every
+        chunk = min(until_report, args.steps - completed)
+        if args.checkpoint_every is not None:
+            until_checkpoint = args.checkpoint_every - completed % args.checkpoint_every
+            chunk = min(chunk, until_checkpoint)
+        simulation.step(chunk)
+        completed += chunk
+        if completed % args.report_every == 0 or completed == args.steps:
+            values = simulation.diagnostics()
+            print(
+                f"step={values['step']:6d} t={values['time_s']:.6e} s "
+                f"|Er|max={values['max_abs_er_v_m']:.6e} V/m "
+                f"|H|max={max(values['max_abs_hr_a_m'], values['max_abs_ht_a_m']):.6e} "
+                "A/m"
+            )
+        if (
+            args.checkpoint is not None
+            and args.checkpoint_every is not None
+            and completed % args.checkpoint_every == 0
+        ):
+            simulation.save_checkpoint(args.checkpoint)
+    if args.checkpoint is not None:
+        simulation.save_checkpoint(args.checkpoint)
+        print(f"checkpoint={args.checkpoint}")
     return 0

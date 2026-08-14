@@ -7,6 +7,7 @@ from .backends import (
     TorchBackend,
     create_backend,
 )
+from .checkpoint import CheckpointError
 from .materials import (
     EarthIonosphereMaterial,
     LayeredEarthIonosphereMaterial,
@@ -32,6 +33,7 @@ from .visualization import (
 __all__ = [
     "ArrayBackend",
     "BackendUnavailableError",
+    "CheckpointError",
     "EarthIonosphereMaterial",
     "LayeredEarthIonosphereMaterial",
     "GaussianCurrent",

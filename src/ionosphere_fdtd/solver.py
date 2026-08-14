@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -683,6 +684,37 @@ class GeodesicFDTD:
             self._field_step(current_a)
             self.steps += 1
             self.time_s = self.steps * self.time_step_s
+
+    def save_checkpoint(self, path: str | Path) -> Path:
+        """Atomically save a portable, versioned NPZ checkpoint."""
+
+        from .checkpoint import save_checkpoint
+
+        return save_checkpoint(self, path)
+
+    @classmethod
+    def load_checkpoint(
+        cls,
+        path: str | Path,
+        *,
+        backend: str = "numpy",
+        device: str = "auto",
+        dtype: str | None = None,
+        compile_step: bool = False,
+        torch_threads: int | None = None,
+    ) -> GeodesicFDTD:
+        """Restore a checkpoint, optionally on a different backend or device."""
+
+        from .checkpoint import load_checkpoint
+
+        return load_checkpoint(
+            path,
+            backend=backend,
+            device=device,
+            dtype=dtype,
+            compile_step=compile_step,
+            torch_threads=torch_threads,
+        )
 
     def _source_currents(self, count: int) -> Any:
         if self.source is None:
