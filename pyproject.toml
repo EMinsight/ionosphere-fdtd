@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ionosphere-fdtd"
-version = "0.1.0"
+version = "0.1.1"
 description = "NumPy and PyTorch geodesic FDTD model of the Earth-ionosphere waveguide"
 readme = "README.md"
 license = "Apache-2.0"
