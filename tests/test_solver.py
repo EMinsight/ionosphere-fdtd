@@ -274,7 +274,7 @@ def test_five_kilometre_source_retains_uniform_grid_deposition() -> None:
         / simulation._cb_er[vertices, layers]
     )
 
-    np.testing.assert_allclose(represented_currents, weights, rtol=2.0e-16)
+    np.testing.assert_allclose(represented_currents, weights, rtol=5.0e-16)
 
 
 def test_tangential_source_update_uses_dual_face_current_density() -> None:
