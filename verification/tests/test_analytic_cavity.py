@@ -2,7 +2,7 @@ import numpy as np
 
 from ionosphere_fdtd.constants import EARTH_RADIUS_M
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
-from verification.analytic_solutions.cavity import VacuumMaterial, build_electric_mode, initialize_electric_standing_mode, project_electric_mode
+from verification.analytic_solutions.cavity import VacuumMaterial, build_electric_mode, initialize_electric_standing_mode, measure_mode, project_electric_mode
 
 
 def _simulation() -> GeodesicFDTD:
@@ -26,3 +26,13 @@ def test_cavity_initializer_projects_to_unit_amplitude() -> None:
         assert projection.relative_leakage < 3e-16
         assert np.all(np.isfinite(mode.er_v_m))
         assert np.all(np.isfinite(mode.et_v_m))
+
+
+def test_cavity_measurement_checks_energy_and_pec_trace() -> None:
+    simulation = _simulation()
+    mode = build_electric_mode(simulation, 1, polarization="TE")
+    initialize_electric_standing_mode(simulation, mode)
+    measurement = measure_mode(simulation, mode, 20)
+    assert np.isfinite(measurement.relative_energy_variation)
+    assert measurement.relative_energy_variation >= 0.0
+    assert measurement.maximum_pec_residual == 0.0

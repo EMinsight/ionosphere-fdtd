@@ -2,7 +2,17 @@
   "A2_horizontal_order": 1.9781725360542666,
   "A3_decay_order": 2.0030896070756277,
   "A3_frequency_order": 2.0024443567797108,
-  "A4_TE_radial_order": 1.9989452464805475,
-  "A4_TM_radial_order": 1.9986660613628215,
-  "maximum_leakage": 0.000957027051294003
+  "A4_TE_radial_order": 1.9989453705517966,
+  "A4_TM_radial_order": 1.998735417121428,
+  "A4_TE_energy_variation_order": 2.1895776343233355,
+  "A4_TM_energy_variation_order": 1.839153976616264,
+  "A4_TE_joint_leakage_order": -0.45415174959646126,
+  "A4_TM_joint_leakage_order": 1.013881383927826,
+  "maximum_leakage": 0.000957027051294003,
+  "maximum_pec_residual": 0.0,
+  "A4_observation_periods": 5.0,
+  "A4_acceptance_verdict": "FAIL",
+  "A4_acceptance_failures": [
+    "joint leakage does not have positive order"
+  ]
 }

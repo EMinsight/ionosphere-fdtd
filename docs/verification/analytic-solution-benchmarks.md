@@ -18,7 +18,7 @@ full-vector spherical-cavity benchmark.
 | A1 | Curl-free field in a homogeneous conductor | Material sampling, lossy E update, precision | `E(t)=E0 exp[-sigma t/(epsilon_0 epsilon_r)]` | Formula, tests, and current update path ready |
 | A2 | Spherical surface harmonic in a lossless thin shell | Geodesic curl/Hodge metrics, TM/TE branches, leapfrog time integration | `lambda_l=l(l+1)/R^2`; `f_l=c sqrt(lambda_l)/(2 pi)`; exact leapfrog frequency | Full-field convergence runner complete |
 | A3 | Plane wave in a homogeneous lossy medium | Permittivity, conductivity, attenuation and phase signs | `gamma=sqrt[j omega mu (sigma+j omega epsilon)]` | Periodic Yee auxiliary-geometry convergence complete |
-| A4 | Vector spherical harmonics between two concentric PEC spheres | Full spherical radial metrics, all field components, radial PEC boundaries, modal frequency extraction | TE/TM spherical-Bessel determinant roots | Staggered-field initializer, projector, and full-field convergence complete |
+| A4 | Vector spherical harmonics between two concentric PEC spheres | Full spherical radial metrics, all field components, radial PEC boundaries, modal frequency extraction | TE/TM spherical-Bessel determinant roots | Full-field measurements complete; strict acceptance FAILS on joint TE leakage order |
 
 The A1 implementation uses `EPSILON_0 * relative_permittivity`.
 
@@ -123,6 +123,26 @@ The maximum measured off-mode electric-energy fraction is `0.0009570271`.
 A2 supplies the horizontal geodesic refinement study, while the A4 TE and TM
 runs isolate radial refinement at fixed angular subdivision 2.
 
+Every A4 row is observed for five analytic mode periods. Radial convergence
+holds angular subdivision 2 fixed and judges frequency, centered energy, and
+PEC enforcement. Modal leakage is judged separately on the joint sequence
+`(subdivision, radial cells) = (1, 8), (2, 16), (3, 32)`.
+
+| A4 diagnostic | Coarse | Medium | Fine | Verdict |
+|---|---:|---:|---:|---|
+| TE centered-energy variation | `0.2995%` | `0.07198%` | `0.01439%` | PASS, order `2.1897` |
+| TM centered-energy variation | `0.3093%` | `0.08176%` | `0.02416%` | PASS, order `1.8392` |
+| TE joint modal leakage | `0.02347%` | `0.04121%` | `0.04406%` | FAIL, order `-0.4542` |
+| TM joint modal leakage | `0.08704%` | `0.04486%` | `0.02134%` | PASS, order `1.0139` |
+| PEC tangential trace residual | `0` | `0` | `0` | PASS, exactly enforced |
+
+The low TM mode reused by A2 has monotonically decreasing leakage from
+`0.09570%` to `0.003255%`. Separating the refinement directions resolves the
+earlier TM leakage ambiguity, but the equally timed joint study exposes a TE
+failure instead. The strict aggregate A4 verdict remains **FAIL** because the
+analytic TE mode does not approach an invariant discrete modal subspace under
+this sequence.
+
 ## Acceptance protocol
 
 Use predeclared refinement sequences and fit `error=C h^p`; do not compare only
@@ -136,9 +156,12 @@ one grid.
    order near two on subdivisions 1–4.
 4. A3 must recover positive attenuation and phase constant, with both errors
    decreasing under space/time refinement in the auxiliary channel.
-5. A4 must recover both the low TM and first radial TE modes. Frequency error,
-   mode-projection leakage, energy drift, and PEC tangential-field residual
-   must all decrease under refinement.
+5. A4 observes every radial mode for five analytic periods. On radial cells
+   8–32 at angular subdivision 2, TE/TM frequency error and centered-energy
+   variation must decrease monotonically, with fitted orders at least `1.8`
+   and `1.5`, respectively. Joint TE/TM leakage on `(1,8)`, `(2,16)`, and
+   `(3,32)` must have positive fitted order. Low-TM leakage must decrease
+   monotonically, and the odd-ghost PEC trace must remain exactly zero.
 
 No tolerance should be chosen from an observed production result. Initial
 roundoff tolerances may scale with dtype; convergence gates should use order

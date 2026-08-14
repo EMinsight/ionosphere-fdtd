@@ -17,7 +17,7 @@ analytic solution과 정확한 discrete-time solution을 구분하고, component
 | A1 | 균일 도체의 curl-free field | 물질 표본화, 손실 E update, precision | `E(t)=E0 exp[-sigma t/(epsilon_0 epsilon_r)]` | 수식, test, 현재 update 경로 준비 완료 |
 | A2 | 무손실 thin shell의 구면 surface harmonic | Geodesic curl/Hodge metric, TM/TE branch, leapfrog 시간 적분 | `lambda_l=l(l+1)/R^2`, `f_l=c sqrt(lambda_l)/(2 pi)`, 정확한 leapfrog 주파수 | Full-field 수렴 runner 완료 |
 | A3 | 균일 손실 매질의 plane wave | 유전율, 전도도, 감쇠와 위상 부호 | `gamma=sqrt[j omega mu (sigma+j omega epsilon)]` | Periodic Yee 보조 geometry 수렴 검증 완료 |
-| A4 | 두 동심 PEC 구면 사이 vector spherical harmonic | 완전한 구면 방사 metric, 모든 field component, 방사 PEC 경계, modal frequency 추출 | TE/TM spherical-Bessel determinant root | Staggered-field initializer, projector, full-field 수렴 검증 완료 |
+| A4 | 두 동심 PEC 구면 사이 vector spherical harmonic | 완전한 구면 방사 metric, 모든 field component, 방사 PEC 경계, modal frequency 추출 | TE/TM spherical-Bessel determinant root | Full-field 측정 완료, joint TE leakage 차수 때문에 엄격한 합격 기준 FAIL |
 
 A1 구현은 `EPSILON_0 * relative_permittivity`를 사용한다.
 
@@ -119,6 +119,25 @@ component를 정상적으로 갱신한다. 초기화 뒤 어떤 component도 0�
 A2는 수평 geodesic refinement를 검사하고, A4 TE와 TM 실행은 angular
 subdivision 2를 고정한 채 방사 refinement를 분리해 검사한다.
 
+모든 A4 격자는 analytic mode의 5주기 동안 관찰한다. Radial 수렴에서는 angular
+subdivision 2를 고정하고 주파수, centered energy, PEC 경계를 판정한다. Modal
+leakage는 `(subdivision, radial cells) = (1, 8), (2, 16), (3, 32)` joint
+sequence에서 따로 판정한다.
+
+| A4 진단 | 성긴 격자 | 중간 격자 | 조밀한 격자 | 판정 |
+|---|---:|---:|---:|---|
+| TE centered-energy 변동 | `0.2995%` | `0.07198%` | `0.01439%` | PASS, 차수 `2.1897` |
+| TM centered-energy 변동 | `0.3093%` | `0.08176%` | `0.02416%` | PASS, 차수 `1.8392` |
+| TE joint modal leakage | `0.02347%` | `0.04121%` | `0.04406%` | FAIL, 차수 `-0.4542` |
+| TM joint modal leakage | `0.08704%` | `0.04486%` | `0.02134%` | PASS, 차수 `1.0139` |
+| PEC tangential trace residual | `0` | `0` | `0` | PASS, 정확히 강제됨 |
+
+A2에서 재사용한 낮은 TM mode의 leakage는 `0.09570%`에서 `0.003255%`로
+단조 감소했다. Refinement 방향을 분리하자 앞서 발견한 TM leakage의 모호성은
+해소됐지만, 동일한 시간 동안 실행한 joint 연구에서 TE 실패가 드러났다. 이
+sequence에서는 analytic TE mode가 invariant discrete modal subspace에 가까워지지
+않으므로 A4 종합 판정은 여전히 엄격하게 **FAIL**이다.
+
 ## 합격 절차
 
 미리 정한 refinement sequence를 사용하고 `error=C h^p`를 fitting한다.
@@ -132,9 +151,12 @@ subdivision 2를 고정한 채 방사 refinement를 분리해 검사한다.
    약 2여야 한다.
 4. A3는 양의 감쇠와 위상상수를 복원해야 하며, 보조 channel의 공간·시간
    세분에 따라 두 오차가 모두 감소해야 한다.
-5. A4는 낮은 TM mode와 첫 방사 TE mode를 모두 복원해야 한다. 주파수 오차,
-   mode projection leakage, 에너지 drift, PEC tangential-field 잔차가 모두
-   세분에 따라 감소해야 한다.
+5. A4 radial mode는 모두 analytic 주파수의 5주기 동안 관찰한다. Angular
+   subdivision 2에서 radial cell을 8–32개로 늘릴 때 TE/TM 주파수 오차와
+   centered-energy 변동이 단조 감소하고 fitting 차수가 각각 `1.8`, `1.5`
+   이상이어야 한다. `(1,8)`, `(2,16)`, `(3,32)` joint sequence의 TE/TM
+   leakage fitting 차수는 양수여야 한다. 낮은 TM leakage는 단조 감소해야 하며,
+   odd ghost PEC trace는 정확히 0을 유지해야 한다.
 
 관측한 production 결과로 tolerance를 정하지 않는다. 초기 roundoff
 tolerance는 dtype에 따라 조정할 수 있지만, 수렴 gate에서는 고정 percentage

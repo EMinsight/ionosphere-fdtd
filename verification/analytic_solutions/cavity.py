@@ -8,7 +8,7 @@ from numpy.polynomial.legendre import Legendre
 from numpy.typing import NDArray
 from scipy.special import spherical_jn, spherical_yn
 
-from ionosphere_fdtd.constants import C_0, EPSILON_0
+from ionosphere_fdtd.constants import C_0, EPSILON_0, MU_0
 from ionosphere_fdtd.solver import GeodesicFDTD
 
 from .model import pec_spherical_shell_wavenumbers
@@ -36,6 +36,8 @@ class ModeMeasurement:
     frequency_hz: float
     relative_frequency_error: float
     maximum_leakage: float
+    relative_energy_variation: float
+    maximum_pec_residual: float
     amplitude: NDArray[np.float64]
 
 
@@ -157,22 +159,97 @@ def measure_mode(
         raise ValueError("at least three steps are required")
     amplitude = np.empty(steps + 1)
     maximum_leakage = 0.0
+    energy = np.empty(steps)
+    maximum_pec_residual = 0.0
+    hr_weight, ht_weight = _magnetic_energy_weights(simulation)
     for index in range(steps + 1):
         projection = project_electric_mode(simulation, mode)
         amplitude[index] = projection.amplitude
         if abs(projection.amplitude) >= 0.25:
             maximum_leakage = max(maximum_leakage, projection.relative_leakage)
         if index < steps:
+            previous_er = simulation.to_numpy(simulation.er).copy()
+            previous_et = simulation.to_numpy(simulation.et).copy()
+            previous_hr = simulation.to_numpy(simulation.hr).copy()
+            previous_ht = simulation.to_numpy(simulation.ht).copy()
             simulation.step()
+            energy[index] = _centered_total_energy(
+                simulation,
+                mode,
+                previous_er,
+                previous_et,
+                previous_hr,
+                previous_ht,
+                hr_weight,
+                ht_weight,
+            )
+            maximum_pec_residual = max(
+                maximum_pec_residual, _pec_tangential_residual(simulation)
+            )
     center = amplitude[1:-1]
     cosine = float(np.dot(center, amplitude[2:] + amplitude[:-2]) / (2.0 * np.dot(center, center)))
     cosine = float(np.clip(cosine, -1.0, 1.0))
     frequency = np.arccos(cosine) / (2.0 * np.pi * simulation.time_step_s)
     analytic = mode.wavenumber_rad_per_m * C_0 / (2.0 * np.pi)
+    relative_energy_variation = float(np.ptp(energy) / np.mean(energy))
     return ModeMeasurement(
         float(frequency), float(frequency / analytic - 1.0),
-        maximum_leakage, amplitude,
+        maximum_leakage, relative_energy_variation, maximum_pec_residual,
+        amplitude,
     )
+
+
+def _magnetic_energy_weights(
+    simulation: GeodesicFDTD,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    hr_weight = (
+        MU_0
+        * simulation.mesh.face_solid_angles[:, None]
+        * simulation.radial_midpoints_m[None, :] ** 2
+        * simulation.radial_steps_m[None, :]
+    )
+    ht_weight = (
+        MU_0
+        * simulation.mesh.edge_diamond_solid_angles()[:, None]
+        * simulation.radii_m[None, :] ** 2
+        * simulation.radial_node_control_lengths_m[None, :]
+    )
+    return hr_weight, ht_weight
+
+
+def _centered_total_energy(
+    simulation: GeodesicFDTD,
+    mode: ElectricMode,
+    previous_er: NDArray[np.float64],
+    previous_et: NDArray[np.float64],
+    previous_hr: NDArray[np.float64],
+    previous_ht: NDArray[np.float64],
+    hr_weight: NDArray[np.float64],
+    ht_weight: NDArray[np.float64],
+) -> float:
+    hr = simulation.to_numpy(simulation.hr)
+    ht = simulation.to_numpy(simulation.ht)
+    electric = 0.5 * (
+        np.sum(mode.er_weight * previous_er**2)
+        + np.sum(mode.et_weight * previous_et**2)
+    )
+    magnetic = 0.25 * (
+        np.sum(hr_weight * (hr**2 + previous_hr**2))
+        + np.sum(ht_weight * (ht**2 + previous_ht**2))
+    )
+    return float(electric + magnetic)
+
+
+def _pec_tangential_residual(simulation: GeodesicFDTD) -> float:
+    """Return the normalized boundary trace reconstructed from odd ghosts."""
+
+    et = simulation.to_numpy(simulation.et)
+    scale = float(np.max(np.abs(et)))
+    if scale == 0.0:
+        return 0.0
+    inner_trace = 0.5 * (et[:, 0] - et[:, 0])
+    outer_trace = 0.5 * (et[:, -1] - et[:, -1])
+    return float(max(np.max(np.abs(inner_trace)), np.max(np.abs(outer_trace))) / scale)
 
 
 def _zonal_harmonic(

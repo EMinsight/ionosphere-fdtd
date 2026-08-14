@@ -37,15 +37,26 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _write_full_field(output: Path) -> None:
-    results=run_full_field_suite();rows=["case,polarization,subdivision,radial_cells,analytic_frequency_hz,measured_frequency_hz,relative_frequency_error,maximum_leakage,time_step_s"]
-    for result in results:rows.append(",".join(str(getattr(result,name)) for name in ("case","polarization","subdivision","radial_cells","analytic_frequency_hz","measured_frequency_hz","relative_frequency_error","maximum_leakage","time_step_s")))
+    results=run_full_field_suite();rows=["case,refinement,polarization,subdivision,radial_cells,analytic_frequency_hz,measured_frequency_hz,relative_frequency_error,maximum_leakage,relative_energy_variation,maximum_pec_residual,time_step_s"]
+    for result in results:rows.append(",".join(str(getattr(result,name)) for name in ("case","refinement","polarization","subdivision","radial_cells","analytic_frequency_hz","measured_frequency_hz","relative_frequency_error","maximum_leakage","relative_energy_variation","maximum_pec_residual","time_step_s")))
     (output/"full-field.csv").write_text("\n".join(rows)+"\n")
-    a2=np.asarray([x.relative_frequency_error for x in results if x.case=="A2"]);a4_te=np.asarray([x.relative_frequency_error for x in results if x.case=="A4" and x.polarization=="TE"]);a4_tm=np.asarray([x.relative_frequency_error for x in results if x.case=="A4" and x.polarization=="TM"])
+    a2_rows=[x for x in results if x.case=="A2"];a2=np.asarray([x.relative_frequency_error for x in a2_rows]);a4_te_rows=[x for x in results if x.case=="A4" and x.refinement=="radial" and x.polarization=="TE"];a4_tm_rows=[x for x in results if x.case=="A4" and x.refinement=="radial" and x.polarization=="TM"];a4_te=np.asarray([x.relative_frequency_error for x in a4_te_rows]);a4_tm=np.asarray([x.relative_frequency_error for x in a4_tm_rows])
     periodic=run_periodic_convergence();periodic_rows=["cells,time_step_s,analytic_decay_per_s,measured_decay_per_s,relative_decay_error,analytic_frequency_hz,measured_frequency_hz,relative_frequency_error"]
     for result in periodic:periodic_rows.append(",".join(str(getattr(result,name)) for name in ("cells","time_step_s","analytic_decay_per_s","measured_decay_per_s","relative_decay_error","analytic_frequency_hz","measured_frequency_hz","relative_frequency_error")))
     (output/"periodic-lossy.csv").write_text("\n".join(periodic_rows)+"\n")
     decay=np.asarray([x.relative_decay_error for x in periodic]);frequency=np.asarray([x.relative_frequency_error for x in periodic])
-    summary={"A2_horizontal_order":observed_order(a2),"A3_decay_order":observed_order(decay),"A3_frequency_order":observed_order(frequency),"A4_TE_radial_order":observed_order(a4_te),"A4_TM_radial_order":observed_order(a4_tm),"maximum_leakage":max(x.maximum_leakage for x in results)}
+    te_energy=np.asarray([x.relative_energy_variation for x in a4_te_rows]);tm_energy=np.asarray([x.relative_energy_variation for x in a4_tm_rows]);joint_te=np.asarray([x.maximum_leakage for x in results if x.case=="A4" and x.refinement=="joint" and x.polarization=="TE"]);joint_tm=np.asarray([x.maximum_leakage for x in results if x.case=="A4" and x.refinement=="joint" and x.polarization=="TM"])
+    orders={"A4_TE_radial_order":observed_order(a4_te),"A4_TM_radial_order":observed_order(a4_tm),"A4_TE_energy_variation_order":observed_order(te_energy),"A4_TM_energy_variation_order":observed_order(tm_energy),"A4_TE_joint_leakage_order":observed_order(joint_te),"A4_TM_joint_leakage_order":observed_order(joint_tm)}
+    monotone=lambda values: bool(np.all(np.diff(np.abs(values)) < 0.0))
+    failures=[]
+    if not all(orders[name] >= 1.8 for name in ("A4_TE_radial_order","A4_TM_radial_order")):failures.append("radial frequency order below 1.8")
+    if not all(orders[name] >= 1.5 for name in ("A4_TE_energy_variation_order","A4_TM_energy_variation_order")):failures.append("energy-variation order below 1.5")
+    if not all(monotone(values) for values in (a4_te,a4_tm,te_energy,tm_energy)):failures.append("radial frequency or energy variation is not monotone")
+    if not all(orders[name] > 0.0 for name in ("A4_TE_joint_leakage_order","A4_TM_joint_leakage_order")):failures.append("joint leakage does not have positive order")
+    if not monotone(np.asarray([x.maximum_leakage for x in a2_rows])):failures.append("low-TM leakage is not monotone")
+    pec=max(x.maximum_pec_residual for x in results)
+    if pec != 0.0:failures.append("PEC residual is nonzero")
+    summary={"A2_horizontal_order":observed_order(a2),"A3_decay_order":observed_order(decay),"A3_frequency_order":observed_order(frequency),**orders,"maximum_leakage":max(x.maximum_leakage for x in results),"maximum_pec_residual":pec,"A4_observation_periods":5.0,"A4_acceptance_verdict":"PASS" if not failures else "FAIL","A4_acceptance_failures":failures}
     (output/"full-field-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
 
 

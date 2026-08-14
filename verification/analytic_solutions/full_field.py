@@ -14,6 +14,7 @@ from .cavity import VacuumMaterial, build_electric_mode, initialize_electric_sta
 @dataclass(frozen=True, slots=True)
 class ConvergenceRow:
     case: str
+    refinement: str
     polarization: str
     subdivision: int
     radial_cells: int
@@ -21,20 +22,37 @@ class ConvergenceRow:
     measured_frequency_hz: float
     relative_frequency_error: float
     maximum_leakage: float
+    relative_energy_variation: float
+    maximum_pec_residual: float
     time_step_s: float
 
 
 def run_full_field_suite() -> tuple[ConvergenceRow, ...]:
     rows = []
     for subdivision in (1, 2, 3, 4):
-        rows.append(_run("A2", "TM", subdivision, 8, 0, 2_000))
+        rows.append(_run("A2", "horizontal", "TM", subdivision, 8, 0, steps=2_000))
     for polarization, radial_index in (("TE", 0), ("TM", 1)):
         for radial_cells in (8, 16, 32):
-            rows.append(_run("A4", polarization, 2, radial_cells, radial_index, 400))
+            rows.append(
+                _run(
+                    "A4", "radial", polarization, 2, radial_cells,
+                    radial_index, periods=5.0,
+                )
+            )
+        for subdivision, radial_cells in ((1, 8), (2, 16), (3, 32)):
+            rows.append(
+                _run(
+                    "A4", "joint", polarization, subdivision, radial_cells,
+                    radial_index, periods=5.0,
+                )
+            )
     return tuple(rows)
 
 
-def _run(case, polarization, subdivision, radial_cells, radial_index, steps):
+def _run(
+    case, refinement, polarization, subdivision, radial_cells, radial_index,
+    *, steps=None, periods=None,
+):
     simulation = GeodesicFDTD(
         SimulationConfig(
             subdivision=subdivision,
@@ -52,12 +70,17 @@ def _run(case, polarization, subdivision, radial_cells, radial_index, steps):
         simulation, 1, polarization=polarization, radial_index=radial_index
     )
     initialize_electric_standing_mode(simulation, mode)
-    result = measure_mode(simulation, mode, steps)
     analytic = mode.wavenumber_rad_per_m * C_0 / (2.0 * np.pi)
+    if (steps is None) == (periods is None):
+        raise ValueError("specify exactly one of steps or periods")
+    if periods is not None:
+        steps = int(np.ceil(periods / (analytic * simulation.time_step_s)))
+    result = measure_mode(simulation, mode, steps)
     return ConvergenceRow(
-        case, polarization, subdivision, radial_cells, analytic,
+        case, refinement, polarization, subdivision, radial_cells, analytic,
         result.frequency_hz, result.relative_frequency_error,
-        result.maximum_leakage, simulation.time_step_s,
+        result.maximum_leakage, result.relative_energy_variation,
+        result.maximum_pec_residual, simulation.time_step_s,
     )
 
 
