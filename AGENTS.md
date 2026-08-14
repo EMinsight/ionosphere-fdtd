@@ -27,55 +27,14 @@ Document the supported subdivision levels and verify spherical area closure.
 
 ## Verification reports
 
-- Create and maintain verification reports in both English and Korean. Keep
-  the English report at `docs/verification/<name>.md` and its complete Korean
-  translation at `docs/verification/<name>.ko.md`.
-- Generate or update both language versions in the same change. Add reciprocal
-  language links near the top of each document so readers can switch versions
-  directly.
-- Treat the English and Korean reports as a synchronized pair in both
-  directions. Any content or wording change made first in the Korean version
-  must also be reflected in the English original, just as an English change
-  must be reflected in the Korean translation.
-- Mirror the complete report structure in the Korean version. Preserve every
-  table, figure, link, equation, command, file path, identifier, checksum,
-  metric, and PASS/FAIL verdict; do not replace the translation with an
-  abridged summary.
-- Keep code, command-line options, mathematical notation, hashes, and numeric
-  values unchanged. Translate headings, explanatory prose, captions, and
-  human-readable table labels and cells.
-- Before committing, compare the two versions for matching headings, table
-  rows, image references, fenced command blocks, and verification verdicts.
-
-### Korean prose quality
-
-- Write Korean reports as natural Korean technical prose. Translate the
-  meaning and reasoning, not the English sentence structure or word order.
-  A Korean reader should not have to reconstruct the English source to follow
-  the argument.
-- Prefer active sentences with a concrete subject and verb. Use passive forms
-  only when the actor is unknown or genuinely irrelevant; avoid repeated
-  `-되다`, `-되어 있다`, and English-style inanimate-subject constructions.
-- Replace stacked noun phrases and nominalizations with direct clauses. Split
-  long English sentences when that improves readability, while preserving all
-  qualifications, causal relationships, and scientific uncertainty.
-- Use established Korean technical terms for ordinary prose. Retain English
-  only for code identifiers, command-line options, standard acronyms, proper
-  names, or terms whose translation would introduce ambiguity. When useful,
-  introduce a Korean term with the English term in parentheses on first use
-  and use one form consistently thereafter.
-- Avoid translationese and literal calques such as unnatural uses of
-  “문서화된,” “공개된 불확실성,” or “조용히 확장되다.” Also avoid vague,
-  formulaic AI-style phrasing such as repeated “이는 … 보여준다,” “따라서,”
-  “실질적인 개선,” “주목할 만하다,” or generic concluding restatements.
-  State the concrete observation, evidence, and consequence directly.
-- Do not add praise, emphasis, certainty, or interpretation absent from the
-  English report. Preserve epistemic strength exactly, especially distinctions
-  among confirmed causes, supported hypotheses, limitations, and unknowns.
-- After drafting, read the Korean version independently from the English one.
-  Revise sentences that sound translated, overlong, overly passive, or dense
-  with untranslated English. Scan for repeated transition phrases and verify
-  terminology consistency before running the structural parity checks above.
+- Keep verification reports concise and in English. Do not create parallel
+  translated copies.
+- Maintain exactly three canonical reports under `docs/verification/`: the
+  A0--A4 analytic verification, Simpson--Taflove 2004 reproduction, and
+  Simpson--Heikes--Taflove 2006 reproduction.
+- Record final models, equations, configurations, evidence, verdicts, and
+  reproducibility limits. Keep exploratory failure history out of the final
+  reports unless it is required to interpret the accepted result.
 
 ## Verification code
 

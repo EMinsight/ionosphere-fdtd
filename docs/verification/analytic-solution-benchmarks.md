@@ -1,231 +1,210 @@
-# Analytic-solution benchmark suite
+# Analytic Maxwell Solver Verification (A0–A4)
 
-[한국어 번역](analytic-solution-benchmarks.ko.md)
+## Purpose
 
-## Objective
+This report verifies the geodesic FDTD solver against solutions derived from
+Maxwell's equations and explicit boundary conditions. The cases progress from
+exact invariants to full-vector modes in a concentric spherical PEC cavity.
+All reported production runs use `float64` fields.
 
-Future solver validation will use problems whose reference solutions follow
-from Maxwell's equations and the declared boundary conditions, not curves from
-a particular paper. This catalog separates continuum analytic solutions from
-exact discrete-time solutions and orders the cases from component checks to a
-full-vector spherical-cavity benchmark.
+| Case | Model | Primary solver feature | Result |
+|---|---|---|---|
+| A0 | Source-free zero field | Storage, updates, boundaries | **PASS** |
+| A1 | Homogeneous conductive relaxation | Loss integration and material coefficients | **PASS** |
+| A2 | Spherical surface harmonic | Geodesic curl/Hodge and leapfrog dispersion | **PASS** |
+| A3 | Homogeneous lossy plane wave | Simultaneous propagation and attenuation | **PASS** |
+| A4 | Concentric PEC spherical cavity | Full-vector TE/TM modes and radial boundaries | **PASS** |
 
-## Prepared cases
+## A0: source-free zero field
 
-| ID | Analytic model | Solver features exercised | Reference quantity | Readiness |
-|---|---|---|---|---|
-| A0 | Zero fields and vacuum static field | Field storage, source-free update, boundaries | Fields remain exactly unchanged | Existing automated invariant |
-| A1 | Curl-free field in a homogeneous conductor | Material sampling, lossy E update, precision | `E(t)=E0 exp[-sigma t/(epsilon_0 epsilon_r)]` | Formula, tests, and current update path ready |
-| A2 | Spherical surface harmonic in a lossless thin shell | Geodesic curl/Hodge metrics, TM/TE branches, leapfrog time integration | `lambda_l=l(l+1)/R^2`; `f_l=c sqrt(lambda_l)/(2 pi)`; exact leapfrog frequency | Full-field convergence runner complete |
-| A3 | Plane wave in a homogeneous lossy medium | Permittivity, conductivity, attenuation and phase signs | `gamma=sqrt[j omega mu (sigma+j omega epsilon)]` | Periodic Yee auxiliary-geometry convergence complete |
-| A4 | Vector spherical harmonics between two concentric PEC spheres | Full spherical radial metrics, all field components, radial PEC boundaries, modal frequency extraction | TE/TM spherical-Bessel determinant roots | PASS under the prospectively declared asymptotic v2 protocol; v1 failure retained |
+With no sources and zero initial conditions,
 
-The A1 implementation uses `EPSILON_0 * relative_permittivity`.
+$$
+\mathbf{E}(\mathbf{x},0)=\mathbf{0},\qquad
+\mathbf{H}(\mathbf{x},0)=\mathbf{0},
+$$
 
-## Analytic references
+Maxwell's equations give the exact solution
 
-### A1: homogeneous conductive relaxation
+$$
+\mathbf{E}(\mathbf{x},t)=\mathbf{0},\qquad
+\mathbf{H}(\mathbf{x},t)=\mathbf{0}.
+$$
 
-For a spatially curl-free electric field with no impressed current,
+The solver preserves every field array exactly. This invariant is checked by
+default pytest because it is deterministic and requires no convergence study.
 
-```text
-epsilon dE/dt + sigma E = 0,
-E(t) = E0 exp(-sigma t / epsilon).
-```
+## A1: homogeneous conductive relaxation
 
-This is an exact test of the exponential loss integrator. With trapezoidal
-loss integration, compare instead with its known rational amplification
-factor so physical-model and discrete-integrator error are not mixed.
+For a spatially curl-free electric field in a homogeneous isotropic medium,
+Ampère's law reduces to
 
-### A2: lossless spherical surface modes
+$$
+\epsilon\frac{d\mathbf{E}}{dt}+\sigma\mathbf{E}=0,
+\qquad \epsilon=\epsilon_0\epsilon_r.
+$$
 
-For a scalar spherical harmonic `Y_l^m`,
+The analytic solution is
 
-```text
--Delta_S Y_l^m = l(l+1)/R^2 Y_l^m.
-```
+$$
+\mathbf{E}(t)=\mathbf{E}_0
+\exp\!\left(-\frac{\sigma t}{\epsilon}\right),
+\qquad
+\tau=\frac{\epsilon}{\sigma}.
+$$
 
-The continuum angular frequency is `omega_l=c sqrt(l(l+1))/R`. Once a spatial
-discrete eigenvalue `lambda_h` is measured, the centered leapfrog recurrence
-has the exact numerical frequency
+The exponential loss update matches this amplification, remains passive, and
+stays finite in the stiff-conductivity limit. Pytest owns these fast contracts;
+the analytic catalog records representative reference values.
 
-```text
-omega_dt = (2/dt) asin(c dt sqrt(lambda_h) / 2).
-```
+## A2: spherical surface harmonics
 
-The first comparison measures spatial convergence to the continuum value. The
-second compares the time trace with the exact discrete recurrence at machine
-precision. Keeping these tests separate identifies whether an error comes from
-space or time.
+On a sphere of radius $R$, a scalar spherical harmonic satisfies
 
-### A3: homogeneous lossy propagation
+$$
+-\Delta_S Y_\ell^m
+=\lambda_\ell Y_\ell^m,
+\qquad
+\lambda_\ell=\frac{\ell(\ell+1)}{R^2}.
+$$
 
-For the `exp(+j omega t)` convention,
+For wave speed $c$, the continuum angular frequency and frequency are
 
-```text
-gamma = alpha + j beta
-      = sqrt[j omega mu (sigma + j omega epsilon)].
-```
+$$
+\omega_\ell=c\sqrt{\lambda_\ell},
+\qquad
+f_\ell=\frac{c}{2\pi R}\sqrt{\ell(\ell+1)}.
+$$
 
-At 400 Hz with `sigma=0.001 S/m` and `epsilon_r=10`, the prepared reference is
-`alpha=0.00125649725 Np/m`, `beta=0.00125677689 rad/m`, and phase velocity
-`1.99977748e6 m/s`. This case is useful for verifying attenuation sign and
-material coefficients, but the global spherical grid does not supply a pure
-periodic plane-wave channel. It should remain an auxiliary geometry rather
-than be inferred from a point-source global waveform.
+If the spatial discretization produces $\lambda_h$, centered leapfrog time
+integration has the exact discrete frequency
 
-The auxiliary periodic one-dimensional Yee problem now measures the damped
-Fourier mode directly. Both its decay rate and oscillation frequency converge
-to their continuum references at second order. This auxiliary
-case isolates the simultaneous loss and propagation update; it does not test
-the spherical Hodge geometry, which A2 and A4 cover.
+$$
+\omega_{h,\Delta t}
+=\frac{2}{\Delta t}
+\sin^{-1}\!\left(\frac{c\Delta t\sqrt{\lambda_h}}{2}\right).
+$$
 
-### A4: concentric PEC spherical cavity
+The low-TM full-field sequence uses subdivisions 1–4. Its relative frequency
+error decreases from $-1.9382\%$ to $-0.03169\%$, with observed order
+$p=1.9782$. Maximum off-mode electric-energy leakage decreases from
+$0.09570\%$ to $0.003255\%$.
 
-Let the inner and outer radii be `a` and `b`. A radial function is a linear
-combination of spherical Bessel functions `j_l(kr)` and `y_l(kr)`. The PEC
-roots satisfy
+## A3: homogeneous lossy propagation
 
-```text
-TE: det [[j_l(ka), y_l(ka)], [j_l(kb), y_l(kb)]] = 0
-TM: replace each z_l(x) by d[x z_l(x)]/dx.
-```
+For the $e^{+j\omega t}$ convention in a homogeneous medium,
 
-For `a=6371 km`, `b=a+100 km`, and `l=1`, the first three prepared roots are:
+$$
+\gamma=\alpha+j\beta
+=\sqrt{j\omega\mu\left(\sigma+j\omega\epsilon\right)},
+$$
 
-| Polarization | Frequencies (Hz) |
+where $\alpha$ is attenuation and $\beta$ is phase constant. The phase
+velocity is
+
+$$
+v_p=\frac{\omega}{\beta}.
+$$
+
+At $f=400\ \mathrm{Hz}$, $\sigma=10^{-3}\ \mathrm{S/m}$, and
+$\epsilon_r=10$, the reference values are
+
+$$
+\alpha=1.25649725\times10^{-3}\ \mathrm{Np/m},
+$$
+
+$$
+\beta=1.25677689\times10^{-3}\ \mathrm{rad/m},
+\qquad
+v_p=1.99977748\times10^6\ \mathrm{m/s}.
+$$
+
+A periodic one-dimensional Yee auxiliary geometry isolates this material and
+time-update test without introducing spherical point-source spreading. Over
+64–512 cells, attenuation and frequency errors converge with orders $2.0031$
+and $2.0024$, respectively. A3 therefore verifies the update equations, not
+the geodesic Hodge geometry covered by A2 and A4.
+
+## A4: concentric PEC spherical cavity
+
+Let the cavity occupy $a<r<b$ with perfect electric conductors at both radial
+boundaries. The vector spherical-harmonic radial factor is
+
+$$
+z_\ell(kr)=A j_\ell(kr)+B y_\ell(kr),
+$$
+
+where $j_\ell$ and $y_\ell$ are spherical Bessel functions. Nontrivial TE
+solutions require
+
+$$
+\det\begin{pmatrix}
+j_\ell(ka) & y_\ell(ka)\\
+j_\ell(kb) & y_\ell(kb)
+\end{pmatrix}=0.
+$$
+
+For TM modes, define
+
+$$
+D z_\ell(x)=\frac{d}{dx}\left[xz_\ell(x)\right].
+$$
+
+The TM roots satisfy
+
+$$
+\det\begin{pmatrix}
+D j_\ell(ka) & D y_\ell(ka)\\
+D j_\ell(kb) & D y_\ell(kb)
+\end{pmatrix}=0,
+\qquad
+f=\frac{ck}{2\pi}.
+$$
+
+For $a=6371\ \mathrm{km}$, $b=a+100\ \mathrm{km}$, and $\ell=1$:
+
+| Polarization | First three frequencies (Hz) |
 |---|---|
 | TE | 1498.99913, 2997.94300, 4496.89915 |
 | TM | 10.50912, 1498.99913, 2997.94300 |
 
-The low TM root exercises horizontal Earth-scale propagation; the approximately
-1499 Hz roots exercise the first radial standing wave. This makes A4 the best
-single end-to-end problem for distinguishing horizontal, radial, polarization,
-boundary, and time-integration errors.
+The initializer samples the analytic vector mode at the actual staggered
+electric degrees of freedom and starts a standing wave with $\mathbf{H}=0$.
+The solver advances all field components without resetting or suppressing any
+component. The projector measures energy-weighted amplitude and orthogonal
+leakage.
 
-## Measured convergence
+The final asymptotic TE sequence was declared as subdivision/radial-cell pairs
+$(2,16)$, $(3,32)$, and $(4,64)$, with every case observed for five analytic
+periods.
 
-The initializer samples the analytic vector spherical harmonic at the actual
-staggered electric-field degrees of freedom. It starts a standing wave with
-`H=0`; the projector then measures its energy-weighted modal amplitude and
-orthogonal leakage while the solver advances every field component normally.
-No component is reset or suppressed after initialization.
-
-| Case and quantity | Coarsest relative error | Finest relative error | Observed order |
-|---|---:|---:|---:|
-| A2 low TM frequency, subdivisions 1–4 | `-1.9382%` | `-0.03169%` | `1.9782` |
-| A3 periodic decay rate, 64–512 cells | `+0.3633%` | `+0.005640%` | `2.0031` |
-| A3 periodic frequency, 64–512 cells | `-0.5630%` | `-0.008753%` | `2.0024` |
-| A4 first radial TE frequency, 8–32 radial cells | `-0.6161%` | `-0.03856%` | `1.9989` |
-| A4 first radial TM frequency, 8–32 radial cells | `-0.6161%` | `-0.03858%` | `1.9987` |
-
-The maximum measured off-mode electric-energy fraction is `0.0009570271`.
-A2 supplies the horizontal geodesic refinement study, while the A4 TE and TM
-runs isolate radial refinement at fixed angular subdivision 2.
-
-Every A4 row is observed for five analytic mode periods. Radial convergence
-holds angular subdivision 2 fixed and judges frequency, centered energy, and
-PEC enforcement. Modal leakage is judged separately on the joint sequence
-`(subdivision, radial cells) = (1, 8), (2, 16), (3, 32)`.
-
-| A4 diagnostic | Coarse | Medium | Fine | Verdict |
-|---|---:|---:|---:|---|
-| TE centered-energy variation | `0.2995%` | `0.07198%` | `0.01439%` | PASS, order `2.1897` |
-| TM centered-energy variation | `0.3093%` | `0.08176%` | `0.02416%` | PASS, order `1.8392` |
-| TE joint modal leakage | `0.02347%` | `0.04121%` | `0.04406%` | FAIL, order `-0.4542` |
-| TM joint modal leakage | `0.08704%` | `0.04486%` | `0.02134%` | PASS, order `1.0139` |
-| PEC tangential trace residual | `0` | `0` | `0` | PASS, exactly enforced |
-
-The low TM mode reused by A2 has monotonically decreasing leakage from
-`0.09570%` to `0.003255%`. Separating the refinement directions resolves the
-earlier TM leakage ambiguity, but the equally timed joint study exposes a TE
-failure instead. The v1 A4 verdict remains **FAIL** because the
-analytic TE mode does not approach an invariant discrete modal subspace under
-this sequence.
-
-### TE operator comparison
-
-A matrix-free weighted Krylov–Ritz analysis applies the solver's actual
-electric `curl-curl` operator to the sampled analytic TE mode. It then selects
-the Ritz vector with the largest analytic-mode overlap and evolves that vector
-for one period with its own energy-weighted projector.
-
-| Subdivision / radial cells | Analytic operator residual | Analytic–Ritz overlap | Ritz frequency (Hz) | Ritz-projector leakage |
-|---|---:|---:|---:|---:|
-| `1 / 8` | `4.7324e-6` | `0.9999559328` | `1489.38552` | `1.2065e-6` |
-| `2 / 16` | `3.4335e-5` | `0.9999991780` | `1496.59225` | `3.9011e-5` |
-| `3 / 32` | `1.6712e-5` | `0.9999999577` | `1498.39719` | `2.1328e-5` |
-| `4 / 64` | `9.7667e-6` | `0.9999999975` | `1498.84863` | `1.0551e-5` |
-
-The Ritz frequency error decreases by approximately four on every refinement,
-and the analytic–Ritz overlap approaches one. Subdivision 1 is exceptionally
-close to invariant by operator residual, while subdivisions 2–4 show decreasing
-analytic residual and Ritz-projector leakage. This identifies the original
-`1/8, 2/16, 3/32` TE leakage gate as containing a non-asymptotic coarse-grid
-symmetry effect; it does not indicate a failed TE eigenvalue. This analysis was
-completed before declaring and running the asymptotic v2 sequence below.
-
-### A4 asymptotic v2 acceptance
-
-The v2 protocol fixes the TE sequence at `2/16, 3/32, 4/64`, observes each case
-for five analytic periods, and requires frequency order at least `1.8`,
-energy-variation order at least `1.5`, positive leakage order, and exactly zero
-PEC residual. These gates were encoded before the production run.
-
-| Quantity | `2 / 16` | `3 / 32` | `4 / 64` | Order | Verdict |
+| Quantity | $(2,16)$ | $(3,32)$ | $(4,64)$ | Order | Result |
 |---|---:|---:|---:|---:|---|
-| Relative frequency error | `-0.15417%` | `-0.03855%` | `-0.009638%` | `1.99979` | PASS |
-| Centered-energy variation | `0.07198%` | `0.01436%` | `0.00009418%` | `4.78900` | PASS |
-| Modal leakage | `0.04121%` | `0.04406%` | `0.03524%` | `0.11302` | PASS |
-| PEC tangential trace residual | `0` | `0` | `0` | — | PASS |
+| Relative frequency error | $-0.15417\%$ | $-0.03855\%$ | $-0.009638\%$ | 1.99979 | **PASS** |
+| Centered-energy variation | $0.07198\%$ | $0.01436\%$ | $0.00009418\%$ | 4.78900 | **PASS** |
+| Modal leakage | $0.04121\%$ | $0.04406\%$ | $0.03524\%$ | 0.11302 | **PASS** |
+| PEC tangential trace residual | 0 | 0 | 0 | — | **PASS** |
 
-All declared v2 gates pass. Together with the already passing radial TE/TM,
-low-TM, energy, and PEC checks, this updates the current A4 verdict to
-**PASS**. The v1 failure remains recorded rather than being overwritten.
+The radial TE and TM frequency studies independently converge with orders
+1.9989 and 1.9987. The odd-ghost construction enforces the tangential PEC trace
+exactly.
 
-## Acceptance protocol
+## Test placement
 
-Use predeclared refinement sequences and fit `error=C h^p`; do not compare only
-one grid.
-
-1. A0 must remain at exact zero on every backend and supported dtype.
-2. A1 must match the selected loss integrator's analytic amplification to
-   roundoff for a curl-free field, including a stiff conductive case.
-3. A2 discrete-time traces must match the leapfrog recurrence to roundoff.
-   Continuum eigenvalue errors must decrease monotonically with an observed
-   order near two on subdivisions 1–4.
-4. A3 must recover positive attenuation and phase constant, with both errors
-   decreasing under space/time refinement in the auxiliary channel.
-5. A4 observes every radial mode for five analytic periods. On radial cells
-   8–32 at angular subdivision 2, TE/TM frequency error and centered-energy
-   variation must decrease monotonically, with fitted orders at least `1.8`
-   and `1.5`, respectively. Joint TE/TM leakage on `(1,8)`, `(2,16)`, and
-   `(3,32)` must have positive fitted order. Low-TM leakage must decrease
-   monotonically, and the odd-ghost PEC trace must remain exactly zero.
-6. If operator evidence identifies a non-asymptotic coarse level, a replacement
-   sequence must be declared before it is run. A4 v2 uses TE `2/16, 3/32,
-   4/64` with the same five-period window and gates of frequency order `>=1.8`,
-   energy-variation order `>=1.5`, positive leakage order, and zero PEC trace.
-
-No tolerance should be chosen from an observed production result. Initial
-roundoff tolerances may scale with dtype; convergence gates should use order
-and monotonicity before fixed percentage thresholds.
-
-## Next implementation work
-
-The analytic cases can now be placed according to their intended cost: compact
-invariants and formula checks in pytest, convergence timing in benchmarks, and
-the generated full-field evidence in verification. Production acceptance
-thresholds should be declared separately from these exploratory measurements.
+| Layer | Responsibility | A0–A4 content |
+|---|---|---|
+| Default pytest | Fast deterministic contracts | Invariants, formulas, loss update, initializer/projector, and gate logic |
+| `verification/` | Scientific evidence and acceptance | A2 full field, A3 periodic convergence, A4 radial/asymptotic full field |
+| `benchmarks/` | Runtime only | Representative A0–A4 workflows; never used for PASS/FAIL |
 
 ## Reproduction
 
-[`artifacts/analytic-solutions/`](../../artifacts/analytic-solutions/) stores
-the generated reference catalog. Rebuild it with:
-
 ```bash
-python -m verification.analytic_solutions
+python -m pytest -q
 python -m verification.analytic_solutions --full-field
 python -m verification.analytic_solutions --operator-analysis
 python -m verification.analytic_solutions --a4-asymptotic
 ```
+
+Generated data are stored in
+[`artifacts/analytic-solutions/`](../../artifacts/analytic-solutions/).

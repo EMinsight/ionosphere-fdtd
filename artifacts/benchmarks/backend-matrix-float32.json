@@ -1,0 +1,64 @@
+{
+  "system": {
+    "platform": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "python": "3.12.3",
+    "numpy": "2.5.1",
+    "torch": "2.13.0+cu130"
+  },
+  "configuration": {
+    "subdivision": 2,
+    "radial_cells": 16,
+    "steps": 200,
+    "warmup_steps": 20,
+    "repeats": 3,
+    "dtype": "float32",
+    "torch_compile": false
+  },
+  "results": [
+    {
+      "backend": "numpy",
+      "device": "cpu",
+      "dtype": "float32",
+      "compiled": false,
+      "status": "ok",
+      "median_seconds": 0.06617212999844924,
+      "steps_per_second": 3022.4204662096727,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cpu",
+      "dtype": "float32",
+      "compiled": false,
+      "status": "ok",
+      "median_seconds": 0.10973739199107513,
+      "steps_per_second": 1822.532833806237,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": false,
+      "status": "ok",
+      "median_seconds": 0.16753681300906464,
+      "steps_per_second": 1193.7674855327402,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "mps",
+      "dtype": "float32",
+      "compiled": false,
+      "status": "unavailable",
+      "median_seconds": null,
+      "steps_per_second": null,
+      "field_memory_bytes": null,
+      "reason": "PyTorch was not built with MPS support"
+    }
+  ]
+}
