@@ -16,9 +16,9 @@ full-vector spherical-cavity benchmark.
 |---|---|---|---|---|
 | A0 | Zero fields and vacuum static field | Field storage, source-free update, boundaries | Fields remain exactly unchanged | Existing automated invariant |
 | A1 | Curl-free field in a homogeneous conductor | Material sampling, lossy E update, precision | `E(t)=E0 exp[-sigma t/(epsilon_0 epsilon_r)]` | Formula, tests, and current update path ready |
-| A2 | Spherical surface harmonic in a lossless thin shell | Geodesic curl/Hodge metrics, TM/TE branches, leapfrog time integration | `lambda_l=l(l+1)/R^2`; `f_l=c sqrt(lambda_l)/(2 pi)`; exact leapfrog frequency | Formula and component tests ready; production convergence runner next |
-| A3 | Plane wave in a homogeneous lossy medium | Permittivity, conductivity, attenuation and phase signs | `gamma=sqrt[j omega mu (sigma+j omega epsilon)]` | Formula and tests ready; requires a plane-wave/periodic auxiliary geometry for end-to-end use |
-| A4 | Vector spherical harmonics between two concentric PEC spheres | Full spherical radial metrics, all field components, radial PEC boundaries, modal frequency extraction | TE/TM spherical-Bessel determinant roots | Root solver ready; staggered-field initializer and projection runner are the next implementation target |
+| A2 | Spherical surface harmonic in a lossless thin shell | Geodesic curl/Hodge metrics, TM/TE branches, leapfrog time integration | `lambda_l=l(l+1)/R^2`; `f_l=c sqrt(lambda_l)/(2 pi)`; exact leapfrog frequency | Full-field convergence runner complete |
+| A3 | Plane wave in a homogeneous lossy medium | Permittivity, conductivity, attenuation and phase signs | `gamma=sqrt[j omega mu (sigma+j omega epsilon)]` | Periodic Yee auxiliary-geometry convergence complete |
+| A4 | Vector spherical harmonics between two concentric PEC spheres | Full spherical radial metrics, all field components, radial PEC boundaries, modal frequency extraction | TE/TM spherical-Bessel determinant roots | Staggered-field initializer, projector, and full-field convergence complete |
 
 The A1 implementation uses `EPSILON_0 * relative_permittivity`.
 
@@ -74,6 +74,12 @@ material coefficients, but the global spherical grid does not supply a pure
 periodic plane-wave channel. It should remain an auxiliary geometry rather
 than be inferred from a point-source global waveform.
 
+The auxiliary periodic one-dimensional Yee problem now measures the damped
+Fourier mode directly. Both its decay rate and oscillation frequency converge
+to their continuum references at second order. This auxiliary
+case isolates the simultaneous loss and propagation update; it does not test
+the spherical Hodge geometry, which A2 and A4 cover.
+
 ### A4: concentric PEC spherical cavity
 
 Let the inner and outer radii be `a` and `b`. A radial function is a linear
@@ -97,6 +103,26 @@ The low TM root exercises horizontal Earth-scale propagation; the approximately
 single end-to-end problem for distinguishing horizontal, radial, polarization,
 boundary, and time-integration errors.
 
+## Measured convergence
+
+The initializer samples the analytic vector spherical harmonic at the actual
+staggered electric-field degrees of freedom. It starts a standing wave with
+`H=0`; the projector then measures its energy-weighted modal amplitude and
+orthogonal leakage while the solver advances every field component normally.
+No component is reset or suppressed after initialization.
+
+| Case and quantity | Coarsest relative error | Finest relative error | Observed order |
+|---|---:|---:|---:|
+| A2 low TM frequency, subdivisions 1–4 | `-1.9382%` | `-0.03169%` | `1.9782` |
+| A3 periodic decay rate, 64–512 cells | `+0.3633%` | `+0.005640%` | `2.0031` |
+| A3 periodic frequency, 64–512 cells | `-0.5630%` | `-0.008753%` | `2.0024` |
+| A4 first radial TE frequency, 8–32 radial cells | `-0.6161%` | `-0.03856%` | `1.9989` |
+| A4 first radial TM frequency, 8–32 radial cells | `-0.6161%` | `-0.03858%` | `1.9987` |
+
+The maximum measured off-mode electric-energy fraction is `0.0009570271`.
+A2 supplies the horizontal geodesic refinement study, while the A4 TE and TM
+runs isolate radial refinement at fixed angular subdivision 2.
+
 ## Acceptance protocol
 
 Use predeclared refinement sequences and fit `error=C h^p`; do not compare only
@@ -107,7 +133,7 @@ one grid.
    roundoff for a curl-free field, including a stiff conductive case.
 3. A2 discrete-time traces must match the leapfrog recurrence to roundoff.
    Continuum eigenvalue errors must decrease monotonically with an observed
-   order near two on subdivisions 5–8.
+   order near two on subdivisions 1–4.
 4. A3 must recover positive attenuation and phase constant, with both errors
    decreasing under space/time refinement in the auxiliary channel.
 5. A4 must recover both the low TM and first radial TE modes. Frequency error,
@@ -118,13 +144,12 @@ No tolerance should be chosen from an observed production result. Initial
 roundoff tolerances may scale with dtype; convergence gates should use order
 and monotonicity before fixed percentage thresholds.
 
-## Implementation order
+## Next implementation work
 
-The immediate next change should implement the A4 staggered vector-spherical-
-harmonic initializer and modal projection at small subdivisions. A2 should run
-alongside it as a cheaper regression. A3 should be deferred until a periodic
-or otherwise exact plane-wave auxiliary geometry exists; using the global
-point-source solution would invalidate its analytic assumptions.
+The analytic cases can now be placed according to their intended cost: compact
+invariants and formula checks in pytest, convergence timing in benchmarks, and
+the generated full-field evidence in verification. Production acceptance
+thresholds should be declared separately from these exploratory measurements.
 
 ## Reproduction
 
@@ -133,4 +158,5 @@ the generated reference catalog. Rebuild it with:
 
 ```bash
 python -m verification.analytic_solutions
+python -m verification.analytic_solutions --full-field
 ```

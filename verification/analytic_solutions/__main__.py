@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 from pathlib import Path
@@ -9,9 +10,12 @@ import numpy as np
 
 from ionosphere_fdtd.constants import EARTH_RADIUS_M
 from .model import homogeneous_medium_propagation_constant, pec_spherical_shell_frequencies_hz, spherical_surface_frequency_hz
+from .full_field import observed_order, run_full_field_suite
+from .periodic import run_periodic_convergence
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("--full-field",action="store_true");args=parser.parse_args(argv)
     output = Path("artifacts/analytic-solutions"); output.mkdir(parents=True, exist_ok=True)
     degrees = np.asarray((1, 2, 5, 8, 20, 61))
     surface = np.asarray([spherical_surface_frequency_hz(int(value), EARTH_RADIUS_M) for value in degrees])
@@ -26,7 +30,23 @@ def main() -> int:
     catalog={"git_revision":_revision(),"reference_radius_m":EARTH_RADIUS_M,"shell_outer_offset_m":100_000.0,"surface_modes":{"degree":degrees.tolist(),"frequency_hz":surface.tolist()},"pec_shell_modes_hz":shell,"homogeneous_400_hz":media,"case_order":["A0 zero/static fields","A1 homogeneous conductive relaxation","A2 spherical surface harmonic plus leapfrog dispersion","A3 homogeneous lossy-medium propagation constant","A4 concentric PEC spherical-shell TE/TM modes"]}
     (output/"catalog.json").write_text(json.dumps(catalog,indent=2)+"\n")
     rows=["degree,surface_frequency_hz"]+[f"{degree},{frequency:.12g}" for degree,frequency in zip(degrees,surface)]
-    (output/"surface-modes.csv").write_text("\n".join(rows)+"\n");print(json.dumps(catalog,indent=2));return 0
+    (output/"surface-modes.csv").write_text("\n".join(rows)+"\n")
+    if args.full_field:
+        _write_full_field(output)
+    print(json.dumps(catalog,indent=2));return 0
+
+
+def _write_full_field(output: Path) -> None:
+    results=run_full_field_suite();rows=["case,polarization,subdivision,radial_cells,analytic_frequency_hz,measured_frequency_hz,relative_frequency_error,maximum_leakage,time_step_s"]
+    for result in results:rows.append(",".join(str(getattr(result,name)) for name in ("case","polarization","subdivision","radial_cells","analytic_frequency_hz","measured_frequency_hz","relative_frequency_error","maximum_leakage","time_step_s")))
+    (output/"full-field.csv").write_text("\n".join(rows)+"\n")
+    a2=np.asarray([x.relative_frequency_error for x in results if x.case=="A2"]);a4_te=np.asarray([x.relative_frequency_error for x in results if x.case=="A4" and x.polarization=="TE"]);a4_tm=np.asarray([x.relative_frequency_error for x in results if x.case=="A4" and x.polarization=="TM"])
+    periodic=run_periodic_convergence();periodic_rows=["cells,time_step_s,analytic_decay_per_s,measured_decay_per_s,relative_decay_error,analytic_frequency_hz,measured_frequency_hz,relative_frequency_error"]
+    for result in periodic:periodic_rows.append(",".join(str(getattr(result,name)) for name in ("cells","time_step_s","analytic_decay_per_s","measured_decay_per_s","relative_decay_error","analytic_frequency_hz","measured_frequency_hz","relative_frequency_error")))
+    (output/"periodic-lossy.csv").write_text("\n".join(periodic_rows)+"\n")
+    decay=np.asarray([x.relative_decay_error for x in periodic]);frequency=np.asarray([x.relative_frequency_error for x in periodic])
+    summary={"A2_horizontal_order":observed_order(a2),"A3_decay_order":observed_order(decay),"A3_frequency_order":observed_order(frequency),"A4_TE_radial_order":observed_order(a4_te),"A4_TM_radial_order":observed_order(a4_tm),"maximum_leakage":max(x.maximum_leakage for x in results)}
+    (output/"full-field-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
 
 
 def _revision() -> str:
