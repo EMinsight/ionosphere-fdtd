@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,15 +7,33 @@ name = "ionosphere-fdtd"
 version = "0.1.0"
 description = "NumPy and PyTorch geodesic FDTD model of the Earth-ionosphere waveguide"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+    { name = "Kyungwon Chun", email = "ruddyscent@gmail.com" },
+]
+keywords = [
+    "electromagnetics",
+    "fdtd",
+    "geodesic-grid",
+    "ionosphere",
+    "maxwell-equations",
+]
 requires-python = ">=3.11"
 dependencies = ["numpy>=2.0"]
 classifiers = [
-    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
 ]
 
 [project.urls]
 Homepage = "https://github.com/ruddyscent/ionosphere-fdtd"
+Documentation = "https://github.com/ruddyscent/ionosphere-fdtd/tree/master/docs/manual"
 Repository = "https://github.com/ruddyscent/ionosphere-fdtd"
 Issues = "https://github.com/ruddyscent/ionosphere-fdtd/issues"
 
