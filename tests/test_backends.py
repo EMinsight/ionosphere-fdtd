@@ -48,6 +48,49 @@ def test_numpy_backend_rejects_compiled_step() -> None:
         GeodesicFDTD(config=config(), backend="numpy", compile_step=True)
 
 
+@pytest.mark.parametrize("chunk_size", (0, True, 1.5))
+def test_compile_chunk_size_must_be_a_positive_integer(chunk_size) -> None:
+    with pytest.raises(ValueError, match="compile_chunk_size"):
+        GeodesicFDTD(config=config(), compile_chunk_size=chunk_size)
+
+
+def test_compiled_step_batches_full_chunks_and_preserves_remainder(
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def fake_compile_step(backend, function):
+        del backend
+
+        def compiled(values):
+            calls.append(np.shape(values))
+            return function(values)
+
+        return compiled
+
+    monkeypatch.setattr(NumPyBackend, "compile_step", fake_compile_step)
+    eager = GeodesicFDTD(config=config(), source=source())
+    compiled = GeodesicFDTD(
+        config=config(),
+        source=source(),
+        compile_step=True,
+        compile_chunk_size=8,
+    )
+
+    eager.step(19)
+    compiled.step(19)
+
+    assert calls == [(8,), (8,), (), (), ()]
+    assert compiled.diagnostics()["compile_chunk_size"] == 8
+    for field in ("er", "et", "hr", "ht"):
+        np.testing.assert_allclose(
+            compiled.to_numpy(getattr(compiled, field)),
+            getattr(eager, field),
+            rtol=5.0e-13,
+            atol=5.0e-29,
+        )
+
+
 def test_numpy_backend_rejects_torch_threads() -> None:
     with pytest.raises(BackendUnavailableError, match="PyTorch CPU"):
         GeodesicFDTD(config=config(), backend="numpy", torch_threads=1)

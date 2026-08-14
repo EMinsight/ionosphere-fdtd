@@ -21,6 +21,7 @@ class BackendResult:
     device: str
     dtype: str
     compiled: bool
+    compile_chunk_size: int
     status: str
     median_seconds: float | None
     steps_per_second: float | None
@@ -44,8 +45,9 @@ def run_backend_matrix(
     repeats: int = 3,
     dtype: str = "float32",
     torch_compile: bool = False,
+    torch_compile_chunk_size: int = 8,
 ) -> dict[str, object]:
-    if min(steps, repeats) < 1 or warmup_steps < 0:
+    if min(steps, repeats, torch_compile_chunk_size) < 1 or warmup_steps < 0:
         raise ValueError("steps/repeats must be positive and warmup nonnegative")
     configurations = (
         ("numpy", "cpu"),
@@ -64,6 +66,7 @@ def run_backend_matrix(
             repeats=repeats,
             dtype=dtype,
             compile_step=torch_compile and backend == "torch",
+            compile_chunk_size=torch_compile_chunk_size,
         )
         for backend, device in configurations
     ]
@@ -83,6 +86,7 @@ def run_backend_matrix(
             "repeats": repeats,
             "dtype": dtype,
             "torch_compile": torch_compile,
+            "torch_compile_chunk_size": torch_compile_chunk_size,
         },
         "results": [asdict(result) for result in results],
     }
@@ -99,6 +103,7 @@ def _measure(
     repeats,
     dtype,
     compile_step,
+    compile_chunk_size,
 ):
     try:
         simulation = GeodesicFDTD(
@@ -114,10 +119,11 @@ def _measure(
             device=device,
             dtype=dtype,
             compile_step=compile_step,
+            compile_chunk_size=compile_chunk_size,
         )
     except (BackendUnavailableError, ImportError, RuntimeError) as error:
         return BackendResult(
-            backend, device, dtype, compile_step, "unavailable",
+            backend, device, dtype, compile_step, compile_chunk_size, "unavailable",
             None, None, None, str(error),
         )
     _initialize_fields(simulation)
@@ -136,8 +142,15 @@ def _measure(
         for field in ("er", "et", "hr", "ht")
     )
     return BackendResult(
-        backend, simulation.backend.device, dtype, compile_step, "ok",
-        median, steps / median, memory,
+        backend,
+        simulation.backend.device,
+        dtype,
+        compile_step,
+        compile_chunk_size,
+        "ok",
+        median,
+        steps / median,
+        memory,
     )
 
 
@@ -165,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--torch-compile", action="store_true")
+    parser.add_argument("--torch-compile-chunk-size", type=int, default=8)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     payload = run_backend_matrix(
@@ -175,6 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         repeats=args.repeats,
         dtype=args.dtype,
         torch_compile=args.torch_compile,
+        torch_compile_chunk_size=args.torch_compile_chunk_size,
     )
     rendered = json.dumps(payload, indent=2) + "\n"
     if args.output is not None:

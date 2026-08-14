@@ -39,7 +39,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--torch-compile",
         action="store_true",
-        help="compile the PyTorch field step for long-running simulations",
+        help="compile chunked PyTorch field steps for long-running simulations",
+    )
+    parser.add_argument(
+        "--torch-compile-chunk-size",
+        type=int,
+        default=8,
+        help="number of time steps captured in each compiled graph",
     )
     parser.add_argument(
         "--torch-threads",
@@ -154,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--steps must be non-negative")
     if args.torch_threads is not None and args.torch_threads < 1:
         raise SystemExit("--torch-threads must be positive")
+    if args.torch_compile_chunk_size < 1:
+        raise SystemExit("--torch-compile-chunk-size must be positive")
     try:
         simulation = GeodesicFDTD(
             config=SimulationConfig(
@@ -169,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
             device=args.device,
             dtype=args.dtype,
             compile_step=args.torch_compile,
+            compile_chunk_size=args.torch_compile_chunk_size,
             torch_threads=args.torch_threads,
         )
     except BackendUnavailableError as error:
@@ -181,7 +190,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"backend={simulation.backend.name} device={simulation.backend.device} "
         f"dtype={simulation.backend.dtype_name}{thread_text} "
-        f"compiled={simulation.compiled}"
+        f"compiled={simulation.compiled} "
+        f"compile_chunk_size={simulation.compile_chunk_size}"
     )
     simulation.step(args.steps)
     output = getattr(args, "output", None)

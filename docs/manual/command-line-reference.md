@@ -15,7 +15,7 @@ The principal option groups are:
 |---|---|
 | Work | `--steps`, `--report-every`, `--resume`, `--checkpoint`, `--checkpoint-every` |
 | Grid | `--subdivision`, `--radial-cells`, `--surface-step`, `--courant` |
-| Backend | `--backend`, `--device`, `--dtype`, `--torch-compile`, `--torch-threads` |
+| Backend | `--backend`, `--device`, `--dtype`, `--torch-compile`, `--torch-compile-chunk-size`, `--torch-threads` |
 | Source | `--source-current`, `--source-length`, `--source-frequency`, `--source-center`, `--source-width`, `--source-latitude`, `--source-longitude` |
 | Anomaly | `--oil-anomaly`, `--anomaly-radius-km` |
 

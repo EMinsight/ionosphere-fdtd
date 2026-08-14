@@ -75,6 +75,7 @@ python -m benchmarks.backend_matrix \
   --repeats 3 \
   --dtype float32 \
   --torch-compile \
+  --torch-compile-chunk-size 8 \
   --output artifacts/benchmarks/backend-matrix-compiled-float32.json
 ```
 
@@ -88,6 +89,10 @@ presenting one machine's numbers as universal performance.
 
 - Compare eager and compiled PyTorch as separate experiments because compilation
   warm-up and graph caches change the cost model.
+- Keep warm-up and measured step counts divisible by the compile chunk size to
+  isolate the multi-step graph from the single-step remainder graph.
+- Sweep chunk sizes on the target hardware; larger graphs reduce dispatch but
+  cost more to compile and need not be faster for every grid.
 - Use `float32` for a four-device comparison. Use a separate `float64` run for
   NumPy CPU, PyTorch CPU, and CUDA; MPS will be unavailable.
 - Increase subdivision and step count for accelerator studies so kernel time

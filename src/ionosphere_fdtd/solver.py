@@ -167,8 +167,16 @@ class GeodesicFDTD:
         device: str = "auto",
         dtype: str = "auto",
         compile_step: bool = False,
+        compile_chunk_size: int = 8,
         torch_threads: int | None = None,
     ) -> None:
+        if (
+            isinstance(compile_chunk_size, bool)
+            or not isinstance(compile_chunk_size, (int, np.integer))
+            or compile_chunk_size < 1
+        ):
+            raise ValueError("compile_chunk_size must be a positive integer")
+        self.compile_chunk_size = int(compile_chunk_size)
         self.config = config or SimulationConfig()
         if mesh is None:
             self.mesh = build_geodesic_mesh(
@@ -292,6 +300,11 @@ class GeodesicFDTD:
             self.backend.compile_step(self._advance_fields)
             if compile_step
             else self._advance_fields
+        )
+        self._field_chunk = (
+            self.backend.compile_step(self._advance_field_chunk)
+            if compile_step
+            else self._advance_field_chunk
         )
 
     def _estimate_cfl_time_step_limit(self) -> float:
@@ -667,7 +680,12 @@ class GeodesicFDTD:
         count = self._validated_count(count, "step count", minimum=0)
         if self.compiled and count:
             currents = self._source_currents(count)
-            for offset in range(count):
+            chunk_steps = count - count % self.compile_chunk_size
+            for offset in range(0, chunk_steps, self.compile_chunk_size):
+                self._field_chunk(
+                    currents[offset : offset + self.compile_chunk_size]
+                )
+            for offset in range(chunk_steps, count):
                 self._field_step(currents[offset])
             self.steps += count
             self.time_s = self.steps * self.time_step_s
@@ -701,6 +719,7 @@ class GeodesicFDTD:
         device: str = "auto",
         dtype: str | None = None,
         compile_step: bool = False,
+        compile_chunk_size: int = 8,
         torch_threads: int | None = None,
     ) -> GeodesicFDTD:
         """Restore a checkpoint, optionally on a different backend or device."""
@@ -713,6 +732,7 @@ class GeodesicFDTD:
             device=device,
             dtype=dtype,
             compile_step=compile_step,
+            compile_chunk_size=compile_chunk_size,
             torch_threads=torch_threads,
         )
 
@@ -735,6 +755,12 @@ class GeodesicFDTD:
     def _advance_fields(self, current_a: Any) -> None:
         self._update_magnetic_fields()
         self._update_electric_fields(current_a)
+
+    def _advance_field_chunk(self, currents: Any) -> None:
+        """Advance a fixed-size current chunk inside one compiled graph."""
+
+        for offset in range(self.compile_chunk_size):
+            self._advance_fields(currents[offset])
 
     def _update_magnetic_fields(self) -> None:
         surface_gradient_er = self.backend.edge_difference(self.er)
@@ -828,6 +854,7 @@ class GeodesicFDTD:
             "device": self.backend.device,
             "dtype": self.backend.dtype_name,
             "compiled": self.compiled,
+            "compile_chunk_size": self.compile_chunk_size,
             "radial_boundary_condition": self.config.radial_boundary_condition,
             "loss_integration": self.config.loss_integration,
             "geometry_mode": self.config.geometry_mode,

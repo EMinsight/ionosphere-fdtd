@@ -32,9 +32,18 @@ uv run --extra pytorch ionosphere \
 
 ## Compilation
 
-`--torch-compile` compiles the static field step through PyTorch. Compilation
-has a significant first-use cost and is intended for long runs with fixed
-shapes. Compare eager and compiled execution as separate experiments.
+`--torch-compile` captures several static field steps in each PyTorch compiled
+graph. The default `--torch-compile-chunk-size 8` turns, for example, 80 time
+steps into 10 compiled calls instead of 80. A remainder shorter than the chunk
+uses the compiled single-step graph, so every requested count is supported
+without compiling a new graph shape.
+
+Larger chunks reduce Python dispatch and accelerator launch overhead but
+increase compilation time and graph size. Benchmark powers of two such as 4,
+8, 16, and 32 on the target grid and device. Compilation has a significant
+first-use cost and is intended for long runs with fixed shapes. Warm up with at
+least one complete chunk before timing, and compare eager and compiled
+execution as separate experiments.
 
 ## Choosing a backend
 
@@ -54,7 +63,7 @@ Run the standardized backend matrix:
 uv run --extra pytorch python -m benchmarks.backend_matrix \
   --subdivision 2 --radial-cells 16 \
   --steps 200 --warmup-steps 20 --repeats 3 \
-  --dtype float32
+  --dtype float32 --torch-compile --torch-compile-chunk-size 8
 ```
 
 The benchmark excludes setup and transfers from the timed region and

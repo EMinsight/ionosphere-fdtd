@@ -69,6 +69,7 @@ def load_checkpoint(
     device: str = "auto",
     dtype: str | None = None,
     compile_step: bool = False,
+    compile_chunk_size: int = 8,
     torch_threads: int | None = None,
 ) -> Any:
     """Restore a checkpoint, optionally on a different backend or device."""
@@ -129,6 +130,7 @@ def load_checkpoint(
         device=device,
         dtype=selected_dtype,
         compile_step=compile_step,
+        compile_chunk_size=compile_chunk_size,
         torch_threads=torch_threads,
     )
     simulation.config = config
@@ -197,6 +199,7 @@ def _metadata(simulation: Any) -> dict[str, Any]:
             "device": simulation.backend.device,
             "dtype": simulation.backend.dtype_name,
             "compiled": simulation.compiled,
+            "compile_chunk_size": simulation.compile_chunk_size,
         },
     }
 
