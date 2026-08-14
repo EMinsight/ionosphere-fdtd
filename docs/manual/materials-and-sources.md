@@ -1,0 +1,91 @@
+# Materials and Sources
+
+## Data-free Earth–ionosphere material
+
+`EarthIonosphereMaterial` is the default model. It provides a homogeneous
+lithosphere and exponential atmosphere/ionosphere without external datasets:
+
+- lithosphere conductivity: $10^{-3}\ \mathrm{S/m}$;
+- lithosphere relative permittivity: 10;
+- atmosphere relative permittivity: 1;
+- exponential ionospheric conductivity controlled by reference height, scale
+  height, and prefactor.
+
+All values are configurable constructor arguments. Custom material objects may
+be supplied if they implement
+
+```python
+sample(directions, altitudes_m, earth_radius_m) -> (sigma, epsilon_r)
+```
+
+and return finite arrays of shape `(directions, altitudes)`.
+
+## Layered geographic material
+
+`LayeredEarthIonosphereMaterial` supports land/ocean classification or sampled
+surface elevation, seawater, upper crust, asthenosphere, deep rock, and an
+exponential ionosphere. Supply exactly one of `land_classifier` or
+`surface_elevation_sampler`.
+
+Use `tangential_interface_mode="fractional"` when a tangential cell straddling
+a radial material interface should receive thickness-weighted properties.
+
+## Spherical anomalies
+
+```python
+from ionosphere_fdtd import EarthIonosphereMaterial, SphericalAnomaly
+
+anomaly = SphericalAnomaly(
+    latitude_deg=69.0,
+    longitude_deg=-156.0,
+    radius_m=40_000.0,
+    altitude_min_m=-2_000.0,
+    altitude_max_m=-500.0,
+    conductivity_factor=0.1,
+)
+material = EarthIonosphereMaterial(anomalies=(anomaly,))
+```
+
+An anomaly only affects electric samples intersecting its horizontal and radial
+support. The CLI warns when the selected grid cannot resolve it.
+
+## Vertical Gaussian current
+
+`GaussianCurrent` launches a localized radial electric source. Its main
+parameters are:
+
+| Parameter | Meaning |
+|---|---|
+| `latitude_deg`, `longitude_deg`, `altitude_m` | Exact geographic location |
+| `peak_current_a` | Peak current |
+| `vertical_element_length_m` | Current-element length |
+| `center_time_s` | Gaussian center |
+| `one_over_e_half_width_s` | Gaussian $1/e$ half-width |
+| `carrier_frequency_hz` | Optional cosine carrier |
+
+The source is distributed barycentrically across the containing surface
+triangle and linearly across adjacent staggered radial planes. This preserves
+the configured current moment under refinement.
+
+When a carrier is present and no width is supplied, the half-width defaults to
+$0.5/f$. The solver rejects a carrier at or above the time-step Nyquist limit.
+
+## Tangential Gaussian current
+
+`TangentialGaussianCurrent` projects one or more geographic azimuths onto the
+three oriented edges of the containing triangle:
+
+```python
+from ionosphere_fdtd import TangentialGaussianCurrent
+
+source = TangentialGaussianCurrent(
+    latitude_deg=46.5,
+    longitude_deg=-90.9,
+    carrier_frequency_hz=20.0,
+    azimuths_deg=(0.0, 90.0),
+    line_lengths_m=(22_500.0, 22_500.0),
+)
+```
+
+Azimuth is measured clockwise from geographic north. `edge_assignment` accepts
+`projected` for a vector reconstruction or `nearest` for compatibility studies.
