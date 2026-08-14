@@ -1,0 +1,118 @@
+{
+  "system": {
+    "platform": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "numpy": "2.5.1",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "compute_capability": "8.6",
+    "memory_bytes": 12488343552
+  },
+  "configuration": {
+    "subdivision": 2,
+    "radial_cells": 16,
+    "steps": 512,
+    "warmup_steps": 256,
+    "repeats": 5,
+    "dtype": "float32"
+  },
+  "results": [
+    {
+      "backend": "numpy",
+      "device": "cpu",
+      "dtype": "float32",
+      "compiled": false,
+      "compile_chunk_size": 1,
+      "status": "ok",
+      "median_seconds": 0.16411119000986218,
+      "steps_per_second": 3119.8360085575614,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": false,
+      "compile_chunk_size": 1,
+      "status": "ok",
+      "median_seconds": 0.43878626299556345,
+      "steps_per_second": 1166.8551255561454,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": true,
+      "compile_chunk_size": 1,
+      "status": "ok",
+      "median_seconds": 0.09424238602514379,
+      "steps_per_second": 5432.799630766976,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": true,
+      "compile_chunk_size": 16,
+      "status": "ok",
+      "median_seconds": 0.017328577989246696,
+      "steps_per_second": 29546.567543956764,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": true,
+      "compile_chunk_size": 32,
+      "status": "ok",
+      "median_seconds": 0.014007882011355832,
+      "steps_per_second": 36550.85041299853,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": true,
+      "compile_chunk_size": 64,
+      "status": "ok",
+      "median_seconds": 0.014818657014984637,
+      "steps_per_second": 34551.03923940376,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": true,
+      "compile_chunk_size": 128,
+      "status": "ok",
+      "median_seconds": 0.011746264004614204,
+      "steps_per_second": 43588.32730124868,
+      "field_memory_bytes": 94856,
+      "reason": null
+    },
+    {
+      "backend": "torch",
+      "device": "cuda:0",
+      "dtype": "float32",
+      "compiled": true,
+      "compile_chunk_size": 256,
+      "status": "ok",
+      "median_seconds": 0.01124431798234582,
+      "steps_per_second": 45534.10894318956,
+      "field_memory_bytes": 94856,
+      "reason": null
+    }
+  ]
+}
