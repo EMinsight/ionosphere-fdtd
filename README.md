@@ -77,3 +77,10 @@ commands, acceptance criteria, and current results.
    Earth-ionosphere waveguide,” *IEEE TAP*, 54(6), 1734–1741, 2006.
 4. A. Taflove and S. C. Hagness, *Computational Electrodynamics: The
    Finite-Difference Time-Domain Method*, 3rd ed., Chapter 3, 2005.
+
+## License
+
+Copyright 2026 Kyungwon Chun.
+
+Licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for the
+project copyright notice.
