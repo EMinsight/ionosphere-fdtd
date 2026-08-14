@@ -13,16 +13,16 @@ jobs:
         python-version: ["3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install package and test dependencies
-        run: python -m pip install -e ".[test,pytorch]"
+        run: python -m pip install -e ".[test,pytorch,verification]"
       - name: Check installed dependencies
         run: python -m pip check
       - name: Compile Python sources
-        run: python -m compileall -q src tests
+        run: python -m compileall -q src tests verification benchmarks
       - name: Run test suite
         run: python -m pytest -q
