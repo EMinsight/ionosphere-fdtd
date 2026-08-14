@@ -1,0 +1,79 @@
+{
+  "git_revision": "95ca892-dirty",
+  "reference_radius_m": 6371000.0,
+  "shell_outer_offset_m": 100000.0,
+  "surface_modes": {
+    "degree": [
+      1,
+      2,
+      5,
+      8,
+      20,
+      61
+    ],
+    "frequency_hz": [
+      10.59127458006003,
+      18.3446256895767,
+      41.01983006368245,
+      63.54764748036018,
+      153.48215016198924,
+      460.5682456079196
+    ]
+  },
+  "pec_shell_modes_hz": {
+    "l1_TE": [
+      1498.9991275391951,
+      2997.9429994486572,
+      4496.899149716302
+    ],
+    "l1_TM": [
+      10.509119467014145,
+      1498.9991302551175,
+      2997.9429997809643
+    ],
+    "l2_TE": [
+      1499.0727999057337,
+      2997.9798380062816,
+      4496.923709048195
+    ],
+    "l2_TM": [
+      18.20232878828552,
+      1499.0728080569522,
+      2997.9798390215788
+    ],
+    "l5_TE": [
+      1499.5147580625312,
+      2998.2008598528078,
+      4497.071062223208
+    ],
+    "l5_TM": [
+      40.701643561554945,
+      1499.5147988186768,
+      2998.200864943405
+    ]
+  },
+  "homogeneous_400_hz": {
+    "sigma_0_epsr_1": {
+      "beta_rad_per_m": 8.383380087806546e-06,
+      "attenuation_np_per_m": 0.0,
+      "phase_velocity_m_per_s": 299792458.0000065
+    },
+    "sigma_1e-05_epsr_1": {
+      "beta_rad_per_m": 0.00012580360360598945,
+      "attenuation_np_per_m": 0.0001255239643197915,
+      "phase_velocity_m_per_s": 19977759.387110107
+    },
+    "sigma_0.001_epsr_10": {
+      "beta_rad_per_m": 0.0012567768892852611,
+      "attenuation_np_per_m": 0.001256497249827699,
+      "phase_velocity_m_per_s": 1999777.481825874
+    }
+  },
+  "case_order": [
+    "A0 zero/static fields",
+    "A1 homogeneous conductive relaxation",
+    "A2 spherical surface harmonic plus leapfrog dispersion",
+    "A3 homogeneous lossy-medium propagation constant",
+    "A4 concentric PEC spherical-shell TE/TM modes"
+  ]
+}
