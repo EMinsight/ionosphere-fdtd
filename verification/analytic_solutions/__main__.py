@@ -12,10 +12,12 @@ from ionosphere_fdtd.constants import EARTH_RADIUS_M
 from .model import homogeneous_medium_propagation_constant, pec_spherical_shell_frequencies_hz, spherical_surface_frequency_hz
 from .full_field import observed_order, run_full_field_suite
 from .periodic import run_periodic_convergence
+from .operator_analysis import run_te_operator_comparison
+from .a4_asymptotic import write_a4_te_asymptotic
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("--full-field",action="store_true");args=parser.parse_args(argv)
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("--full-field",action="store_true");parser.add_argument("--operator-analysis",action="store_true");parser.add_argument("--a4-asymptotic",action="store_true");args=parser.parse_args(argv)
     output = Path("artifacts/analytic-solutions"); output.mkdir(parents=True, exist_ok=True)
     degrees = np.asarray((1, 2, 5, 8, 20, 61))
     surface = np.asarray([spherical_surface_frequency_hz(int(value), EARTH_RADIUS_M) for value in degrees])
@@ -33,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     (output/"surface-modes.csv").write_text("\n".join(rows)+"\n")
     if args.full_field:
         _write_full_field(output)
+    if args.operator_analysis:
+        _write_operator_analysis(output)
+    if args.a4_asymptotic:
+        print(json.dumps(write_a4_te_asymptotic(output), indent=2))
     print(json.dumps(catalog,indent=2));return 0
 
 
@@ -58,6 +64,12 @@ def _write_full_field(output: Path) -> None:
     if pec != 0.0:failures.append("PEC residual is nonzero")
     summary={"A2_horizontal_order":observed_order(a2),"A3_decay_order":observed_order(decay),"A3_frequency_order":observed_order(frequency),**orders,"maximum_leakage":max(x.maximum_leakage for x in results),"maximum_pec_residual":pec,"A4_observation_periods":5.0,"A4_acceptance_verdict":"PASS" if not failures else "FAIL","A4_acceptance_failures":failures}
     (output/"full-field-summary.json").write_text(json.dumps(summary,indent=2)+"\n")
+
+
+def _write_operator_analysis(output: Path) -> None:
+    results=run_te_operator_comparison();names=("subdivision","radial_cells","analytic_relative_residual","ritz_relative_residual","analytic_ritz_overlap","analytic_frequency_hz","ritz_frequency_hz","ritz_projector_leakage_one_period")
+    rows=[",".join(names)]+[",".join(str(getattr(result,name)) for name in names) for result in results]
+    (output/"te-operator-comparison.csv").write_text("\n".join(rows)+"\n")
 
 
 def _revision() -> str:

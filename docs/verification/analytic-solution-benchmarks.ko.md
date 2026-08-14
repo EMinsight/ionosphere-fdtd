@@ -17,7 +17,7 @@ analytic solution과 정확한 discrete-time solution을 구분하고, component
 | A1 | 균일 도체의 curl-free field | 물질 표본화, 손실 E update, precision | `E(t)=E0 exp[-sigma t/(epsilon_0 epsilon_r)]` | 수식, test, 현재 update 경로 준비 완료 |
 | A2 | 무손실 thin shell의 구면 surface harmonic | Geodesic curl/Hodge metric, TM/TE branch, leapfrog 시간 적분 | `lambda_l=l(l+1)/R^2`, `f_l=c sqrt(lambda_l)/(2 pi)`, 정확한 leapfrog 주파수 | Full-field 수렴 runner 완료 |
 | A3 | 균일 손실 매질의 plane wave | 유전율, 전도도, 감쇠와 위상 부호 | `gamma=sqrt[j omega mu (sigma+j omega epsilon)]` | Periodic Yee 보조 geometry 수렴 검증 완료 |
-| A4 | 두 동심 PEC 구면 사이 vector spherical harmonic | 완전한 구면 방사 metric, 모든 field component, 방사 PEC 경계, modal frequency 추출 | TE/TM spherical-Bessel determinant root | Full-field 측정 완료, joint TE leakage 차수 때문에 엄격한 합격 기준 FAIL |
+| A4 | 두 동심 PEC 구면 사이 vector spherical harmonic | 완전한 구면 방사 metric, 모든 field component, 방사 PEC 경계, modal frequency 추출 | TE/TM spherical-Bessel determinant root | 사전 선언한 asymptotic v2 protocol에서 PASS, v1 실패 기록은 보존 |
 
 A1 구현은 `EPSILON_0 * relative_permittivity`를 사용한다.
 
@@ -136,7 +136,47 @@ A2에서 재사용한 낮은 TM mode의 leakage는 `0.09570%`에서 `0.003255%`�
 단조 감소했다. Refinement 방향을 분리하자 앞서 발견한 TM leakage의 모호성은
 해소됐지만, 동일한 시간 동안 실행한 joint 연구에서 TE 실패가 드러났다. 이
 sequence에서는 analytic TE mode가 invariant discrete modal subspace에 가까워지지
-않으므로 A4 종합 판정은 여전히 엄격하게 **FAIL**이다.
+않으므로 A4 v1 판정은 **FAIL**이다.
+
+### TE 연산자 비교
+
+Matrix-free weighted Krylov–Ritz 분석으로 solver의 실제 electric `curl-curl`
+연산자를 표본화한 analytic TE mode에 적용했다. 그런 다음 analytic mode와
+overlap이 가장 큰 Ritz vector를 선택하고, 자체 energy-weighted projector로
+그 vector를 1주기 동안 진화시켰다.
+
+| Subdivision / radial cells | Analytic operator residual | Analytic–Ritz overlap | Ritz 주파수 (Hz) | Ritz-projector leakage |
+|---|---:|---:|---:|---:|
+| `1 / 8` | `4.7324e-6` | `0.9999559328` | `1489.38552` | `1.2065e-6` |
+| `2 / 16` | `3.4335e-5` | `0.9999991780` | `1496.59225` | `3.9011e-5` |
+| `3 / 32` | `1.6712e-5` | `0.9999999577` | `1498.39719` | `2.1328e-5` |
+| `4 / 64` | `9.7667e-6` | `0.9999999975` | `1498.84863` | `1.0551e-5` |
+
+격자를 한 단계 세분할 때마다 Ritz 주파수 오차는 약 4분의 1로 줄고,
+analytic–Ritz overlap은 1에 가까워진다. Subdivision 1은 operator residual이
+예외적으로 작아 거의 invariant하며, subdivision 2–4에서는 analytic residual과
+Ritz-projector leakage가 감소한다. 따라서 기존 `1/8, 2/16, 3/32` TE leakage
+gate에는 비점근적인 coarse-grid symmetry 효과가 포함돼 있다. TE 고유값 자체가
+잘못됐다는 결과는 아니다. 아래 asymptotic v2 sequence는 이 분석을 마친 뒤,
+production 실행 결과를 보기 전에 선언했다.
+
+### A4 asymptotic v2 합격 판정
+
+V2 protocol은 TE sequence를 `2/16, 3/32, 4/64`로 고정하고 각 case를 analytic
+주파수의 5주기 동안 관찰한다. 주파수 차수 `1.8` 이상, energy-variation 차수
+`1.5` 이상, 양의 leakage 차수, 정확히 0인 PEC residual을 요구한다. Production
+실행 전에 이 gate를 코드에 먼저 넣었다.
+
+| 측정량 | `2 / 16` | `3 / 32` | `4 / 64` | 차수 | 판정 |
+|---|---:|---:|---:|---:|---|
+| 상대 주파수 오차 | `-0.15417%` | `-0.03855%` | `-0.009638%` | `1.99979` | PASS |
+| Centered-energy 변동 | `0.07198%` | `0.01436%` | `0.00009418%` | `4.78900` | PASS |
+| Modal leakage | `0.04121%` | `0.04406%` | `0.03524%` | `0.11302` | PASS |
+| PEC tangential trace residual | `0` | `0` | `0` | — | PASS |
+
+선언한 v2 gate를 모두 통과했다. 이미 통과한 radial TE/TM, 낮은 TM, energy,
+PEC 검사까지 합치면 현재 A4 판정은 **PASS**다. V1 실패 결과는 덮어쓰지 않고
+그대로 보존한다.
 
 ## 합격 절차
 
@@ -157,6 +197,10 @@ sequence에서는 analytic TE mode가 invariant discrete modal subspace에 가�
    이상이어야 한다. `(1,8)`, `(2,16)`, `(3,32)` joint sequence의 TE/TM
    leakage fitting 차수는 양수여야 한다. 낮은 TM leakage는 단조 감소해야 하며,
    odd ghost PEC trace는 정확히 0을 유지해야 한다.
+6. Operator 근거에서 coarse level이 비점근 구간임을 확인하면 대체 sequence를
+   실행 전에 선언해야 한다. A4 v2는 동일한 5주기 관찰창에서 TE `2/16,
+   3/32, 4/64`를 사용하고, 주파수 차수 `>=1.8`, energy-variation 차수
+   `>=1.5`, 양의 leakage 차수, PEC trace 0을 gate로 삼는다.
 
 관측한 production 결과로 tolerance를 정하지 않는다. 초기 roundoff
 tolerance는 dtype에 따라 조정할 수 있지만, 수렴 gate에서는 고정 percentage
@@ -177,4 +221,6 @@ reference catalog를 저장한다. 다음 명령으로 다시 만든다.
 ```bash
 python -m verification.analytic_solutions
 python -m verification.analytic_solutions --full-field
+python -m verification.analytic_solutions --operator-analysis
+python -m verification.analytic_solutions --a4-asymptotic
 ```

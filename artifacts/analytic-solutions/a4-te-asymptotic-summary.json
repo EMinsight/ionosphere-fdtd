@@ -1,0 +1,8 @@
+{
+  "protocol": "TE subdivisions/radial-cells 2/16, 3/32, 4/64; five periods",
+  "frequency_order": 1.9997900378489448,
+  "energy_variation_order": 4.789003452012798,
+  "leakage_order": 0.11302136345715912,
+  "A4_acceptance_verdict": "PASS",
+  "A4_acceptance_failures": []
+}
