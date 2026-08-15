@@ -6,6 +6,17 @@ import argparse
 from pathlib import Path
 
 from .backends import BackendUnavailableError
+from .cli_config import (
+    add_config_argument,
+    apply_toml_defaults,
+    clear_explicit_append_defaults,
+    explicit_subcommand,
+    load_toml_from_argv,
+    subparser,
+    table,
+    validate_nested_tables,
+    validate_root_sections,
+)
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import (
     GWANGJU_LATITUDE_DEG,
@@ -27,6 +38,7 @@ from .visualization import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    add_config_argument(parser)
     parser.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
     parser.add_argument(
         "--device",
@@ -72,7 +84,7 @@ def _parser() -> argparse.ArgumentParser:
     surface.add_argument("--scale", choices=("linear", "symlog"), default="linear")
     surface.add_argument("--color-limit", type=float)
     surface.add_argument("--coastlines", action="store_true")
-    surface.add_argument("--output", type=Path, required=True)
+    surface.add_argument("--output", type=Path)
 
     section = subparsers.add_parser("section", help="render a distance-height section")
     section.add_argument(
@@ -90,7 +102,7 @@ def _parser() -> argparse.ArgumentParser:
     section.add_argument("--samples", type=int, default=241)
     section.add_argument("--scale", choices=("linear", "symlog"), default="linear")
     section.add_argument("--color-limit", type=float)
-    section.add_argument("--output", type=Path, required=True)
+    section.add_argument("--output", type=Path)
 
     mesh = subparsers.add_parser("mesh", help="render a 3-D geodesic surface")
     mesh.add_argument("--component", choices=("topology", "er", "hr"), default="topology")
@@ -100,7 +112,7 @@ def _parser() -> argparse.ArgumentParser:
         "--earth-texture", action=argparse.BooleanOptionalAction, default=True
     )
     mesh.add_argument("--field-opacity", type=float, default=0.82)
-    mesh.add_argument("--output", type=Path, required=True)
+    mesh.add_argument("--output", type=Path)
 
     animation = subparsers.add_parser("animate", help="write a GIF or MP4")
     animation.add_argument("--component", choices=("er", "hr"), default="er")
@@ -116,7 +128,7 @@ def _parser() -> argparse.ArgumentParser:
     animation.add_argument(
         "--show-edges", action=argparse.BooleanOptionalAction, default=True
     )
-    animation.add_argument("--output", type=Path, required=True)
+    animation.add_argument("--output", type=Path)
 
     live = subparsers.add_parser(
         "live", help="advance the solver in an interactive 3-D window"
@@ -150,12 +162,37 @@ def _parser() -> argparse.ArgumentParser:
         metavar=("LAT", "LON", "ALT_KM"),
         type=float,
     )
-    traces.add_argument("--output", type=Path, required=True)
+    traces.add_argument("--output", type=Path)
     return parser
 
 
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = _parser()
+    _, document = load_toml_from_argv(argv)
+    validate_root_sections(document, allowed={"ionosphere", "visualization"})
+    values = table(document, ("visualization",))
+    commands = {"surface", "section", "mesh", "animate", "live", "traces"}
+    validate_nested_tables(values, allowed=commands, section="visualization")
+    apply_toml_defaults(parser, values, section="visualization")
+    for configured_command in commands:
+        command_values = table(document, ("visualization", configured_command))
+        apply_toml_defaults(
+            subparser(parser, configured_command),
+            command_values,
+            section=f"visualization.{configured_command}",
+        )
+    command = explicit_subcommand(argv, commands)
+    if command is not None:
+        command_parser = subparser(parser, command)
+        clear_explicit_append_defaults(command_parser, argv)
+    args = parser.parse_args(argv)
+    if args.command != "live" and args.output is None:
+        parser.error(f"{args.command} requires --output or a TOML output value")
+    return args
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    args = _parse_args(argv)
     if args.steps < 0:
         raise SystemExit("--steps must be non-negative")
     if args.torch_threads is not None and args.torch_threads < 1:

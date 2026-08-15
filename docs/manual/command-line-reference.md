@@ -19,6 +19,72 @@ The principal option groups are:
 | Source | `--source-current`, `--source-length`, `--source-frequency`, `--source-center`, `--source-width`, `--source-latitude`, `--source-longitude` |
 | Anomaly | `--oil-anomaly`, `--anomaly-radius-km` |
 
+## TOML configuration files
+
+Both command-line applications accept `--config PATH`. Configuration values
+become parser defaults, so an explicitly supplied command-line option always
+wins:
+
+```bash
+cp configs/ionosphere.example.toml run.toml
+uv run ionosphere --config run.toml
+
+# Reuse the file but override only this run's device and step count.
+uv run ionosphere --config run.toml --device cpu --steps 100
+```
+
+Simulation-runner values belong in `[ionosphere]`. TOML keys use the argparse
+destination spelling: replace option hyphens with underscores. For example,
+`--radial-cells` becomes `radial_cells`, `--torch-compile` becomes
+`torch_compile`, and flags use TOML booleans.
+
+```toml
+[ionosphere]
+steps = 20000
+subdivision = 5
+radial_cells = 40
+backend = "torch"
+device = "cuda:0"
+dtype = "float32"
+torch_compile = true
+torch_compile_chunk_size = 32
+source_frequency = 20.0
+checkpoint = "artifacts/runs/model.npz"
+checkpoint_every = 5000
+```
+
+The visualization runner reads shared simulation defaults from
+`[visualization]` and render-specific values from
+`[visualization.COMMAND]`. Place `--config` before the command:
+
+```toml
+[visualization]
+subdivision = 4
+radial_cells = 40
+steps = 100
+
+[visualization.surface]
+component = "er"
+scale = "symlog"
+coastlines = true
+output = "artifacts/figures/surface.png"
+```
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --config run.toml surface
+```
+
+The tables for `surface`, `section`, `mesh`, `animate`, `live`, and `traces`
+accept the same names as their command-specific options. Repeatable values use
+arrays; for example, `receiver` is an array of `[latitude, longitude,
+altitude_km]` arrays. Relative paths are interpreted from the command's current
+working directory. Unknown keys, invalid types, unsupported choices, malformed
+TOML, and missing files terminate with a diagnostic instead of being ignored.
+See
+[`configs/ionosphere.example.toml`](../../configs/ionosphere.example.toml) for
+a complete starting point.
+
 `--surface-step SPACING_M` adds regularly spaced radial nodes within 5 km of
 sea level. Because this creates abrupt transitions to the coarse grid, the CLI
 selects the explicitly permitted first-order transition policy. Use the Python

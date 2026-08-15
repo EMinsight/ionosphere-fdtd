@@ -9,6 +9,14 @@ import numpy as np
 
 from .backends import BackendUnavailableError
 from .checkpoint import CheckpointError
+from .cli_config import (
+    add_config_argument,
+    apply_toml_defaults,
+    load_toml_from_argv,
+    table,
+    validate_nested_tables,
+    validate_root_sections,
+)
 from .materials import EarthIonosphereMaterial, SphericalAnomaly
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import (
@@ -20,6 +28,7 @@ from .sources import (
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    add_config_argument(parser)
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument(
         "--resume", type=Path, help="resume model and fields from an NPZ checkpoint"
@@ -95,8 +104,18 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = _parser()
+    _, document = load_toml_from_argv(argv)
+    validate_root_sections(document, allowed={"ionosphere", "visualization"})
+    values = table(document, ("ionosphere",))
+    validate_nested_tables(values, allowed=set(), section="ionosphere")
+    apply_toml_defaults(parser, values, section="ionosphere")
+    return parser.parse_args(argv)
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    args = _parse_args(argv)
     if args.steps < 0:
         raise SystemExit("--steps must be non-negative")
     if args.report_every <= 0:
