@@ -27,6 +27,18 @@ uv sync --extra test --extra visualization --extra pytorch
 uv run ionosphere --steps 200
 ```
 
+For repeatable runs, copy the provided TOML configuration and edit it instead
+of repeating command-line options:
+
+```bash
+cp configs/ionosphere.example.toml run.toml
+uv run ionosphere --config run.toml
+```
+
+Explicit command-line options override values from the file. See the
+[command-line reference](docs/manual/command-line-reference.md#toml-configuration-files)
+for the simulation and visualization table layout.
+
 Minimal Python usage:
 
 ```python

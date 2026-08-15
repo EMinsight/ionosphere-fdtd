@@ -10,6 +10,27 @@ The default uses NumPy CPU, subdivision 2, 24 radial cells, a Gwangju vertical
 Gaussian current, and the data-free Earth–ionosphere material. Progress output
 includes simulation time and maximum electric and magnetic amplitudes.
 
+## Reuse run parameters
+
+Copy the example TOML file when a run needs more than a few options:
+
+```bash
+cp configs/ionosphere.example.toml run.toml
+uv run ionosphere --config run.toml
+```
+
+Edit values below `[ionosphere]` in `run.toml`. An option supplied directly on
+the command line takes precedence, which makes one-off changes concise:
+
+```bash
+uv run ionosphere --config run.toml --steps 100 --device cpu
+```
+
+The same file can contain `[visualization]` and
+`[visualization.COMMAND]` tables for `ionosphere-visualize`. See the
+[TOML configuration reference](command-line-reference.md#toml-configuration-files)
+for the table layout and validation rules.
+
 ## Select a grid
 
 ```bash

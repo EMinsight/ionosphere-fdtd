@@ -83,7 +83,10 @@ working directory. Unknown keys, invalid types, unsupported choices, malformed
 TOML, and missing files terminate with a diagnostic instead of being ignored.
 See
 [`configs/ionosphere.example.toml`](../../configs/ionosphere.example.toml) for
-a complete starting point.
+a ready-to-edit starting point. The file may contain both application tables;
+each command reads only its own table. A visualization command must still be
+selected on the command line because the configuration does not choose a
+subcommand.
 
 `--surface-step SPACING_M` adds regularly spaced radial nodes within 5 km of
 sea level. Because this creates abrupt transitions to the coarse grid, the CLI
@@ -137,7 +140,7 @@ requested step count is not an exact checkpoint interval.
 subcommand:
 
 ```text
-ionosphere-visualize [simulation options] COMMAND [render options]
+ionosphere-visualize [--config PATH] [simulation options] COMMAND [render options]
 ```
 
 | Command | Output |
