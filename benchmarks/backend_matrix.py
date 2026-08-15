@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 import json
 import platform
 from pathlib import Path
+import resource
 from time import perf_counter
 
 import numpy as np
@@ -23,9 +24,14 @@ class BackendResult:
     compiled: bool
     compile_chunk_size: int
     status: str
+    initialization_seconds: float | None
+    compile_seconds: float | None
     median_seconds: float | None
     steps_per_second: float | None
     field_memory_bytes: int | None
+    persistent_memory_bytes: int | None
+    peak_process_memory_bytes: int | None
+    peak_device_memory_bytes: int | None
     reason: str | None = None
 
 
@@ -105,6 +111,8 @@ def _measure(
     compile_step,
     compile_chunk_size,
 ):
+    _reset_device_peak_memory(device)
+    initialized = perf_counter()
     try:
         simulation = GeodesicFDTD(
             SimulationConfig(
@@ -121,12 +129,21 @@ def _measure(
             compile_step=compile_step,
             compile_chunk_size=compile_chunk_size,
         )
+        _initialize_fields(simulation)
+        simulation.backend.synchronize()
     except (BackendUnavailableError, ImportError, RuntimeError) as error:
         return BackendResult(
             backend, device, dtype, compile_step, compile_chunk_size, "unavailable",
-            None, None, None, str(error),
+            None, None, None, None, None, None, _peak_process_memory_bytes(),
+            _peak_device_memory_bytes(device), str(error),
         )
-    _initialize_fields(simulation)
+    initialization_seconds = perf_counter() - initialized
+    compile_seconds = None
+    if compile_step:
+        compile_started = perf_counter()
+        simulation.step(compile_chunk_size)
+        simulation.backend.synchronize()
+        compile_seconds = perf_counter() - compile_started
     if warmup_steps:
         simulation.step(warmup_steps)
         simulation.backend.synchronize()
@@ -148,9 +165,14 @@ def _measure(
         compile_step,
         compile_chunk_size,
         "ok",
+        initialization_seconds,
+        compile_seconds,
         median,
         steps / median,
         memory,
+        simulation.persistent_backend_bytes,
+        _peak_process_memory_bytes(),
+        _peak_device_memory_bytes(simulation.backend.device),
     )
 
 
@@ -167,6 +189,36 @@ def _torch_version():
     except ImportError:
         return None
     return torch.__version__
+
+
+def _peak_process_memory_bytes() -> int:
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return int(peak if platform.system() == "Darwin" else peak * 1024)
+
+
+def _reset_device_peak_memory(device: str) -> None:
+    if not device.startswith("cuda"):
+        return
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(device)
+    except (ImportError, RuntimeError, ValueError):
+        pass
+
+
+def _peak_device_memory_bytes(device: str) -> int | None:
+    if not device.startswith("cuda"):
+        return None
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return int(torch.cuda.max_memory_allocated(device))
+    except (ImportError, RuntimeError, ValueError):
+        pass
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

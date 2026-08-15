@@ -121,6 +121,92 @@ NVIDIA host to populate CUDA. Hardware-specific results should remain JSON
 artifacts; this document defines the stable comparison method rather than
 presenting one machine's numbers as universal performance.
 
+### Production-size scaling sweep
+
+Use the isolated-worker scaling benchmark for crossover analysis across mesh
+and radial sizes:
+
+```bash
+uv run --extra pytorch python -m benchmarks.backend_scaling \
+  --subdivisions 2,3,4,5,6,7 \
+  --radial-cells-list 16,40,80 \
+  --dtypes float32,float64 \
+  --implementations numpy,torch-cpu,cuda,mps \
+  --modes eager,compiled \
+  --steps 32 \
+  --warmup-steps 32 \
+  --repeats 3 \
+  --torch-compile-chunk-size 32 \
+  --output artifacts/benchmarks/backend-scaling.json
+```
+
+Each case runs in a fresh process. This makes process peak resident memory
+comparable between cases and prevents an out-of-memory exit or timeout from
+discarding the rest of the sweep. Results are written atomically after every
+case and `--resume` is enabled by default. Compiled cases use a fresh
+TorchInductor cache by default, so `compile_seconds` measures a cold first
+chunk; pass `--no-cold-compile` to study cache reuse instead.
+
+The scaling schema separates:
+
+- `initialization_seconds`: solver construction, initial field upload, and
+  device synchronization;
+- `compile_seconds`: the first synchronized compiled chunk, including its
+  execution, or `null` for eager cases;
+- `steps_per_second`: median synchronized steady-state throughput after
+  compilation and warm-up;
+- `peak_process_memory_bytes`: the worker process high-water resident set;
+- `peak_device_memory_bytes`: peak live CUDA tensor allocation when available;
+- `persistent_memory_bytes`: fields, coefficients, geometry, and topology
+  retained by the solver.
+
+MPS does not support this solver's `float64` mode and is recorded as
+`unavailable`. A worker that exceeds `--timeout-seconds` is recorded as
+`timeout`, allowing large subdivision-7 cases to fail explicitly rather than
+stalling or truncating the complete matrix.
+
+## Production-size results
+
+The 2026-08-15 Linux run used an RTX 3060 12 GB, PyTorch 2.13.0+cu130,
+NumPy 2.5.1, 32 measured steps, 32 warm-up steps, and three repeats. All 108
+available eager cases and all 36 cold-compiled CUDA cases completed. The 36 MPS
+cases were recorded as unavailable because this host is not macOS.
+
+![Backend throughput curves](images/backend-scaling-throughput.png)
+
+![Initialization and cold-compile curves](images/backend-scaling-setup-time.png)
+
+![Persistent memory curves](images/backend-scaling-persistent-memory.png)
+
+Representative endpoints show the change in scale:
+
+| Grid | Dtype | NumPy | Torch CPU | CUDA eager | CUDA compiled |
+|---|---|---:|---:|---:|---:|
+| subdivision 2, radial 16 | float32 | 3167.8 | 1833.9 | 1151.1 | 32614.7 |
+| subdivision 4, radial 40 | float32 | 107.7 | 383.6 | 1166.5 | 11806.5 |
+| subdivision 6, radial 80 | float32 | 3.3 | 3.8 | 82.1 | 465.1 |
+| subdivision 7, radial 80 | float32 | 0.8 | 0.9 | 20.7 | 116.8 |
+| subdivision 7, radial 80 | float64 | 0.5 | 0.5 | 10.5 | 31.1 |
+
+Values are steady-state steps/s. Eager CUDA first becomes the fastest tested
+backend at subdivision 3 for most configurations, but the exact crossover
+depends on radial cells and dtype. For example, subdivision 2 with 80 radial
+cells favors Torch CPU in `float32` and CUDA in `float64`.
+
+Cold compilation took 49–60 seconds across the matrix. Compared with the best
+eager backend, the estimated break-even run length ranges from about 174,000
+steps for subdivision 2/radial 16/`float32` down to about 950 steps for
+subdivision 7/radial 80/`float64`. Consequently, changing `device="auto"` from
+GPU-first to a size-only rule is not justified: an optimal choice also needs
+the requested dtype, compilation mode, expected step count, GPU model, and
+whether a compiled graph is already cached. Keep automatic selection unchanged
+until those inputs can be represented explicitly at the run-planning layer.
+
+Complete records are
+[`backend-scaling-eager-rtx3060.json`](../../artifacts/benchmarks/backend-scaling-eager-rtx3060.json)
+and
+[`backend-scaling-compiled-rtx3060.json`](../../artifacts/benchmarks/backend-scaling-compiled-rtx3060.json).
+
 ## Interpretation
 
 - Compare eager and compiled PyTorch as separate experiments because compilation

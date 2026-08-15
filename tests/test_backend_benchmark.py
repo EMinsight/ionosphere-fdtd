@@ -1,4 +1,5 @@
 from benchmarks.backend_matrix import run_backend_matrix
+from benchmarks.backend_scaling import benchmark_cases
 
 
 def test_backend_matrix_always_reports_numpy_cpu() -> None:
@@ -16,3 +17,33 @@ def test_backend_matrix_always_reports_numpy_cpu() -> None:
     assert numpy_result["steps_per_second"] > 0.0
     assert payload["configuration"]["torch_compile_chunk_size"] == 8
     assert numpy_result["compile_chunk_size"] == 8
+    assert numpy_result["initialization_seconds"] > 0.0
+    assert numpy_result["compile_seconds"] is None
+    assert numpy_result["persistent_memory_bytes"] >= numpy_result["field_memory_bytes"]
+    assert numpy_result["peak_process_memory_bytes"] > 0
+
+
+def test_scaling_cases_use_only_eager_mode_for_numpy() -> None:
+    cases = benchmark_cases(
+        (2,),
+        (16,),
+        ("float32", "float64"),
+        ("numpy", "torch-cpu", "cuda", "mps"),
+        ("eager", "compiled"),
+    )
+
+    assert len(cases) == 14
+    assert all(
+        case["mode"] == "eager"
+        for case in cases
+        if case["implementation"] == "numpy"
+    )
+    assert {
+        (case["backend"], case["device"])
+        for case in cases
+    } == {
+        ("numpy", "cpu"),
+        ("torch", "cpu"),
+        ("torch", "cuda"),
+        ("torch", "mps"),
+    }
