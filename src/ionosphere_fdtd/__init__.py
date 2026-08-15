@@ -10,8 +10,10 @@ from .backends import (
 from .checkpoint import CheckpointError
 from .materials import (
     EarthIonosphereMaterial,
+    GriddedMaterial,
     LayeredEarthIonosphereMaterial,
     SphericalAnomaly,
+    SpatialEarthIonosphereMaterial,
 )
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .solver import GeodesicFDTD, SimulationConfig
@@ -35,6 +37,7 @@ __all__ = [
     "BackendUnavailableError",
     "CheckpointError",
     "EarthIonosphereMaterial",
+    "GriddedMaterial",
     "LayeredEarthIonosphereMaterial",
     "GaussianCurrent",
     "TangentialGaussianCurrent",
@@ -46,6 +49,7 @@ __all__ = [
     "ReceiverTraces",
     "SimulationConfig",
     "SphericalAnomaly",
+    "SpatialEarthIonosphereMaterial",
     "TorchBackend",
     "animate_surface_field",
     "build_geodesic_mesh",

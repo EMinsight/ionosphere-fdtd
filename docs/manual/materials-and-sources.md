@@ -30,6 +30,30 @@ exponential ionosphere. Supply exactly one of `land_classifier` or
 Use `tangential_interface_mode="fractional"` when a tangential cell straddling
 a radial material interface should receive thickness-weighted properties.
 
+## Spatial profiles and gridded observations
+
+`SpatialEarthIonosphereMaterial` accepts direction samplers for ionosphere
+reference height and scale height, plus an optional direction-by-altitude crust
+conductivity sampler. This supports measured day/night or geographic profile
+maps without coupling the solver to a particular data product.
+
+`GriddedMaterial.from_npz(path)` imports a complete three-dimensional material
+volume. The archive must contain:
+
+| Array | Shape |
+|---|---|
+| `latitudes_deg` | `(n_latitude,)`, increasing |
+| `longitudes_deg` | `(n_longitude,)`, increasing, periodic |
+| `altitudes_m` | `(n_altitude,)`, increasing |
+| `conductivity_s_m` | `(n_latitude, n_longitude, n_altitude)` |
+| `relative_permittivity` | `(n_latitude, n_longitude, n_altitude)` |
+
+Sampling is trilinear with periodic longitude. Requested altitudes must lie
+inside the data volume; extrapolation is deliberately rejected. Convert source
+datasets to SI units and this canonical schema in a provenance-preserving
+preprocessing step rather than embedding study-specific file formats in the
+runtime solver.
+
 ## Spherical anomalies
 
 ```python

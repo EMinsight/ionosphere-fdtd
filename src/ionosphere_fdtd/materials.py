@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
@@ -14,6 +15,8 @@ FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
 LandClassifier = Callable[[FloatArray], BoolArray]
 ReliefSampler = Callable[[FloatArray], FloatArray]
+ProfileSampler = Callable[[FloatArray], FloatArray]
+VolumeSampler = Callable[[FloatArray, FloatArray], FloatArray]
 
 @dataclass(frozen=True, slots=True)
 class SphericalAnomaly:
@@ -320,6 +323,266 @@ class EarthIonosphereMaterial:
             self.anomalies,
         )
         return sigma, epsilon_r
+
+
+@dataclass(frozen=True, slots=True)
+class SpatialEarthIonosphereMaterial:
+    """Earth-ionosphere model with horizontally varying measured profiles.
+
+    Samplers receive normalized Cartesian directions. The optional crust
+    sampler additionally receives the requested one-dimensional altitude array
+    and returns a ``(direction, altitude)`` conductivity grid. It is used only
+    below zero altitude; the exponential ionosphere remains active above it.
+    """
+
+    ionosphere_reference_height_sampler: ProfileSampler
+    ionosphere_scale_height_sampler: ProfileSampler
+    lithosphere_conductivity_sampler: VolumeSampler | None = None
+    lithosphere_conductivity_s_m: float = 1.0e-3
+    lithosphere_relative_permittivity: float = 10.0
+    atmosphere_relative_permittivity: float = 1.0
+    ionosphere_prefactor_hz: float = 2.5e5
+
+    def __post_init__(self) -> None:
+        values = (
+            self.lithosphere_conductivity_s_m,
+            self.lithosphere_relative_permittivity,
+            self.atmosphere_relative_permittivity,
+            self.ionosphere_prefactor_hz,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("spatial material parameters must be finite")
+        if self.lithosphere_conductivity_s_m < 0.0:
+            raise ValueError("lithosphere conductivity cannot be negative")
+        if min(
+            self.lithosphere_relative_permittivity,
+            self.atmosphere_relative_permittivity,
+        ) <= 0.0:
+            raise ValueError("relative permittivity must be positive")
+        if self.ionosphere_prefactor_hz < 0.0:
+            raise ValueError("ionosphere prefactor cannot be negative")
+
+    def sample(
+        self,
+        directions: FloatArray,
+        altitudes_m: FloatArray,
+        earth_radius_m: float,
+    ) -> tuple[FloatArray, FloatArray]:
+        """Sample direction-dependent ionosphere and crust properties."""
+
+        del earth_radius_m
+        points = _normalized_directions(directions)
+        altitudes = np.asarray(altitudes_m, dtype=np.float64)
+        reference = _validated_profile(
+            self.ionosphere_reference_height_sampler(points),
+            len(points),
+            "ionosphere reference height",
+            positive=False,
+        )
+        scale = _validated_profile(
+            self.ionosphere_scale_height_sampler(points),
+            len(points),
+            "ionosphere scale height",
+            positive=True,
+        )
+        exponent = (altitudes[None, :] - reference[:, None]) / scale[:, None]
+        sigma = self.ionosphere_prefactor_hz * EPSILON_0 * np.exp(
+            np.clip(exponent, -80.0, 80.0)
+        )
+        epsilon_r = np.full_like(sigma, self.atmosphere_relative_permittivity)
+        below_ground = altitudes < 0.0
+        if self.lithosphere_conductivity_sampler is None:
+            crust = np.full(
+                (len(points), len(altitudes)),
+                self.lithosphere_conductivity_s_m,
+            )
+        else:
+            crust = np.asarray(
+                self.lithosphere_conductivity_sampler(points, altitudes),
+                dtype=np.float64,
+            )
+            if crust.shape != sigma.shape:
+                raise ValueError(
+                    "lithosphere conductivity sampler must return a direction-by-"
+                    "altitude grid"
+                )
+            if not np.all(np.isfinite(crust)) or np.any(crust < 0.0):
+                raise ValueError("sampled lithosphere conductivity must be finite")
+        sigma[:, below_ground] = crust[:, below_ground]
+        epsilon_r[:, below_ground] = self.lithosphere_relative_permittivity
+        return sigma, epsilon_r
+
+
+@dataclass(frozen=True, slots=True)
+class GriddedMaterial:
+    """Trilinearly interpolate a global latitude-longitude-altitude dataset."""
+
+    latitudes_deg: FloatArray
+    longitudes_deg: FloatArray
+    altitudes_m: FloatArray
+    conductivity_s_m: FloatArray
+    relative_permittivity: FloatArray
+
+    def __post_init__(self) -> None:
+        latitudes = np.asarray(self.latitudes_deg, dtype=np.float64)
+        longitudes = np.asarray(self.longitudes_deg, dtype=np.float64)
+        altitudes = np.asarray(self.altitudes_m, dtype=np.float64)
+        shape = (len(latitudes), len(longitudes), len(altitudes))
+        conductivity = np.asarray(self.conductivity_s_m, dtype=np.float64)
+        permittivity = np.asarray(self.relative_permittivity, dtype=np.float64)
+        if min(len(latitudes), len(longitudes), len(altitudes)) < 2:
+            raise ValueError("material grid axes must each contain at least two values")
+        if not all(
+            np.all(np.diff(axis) > 0.0)
+            for axis in (latitudes, longitudes, altitudes)
+        ):
+            raise ValueError("material grid axes must be strictly increasing")
+        if latitudes[0] < -90.0 or latitudes[-1] > 90.0:
+            raise ValueError("material latitudes must lie in [-90, 90]")
+        if longitudes[-1] - longitudes[0] >= 360.0:
+            raise ValueError("periodic longitude axis must span less than 360 degrees")
+        if conductivity.shape != shape or permittivity.shape != shape:
+            raise ValueError(f"material property grids must have shape {shape}")
+        if (
+            not np.all(np.isfinite(conductivity))
+            or np.any(conductivity < 0.0)
+            or not np.all(np.isfinite(permittivity))
+            or np.any(permittivity <= 0.0)
+        ):
+            raise ValueError("gridded material properties are invalid")
+        for name, values in (
+            ("latitudes_deg", latitudes),
+            ("longitudes_deg", longitudes),
+            ("altitudes_m", altitudes),
+            ("conductivity_s_m", conductivity),
+            ("relative_permittivity", permittivity),
+        ):
+            values = np.array(values, copy=True)
+            values.setflags(write=False)
+            object.__setattr__(self, name, values)
+
+    @classmethod
+    def from_npz(cls, path: str | Path) -> GriddedMaterial:
+        """Load canonical axes and property arrays from an NPZ archive."""
+
+        with np.load(path, allow_pickle=False) as values:
+            required = {
+                "latitudes_deg",
+                "longitudes_deg",
+                "altitudes_m",
+                "conductivity_s_m",
+                "relative_permittivity",
+            }
+            missing = required.difference(values.files)
+            if missing:
+                raise ValueError(
+                    "material archive is missing: " + ", ".join(sorted(missing))
+                )
+            return cls(
+                latitudes_deg=values["latitudes_deg"],
+                longitudes_deg=values["longitudes_deg"],
+                altitudes_m=values["altitudes_m"],
+                conductivity_s_m=values["conductivity_s_m"],
+                relative_permittivity=values["relative_permittivity"],
+            )
+
+    def sample(
+        self,
+        directions: FloatArray,
+        altitudes_m: FloatArray,
+        earth_radius_m: float,
+    ) -> tuple[FloatArray, FloatArray]:
+        """Interpolate material values, treating longitude as periodic."""
+
+        del earth_radius_m
+        points = _normalized_directions(directions)
+        altitudes = np.asarray(altitudes_m, dtype=np.float64)
+        if (
+            altitudes.ndim != 1
+            or np.any(altitudes < self.altitudes_m[0])
+            or np.any(altitudes > self.altitudes_m[-1])
+        ):
+            raise ValueError("requested altitudes are outside the material grid")
+        latitudes = np.rad2deg(np.arcsin(np.clip(points[:, 2], -1.0, 1.0)))
+        longitudes = np.rad2deg(np.arctan2(points[:, 1], points[:, 0]))
+        longitudes = (
+            (longitudes - self.longitudes_deg[0]) % 360.0
+            + self.longitudes_deg[0]
+        )
+        return (
+            self._interpolate(self.conductivity_s_m, latitudes, longitudes, altitudes),
+            self._interpolate(
+                self.relative_permittivity, latitudes, longitudes, altitudes
+            ),
+        )
+
+    def _interpolate(
+        self,
+        values: FloatArray,
+        latitudes: FloatArray,
+        longitudes: FloatArray,
+        altitudes: FloatArray,
+    ) -> FloatArray:
+        lat0, lat1, lat_fraction = _linear_indices(self.latitudes_deg, latitudes)
+        alt0, alt1, alt_fraction = _linear_indices(self.altitudes_m, altitudes)
+        longitude_axis = np.r_[self.longitudes_deg, self.longitudes_deg[0] + 360.0]
+        lon0 = np.searchsorted(longitude_axis, longitudes, side="right") - 1
+        lon0 = np.clip(lon0, 0, len(self.longitudes_deg) - 1)
+        lon1 = (lon0 + 1) % len(self.longitudes_deg)
+        lower = longitude_axis[lon0]
+        upper = longitude_axis[lon0 + 1]
+        lon_fraction = (longitudes - lower) / (upper - lower)
+        output = np.empty((len(latitudes), len(altitudes)), dtype=np.float64)
+        for row in range(len(latitudes)):
+            at_lat0 = (
+                (1.0 - lon_fraction[row]) * values[lat0[row], lon0[row]]
+                + lon_fraction[row] * values[lat0[row], lon1[row]]
+            )
+            at_lat1 = (
+                (1.0 - lon_fraction[row]) * values[lat1[row], lon0[row]]
+                + lon_fraction[row] * values[lat1[row], lon1[row]]
+            )
+            vertical0 = (
+                (1.0 - lat_fraction[row]) * at_lat0
+                + lat_fraction[row] * at_lat1
+            )
+            output[row] = (
+                (1.0 - alt_fraction) * vertical0[alt0]
+                + alt_fraction * vertical0[alt1]
+            )
+        return output
+
+
+def _normalized_directions(directions: FloatArray) -> FloatArray:
+    points = np.asarray(directions, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError("directions must have shape (n, 3)")
+    norms = np.linalg.norm(points, axis=1, keepdims=True)
+    if np.any(norms == 0.0) or not np.all(np.isfinite(points)):
+        raise ValueError("directions must be finite and nonzero")
+    return points / norms
+
+
+def _validated_profile(
+    values: FloatArray, count: int, label: str, *, positive: bool
+) -> FloatArray:
+    profile = np.asarray(values, dtype=np.float64)
+    if profile.shape != (count,) or not np.all(np.isfinite(profile)):
+        raise ValueError(f"{label} sampler must return {count} finite values")
+    if positive and np.any(profile <= 0.0):
+        raise ValueError(f"{label} must be positive")
+    return profile
+
+
+def _linear_indices(
+    axis: FloatArray, coordinates: FloatArray
+) -> tuple[NDArray[np.int64], NDArray[np.int64], FloatArray]:
+    upper = np.searchsorted(axis, coordinates, side="right")
+    upper = np.clip(upper, 1, len(axis) - 1)
+    lower = upper - 1
+    fraction = (coordinates - axis[lower]) / (axis[upper] - axis[lower])
+    fraction = np.clip(fraction, 0.0, 1.0)
+    return lower, upper, fraction
 
 
 @dataclass(frozen=True, slots=True)

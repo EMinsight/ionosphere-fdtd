@@ -3,8 +3,10 @@ import pytest
 
 from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
+    GriddedMaterial,
     LayeredEarthIonosphereMaterial,
     SphericalAnomaly,
+    SpatialEarthIonosphereMaterial,
     conservative_anomaly_fractions,
 )
 
@@ -99,3 +101,65 @@ def test_default_material_rejects_nonfinite_parameters(
 ) -> None:
     with pytest.raises(ValueError, match="finite"):
         EarthIonosphereMaterial(**{parameter: value})
+
+
+def test_spatial_material_varies_ionosphere_and_crust_by_direction() -> None:
+    material = SpatialEarthIonosphereMaterial(
+        ionosphere_reference_height_sampler=lambda directions: (
+            70_000.0 + 5_000.0 * directions[:, 2]
+        ),
+        ionosphere_scale_height_sampler=lambda directions: np.full(
+            len(directions), 4_000.0
+        ),
+        lithosphere_conductivity_sampler=lambda directions, altitudes: (
+            np.broadcast_to(
+                1.0e-3 * (2.0 + directions[:, 0, None]),
+                (len(directions), len(altitudes)),
+            ).copy()
+        ),
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+    sigma, epsilon_r = material.sample(
+        directions, np.asarray((-1_000.0, 70_000.0)), 6_371_000.0
+    )
+
+    assert sigma[0, 0] == pytest.approx(3.0e-3)
+    assert sigma[1, 0] == pytest.approx(2.0e-3)
+    assert sigma[0, 1] > sigma[1, 1]
+    assert np.all(epsilon_r[:, 0] == 10.0)
+
+
+def test_gridded_material_npz_import_and_trilinear_interpolation(tmp_path) -> None:
+    latitudes = np.asarray((-90.0, 0.0, 90.0))
+    longitudes = np.asarray((-180.0, 0.0, 120.0))
+    altitudes = np.asarray((-10_000.0, 0.0, 10_000.0))
+    latitude, longitude, altitude = np.meshgrid(
+        latitudes, longitudes, altitudes, indexing="ij"
+    )
+    conductivity = 1.0 + latitude / 1_000.0 + longitude / 10_000.0 + altitude / 1.0e6
+    permittivity = 10.0 + 0.01 * latitude + altitude / 100_000.0
+    path = tmp_path / "crust.npz"
+    np.savez(
+        path,
+        latitudes_deg=latitudes,
+        longitudes_deg=longitudes,
+        altitudes_m=altitudes,
+        conductivity_s_m=conductivity,
+        relative_permittivity=permittivity,
+    )
+    material = GriddedMaterial.from_npz(path)
+    latitude_rad = np.deg2rad(-45.0)
+    longitude_rad = np.deg2rad(-90.0)
+    direction = np.asarray(
+        ((
+            np.cos(latitude_rad) * np.cos(longitude_rad),
+            np.cos(latitude_rad) * np.sin(longitude_rad),
+            np.sin(latitude_rad),
+        ),)
+    )
+    sigma, epsilon_r = material.sample(
+        direction, np.asarray((-5_000.0, 5_000.0)), 6_371_000.0
+    )
+
+    np.testing.assert_allclose(sigma, ((0.941, 0.951),))
+    np.testing.assert_allclose(epsilon_r, ((9.5, 9.6),))

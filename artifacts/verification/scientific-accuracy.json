@@ -1,0 +1,101 @@
+{
+  "method": {
+    "dispersion": "local circumcentric DEC Laplacian symbol",
+    "material": "smooth-map point versus finite-volume support average",
+    "headings": 12
+  },
+  "directional_dispersion": [
+    {
+      "subdivision": 2,
+      "frequency_hz": 20.0,
+      "median_cells_per_wavelength": 7.798391822615485,
+      "phase_error_median": 0.02161301660227405,
+      "phase_error_p95": 0.022538333271105437,
+      "phase_anisotropy_median": 0.015531820803604922,
+      "phase_anisotropy_p95": 0.06365378555858497,
+      "group_error_median": 0.06149192936379089,
+      "pentagon_near_phase_error_mean": 0.019314101080692984,
+      "pentagon_far_phase_error_mean": 0.02161301660365446
+    },
+    {
+      "subdivision": 3,
+      "frequency_hz": 20.0,
+      "median_cells_per_wavelength": 15.839943476424805,
+      "phase_error_median": 0.005159140551483143,
+      "phase_error_p95": 0.006218200524000123,
+      "phase_anisotropy_median": 0.004005658666877961,
+      "phase_anisotropy_p95": 0.016654469087395173,
+      "group_error_median": 0.014837964182302377,
+      "pentagon_near_phase_error_mean": 0.004911816565332411,
+      "pentagon_far_phase_error_mean": 0.006052404050382313
+    },
+    {
+      "subdivision": 4,
+      "frequency_hz": 20.0,
+      "median_cells_per_wavelength": 31.722107093590246,
+      "phase_error_median": 0.0012883320631391637,
+      "phase_error_p95": 0.0015584869597051686,
+      "phase_anisotropy_median": 0.0010300130202669838,
+      "phase_anisotropy_p95": 0.011746889485816503,
+      "group_error_median": 0.003709228716442914,
+      "pentagon_near_phase_error_mean": 0.0012448958862081073,
+      "pentagon_far_phase_error_mean": 0.0015508743945686458
+    },
+    {
+      "subdivision": 5,
+      "frequency_hz": 20.0,
+      "median_cells_per_wavelength": 63.46561517636536,
+      "phase_error_median": 0.00032189557945094815,
+      "phase_error_p95": 0.0003882772626848663,
+      "phase_anisotropy_median": 0.0002605284315798171,
+      "phase_anisotropy_p95": 0.003130554284051886,
+      "group_error_median": 0.0009268638991992706,
+      "pentagon_near_phase_error_mean": 0.0003120109547892015,
+      "pentagon_far_phase_error_mean": 0.0003936750563903841
+    },
+    {
+      "subdivision": 6,
+      "frequency_hz": 20.0,
+      "median_cells_per_wavelength": 127.3863547839492,
+      "phase_error_median": 8.002141288304676e-05,
+      "phase_error_p95": 9.942977097207039e-05,
+      "phase_anisotropy_median": 6.548360717716423e-05,
+      "phase_anisotropy_p95": 0.000803418558580361,
+      "group_error_median": 0.00023049477624959014,
+      "pentagon_near_phase_error_mean": 7.807529873663305e-05,
+      "pentagon_far_phase_error_mean": 9.887565439778714e-05
+    }
+  ],
+  "material_support_convergence": [
+    {
+      "subdivision": 2,
+      "characteristic_edge_angle": 0.3004754379529982,
+      "radial_rms_difference": 0.0025653827568904424,
+      "tangential_rms_difference": 0.0016696049806635886
+    },
+    {
+      "subdivision": 3,
+      "characteristic_edge_angle": 0.1508745792286272,
+      "radial_rms_difference": 0.0009840710399121103,
+      "tangential_rms_difference": 0.0005763795929404185
+    },
+    {
+      "subdivision": 4,
+      "characteristic_edge_angle": 0.075517269113695,
+      "radial_rms_difference": 0.00036098092616702014,
+      "tangential_rms_difference": 0.00020078334932647826
+    },
+    {
+      "subdivision": 5,
+      "characteristic_edge_angle": 0.037768643697095323,
+      "radial_rms_difference": 0.00012981588106777682,
+      "tangential_rms_difference": 7.04343197792008e-05
+    },
+    {
+      "subdivision": 6,
+      "characteristic_edge_angle": 0.01888557335740956,
+      "radial_rms_difference": 4.627063571856652e-05,
+      "tangential_rms_difference": 2.4803515249550636e-05
+    }
+  ]
+}

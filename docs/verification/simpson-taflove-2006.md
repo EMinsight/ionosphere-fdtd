@@ -58,11 +58,30 @@ attenuation, or radar component scaling. Exact Mesquite parameters and the full
 three-dimensional Hermance-derived conductivity model were not published, so
 the report does not tune undisclosed inputs to force agreement.
 
+## Accuracy research status
+
+The independent directional-dispersion and material-support convergence study
+is reported in the 2004 reproduction because Figures 5–6 reuse that propagation
+model. At 20 Hz, median phase and group errors converge at approximately second
+order over subdivisions 2–6, while the P95 directional anisotropy falls from
+6.365% to 0.080%. Smooth-property point-versus-support differences also
+decrease monotonically for both radial dual cells and tangential edge diamonds.
+
+For Figure 7, the new material API can represent horizontally varying
+ionosphere height/scale profiles and import three-dimensional conductivity and
+permittivity volumes from a canonical NPZ grid. No Hermance conductivity volume
+or equivalent observation product is present in this repository, so no
+unverifiable substitute is introduced and the radar scaling verdict remains
+**FAIL**. A future observational run must record dataset identity, units,
+coordinate datum, interpolation policy, and checksum alongside the trace
+archive.
+
 ## Reproduction
 
 ```bash
 python -m verification.simpson_taflove_2004 --help
 python -m verification.simpson_taflove_2006 --help
+python -m verification.scientific_accuracy --help
 ```
 
 Each production archive includes configuration, checksums, and run signatures.
