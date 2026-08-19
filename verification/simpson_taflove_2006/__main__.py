@@ -37,7 +37,7 @@ def _parser() -> argparse.ArgumentParser:
     radar = commands.add_parser("radar-run")
     radar.add_argument("--case", choices=("reference", "anomaly"), required=True)
     radar.add_argument("--output", type=Path, required=True)
-    radar.add_argument("--subdivision", type=int, choices=range(0, 8), default=7)
+    radar.add_argument("--subdivision", type=int, choices=range(8), default=7)
     radar.add_argument(
         "--mesh-orientation", choices=("native", "polar"), default="polar"
     )
@@ -50,6 +50,17 @@ def _parser() -> argparse.ArgumentParser:
         type=float,
         default=REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
     )
+    radar.add_argument(
+        "--upper-crust-resistivity-ohm-m", type=float, default=500.0
+    )
+    radar.add_argument(
+        "--asthenosphere-resistivity-ohm-m", type=float, default=200.0
+    )
+    radar.add_argument(
+        "--ionosphere", choices=("daytime", "day-night"), default="daytime"
+    )
+    radar.add_argument("--subsolar-latitude-deg", type=float, default=0.0)
+    radar.add_argument("--subsolar-longitude-deg", type=float, default=0.0)
     radar.add_argument(
         "--tangential-interface",
         choices=("point", "fractional"),
@@ -66,6 +77,7 @@ def _parser() -> argparse.ArgumentParser:
     radar.add_argument(
         "--torch-compile", action=argparse.BooleanOptionalAction, default=True
     )
+    radar.add_argument("--torch-compile-chunk-size", type=int, default=8)
     radar.add_argument("--source-center", type=float, default=PAPER_SOURCE_CENTER_S)
     radar.add_argument(
         "--source-altitude-m",
@@ -154,6 +166,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         device=args.device,
         dtype=args.dtype,
         compile_step=args.torch_compile,
+        compile_chunk_size=args.torch_compile_chunk_size,
         source_center_s=args.source_center,
         courant_factor=args.courant,
         source_edge_assignment=args.source_edge_assignment,
@@ -169,6 +182,11 @@ def _run_radar(args: argparse.Namespace) -> int:
         deep_lithosphere_resistivity_ohm_m=(
             args.deep_lithosphere_resistivity_ohm_m
         ),
+        upper_crust_resistivity_ohm_m=args.upper_crust_resistivity_ohm_m,
+        asthenosphere_resistivity_ohm_m=args.asthenosphere_resistivity_ohm_m,
+        ionosphere_model=args.ionosphere,
+        subsolar_latitude_deg=args.subsolar_latitude_deg,
+        subsolar_longitude_deg=args.subsolar_longitude_deg,
     )
     steps = int(
         np.ceil((args.source_center + args.stop_after_center) / simulation.time_step_s)
@@ -184,6 +202,13 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"receiver={args.receiver_support} "
         f"vertical_reference={args.vertical_reference} "
         f"horizontal_anomaly={args.horizontal_anomaly} "
+        f"ionosphere={args.ionosphere} "
+        f"subsolar={args.subsolar_latitude_deg:g},"
+        f"{args.subsolar_longitude_deg:g} "
+        f"upper_crust_resistivity_ohm_m="
+        f"{args.upper_crust_resistivity_ohm_m:g} "
+        f"asthenosphere_resistivity_ohm_m="
+        f"{args.asthenosphere_resistivity_ohm_m:g} "
         "deep_lithosphere_resistivity_ohm_m="
         f"{args.deep_lithosphere_resistivity_ohm_m:g} "
         f"shield={args.shield_radius_km:g}km/{args.shield} "

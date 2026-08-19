@@ -1,12 +1,13 @@
 import numpy as np
 import pytest
 
+from ionosphere_fdtd.constants import EPSILON_0
 from ionosphere_fdtd.materials import (
     EarthIonosphereMaterial,
     GriddedMaterial,
     LayeredEarthIonosphereMaterial,
-    SphericalAnomaly,
     SpatialEarthIonosphereMaterial,
+    SphericalAnomaly,
     conservative_anomaly_fractions,
 )
 
@@ -127,6 +128,47 @@ def test_spatial_material_varies_ionosphere_and_crust_by_direction() -> None:
     assert sigma[1, 0] == pytest.approx(2.0e-3)
     assert sigma[0, 1] > sigma[1, 1]
     assert np.all(epsilon_r[:, 0] == 10.0)
+
+
+def test_layered_material_uses_direction_dependent_ionosphere_profiles() -> None:
+    material = LayeredEarthIonosphereMaterial(
+        land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),
+        ionosphere_reference_height_sampler=lambda directions: np.where(
+            directions[:, 0] >= 0.0, 70_000.0, 90_000.0
+        ),
+        ionosphere_scale_height_sampler=lambda directions: np.where(
+            directions[:, 0] >= 0.0, 3_000.0, 4_000.0
+        ),
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0)))
+    altitudes = np.asarray((70_000.0, 90_000.0))
+
+    sigma, epsilon_r = material.sample(directions, altitudes, 6_371_000.0)
+
+    prefactor = material.ionosphere_prefactor_hz * EPSILON_0
+    np.testing.assert_allclose(
+        sigma,
+        prefactor
+        * np.asarray(
+            (
+                (1.0, np.exp(20_000.0 / 3_000.0)),
+                (np.exp(-20_000.0 / 4_000.0), 1.0),
+            )
+        ),
+    )
+    assert np.all(epsilon_r == material.atmosphere_relative_permittivity)
+
+
+def test_layered_material_requires_both_ionosphere_samplers() -> None:
+    with pytest.raises(ValueError, match="both ionosphere profile samplers"):
+        LayeredEarthIonosphereMaterial(
+            land_classifier=lambda directions: np.ones(
+                len(directions), dtype=np.bool_
+            ),
+            ionosphere_reference_height_sampler=lambda directions: np.full(
+                len(directions), 70_000.0
+            ),
+        )
 
 
 def test_gridded_material_npz_import_and_trilinear_interpolation(tmp_path) -> None:

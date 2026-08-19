@@ -18,6 +18,7 @@ ReliefSampler = Callable[[FloatArray], FloatArray]
 ProfileSampler = Callable[[FloatArray], FloatArray]
 VolumeSampler = Callable[[FloatArray, FloatArray], FloatArray]
 
+
 @dataclass(frozen=True, slots=True)
 class SphericalAnomaly:
     """Multiplicative conductivity anomaly in a spherical lithosphere volume."""
@@ -611,6 +612,8 @@ class LayeredEarthIonosphereMaterial:
     ionosphere_reference_height_m: float = 70_000.0
     ionosphere_scale_height_m: float = 1_000.0 / 0.3
     ionosphere_prefactor_hz: float = 2.5e5
+    ionosphere_reference_height_sampler: ProfileSampler | None = None
+    ionosphere_scale_height_sampler: ProfileSampler | None = None
     anomalies: tuple[SphericalAnomaly, ...] = field(default_factory=tuple)
     tangential_interface_mode: str = "point"
     minimum_ocean_depth_m: float = 0.0
@@ -621,6 +624,12 @@ class LayeredEarthIonosphereMaterial:
         ):
             raise ValueError(
                 "provide exactly one of land_classifier or surface_elevation_sampler"
+            )
+        if (self.ionosphere_reference_height_sampler is None) != (
+            self.ionosphere_scale_height_sampler is None
+        ):
+            raise ValueError(
+                "provide both ionosphere profile samplers or neither"
             )
         parameters = (
             self.ocean_depth_m,
@@ -718,6 +727,36 @@ class LayeredEarthIonosphereMaterial:
         )
         return np.where(is_land[:, None], continent[None, :], ocean[None, :])
 
+    def _ionosphere_conductivity(
+        self, directions: FloatArray, altitudes_m: FloatArray
+    ) -> FloatArray:
+        """Return the exponential atmosphere profile at every direction."""
+
+        altitudes = np.asarray(altitudes_m, dtype=np.float64)
+        if self.ionosphere_reference_height_sampler is None:
+            reference = np.full(
+                len(directions), self.ionosphere_reference_height_m
+            )
+            scale = np.full(len(directions), self.ionosphere_scale_height_m)
+        else:
+            assert self.ionosphere_scale_height_sampler is not None
+            reference = _validated_profile(
+                self.ionosphere_reference_height_sampler(directions),
+                len(directions),
+                "ionosphere reference height",
+                positive=False,
+            )
+            scale = _validated_profile(
+                self.ionosphere_scale_height_sampler(directions),
+                len(directions),
+                "ionosphere scale height",
+                positive=True,
+            )
+        exponent = (altitudes[None, :] - reference[:, None]) / scale[:, None]
+        return self.ionosphere_prefactor_hz * EPSILON_0 * np.exp(
+            np.clip(exponent, -80.0, 80.0)
+        )
+
     def sample(
         self,
         directions: FloatArray,
@@ -731,21 +770,7 @@ class LayeredEarthIonosphereMaterial:
         )
         altitudes = np.asarray(altitudes_m, dtype=np.float64)
 
-        sigma_air = (
-            self.ionosphere_prefactor_hz
-            * EPSILON_0
-            * np.exp(
-                np.clip(
-                    (altitudes - self.ionosphere_reference_height_m)
-                    / self.ionosphere_scale_height_m,
-                    -80.0,
-                    80.0,
-                )
-            )
-        )
-        sigma = np.broadcast_to(
-            sigma_air, (len(directions), len(altitudes))
-        ).copy()
+        sigma = self._ionosphere_conductivity(directions, altitudes)
         epsilon_r = np.full_like(sigma, self.atmosphere_relative_permittivity)
 
         rock_resistivity = self._rock_resistivity(is_land, altitudes)
@@ -842,23 +867,12 @@ class LayeredEarthIonosphereMaterial:
         if not np.allclose(fractions.sum(axis=0), 1.0, atol=1.0e-12):
             raise RuntimeError("radial material fractions do not close")
 
-        sigma_air = (
-            self.ionosphere_prefactor_hz
-            * EPSILON_0
-            * np.exp(
-                np.clip(
-                    (midpoints - self.ionosphere_reference_height_m)
-                    / self.ionosphere_scale_height_m,
-                    -80.0,
-                    80.0,
-                )
-            )
-        )
+        sigma_air = self._ionosphere_conductivity(directions, midpoints)
         sigma_rock = 1.0 / self._rock_resistivity(is_land, midpoints)
         sigma = (
             fractions[0] * sigma_rock
             + fractions[1] / self.sea_water_resistivity_ohm_m
-            + fractions[2] * sigma_air[None, :]
+            + fractions[2] * sigma_air
         )
         epsilon_r = (
             fractions[0] * self.lithosphere_relative_permittivity

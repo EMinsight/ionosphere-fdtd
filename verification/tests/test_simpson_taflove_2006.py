@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from verification.simpson_taflove_2004.materials import ETOPO5Relief
+from verification.simpson_taflove_2004.model import ValidationTraces
 from verification.simpson_taflove_2006.model import (
     PAPER_ENVELOPE_FWHM_S,
     PAPER_OIL_AREA_KM2,
@@ -11,19 +12,22 @@ from verification.simpson_taflove_2006.model import (
     PAPER_OIL_MEDIAN_DEPTH_M,
     PAPER_OIL_RADIUS_M,
     PAPER_OIL_THICKNESS_M,
+    THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M,
+    THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M,
+    THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M,
+    DayNightHemisphereProfile,
     RadarTraces,
     _surface_h_distributions,
     compute_radar_perturbation,
     create_radar_simulation,
+    load_radar_traces,
     normalized_figure_5_traces,
     paper_anomalies,
     radar_field_metrics,
     radar_radial_altitudes_m,
     record_radar_traces,
-    load_radar_traces,
     save_radar_traces,
 )
-from verification.simpson_taflove_2004.model import ValidationTraces
 
 requires_natural_earth = pytest.mark.skipif(
     any(
@@ -72,7 +76,9 @@ def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:
         PAPER_OIL_MEDIAN_DEPTH_M
     )
     assert oil.conductivity_factor == PAPER_OIL_CONDUCTIVITY_FACTOR
-    assert oil.maximum_background_conductivity_s_m == 0.01
+    assert oil.maximum_background_conductivity_s_m == (
+        THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M
+    )
     assert oil.target_area_m2 == PAPER_OIL_AREA_KM2 * 1.0e6
 
 
@@ -125,6 +131,64 @@ def test_radar_grid_refines_lithosphere_to_1_25_km() -> None:
         (-5_000.0, -3_750.0, -2_500.0, -1_250.0, 0.0),
     )
     assert len(altitudes) - 1 == 43
+
+
+def test_day_night_profile_uses_declared_solar_hemispheres() -> None:
+    profile = DayNightHemisphereProfile(
+        daytime_value=70_000.0,
+        nighttime_value=92_800.0,
+        subsolar_latitude_deg=0.0,
+        subsolar_longitude_deg=0.0,
+    )
+
+    values = profile(np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0))))
+
+    np.testing.assert_array_equal(values, (70_000.0, 92_800.0))
+
+
+@requires_natural_earth
+def test_thesis_radar_setup_installs_day_night_ionosphere() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        ionosphere_model="day-night",
+        subsolar_longitude_deg=0.0,
+        upper_crust_resistivity_ohm_m=5_000.0,
+        deep_lithosphere_resistivity_ohm_m=50.0,
+    )
+    day = np.asarray(((1.0, 0.0, 0.0),))
+    night = np.asarray(((-1.0, 0.0, 0.0),))
+
+    assert simulation.material.ionosphere_reference_height_sampler(day)[0] == (
+        70_000.0
+    )
+    assert simulation.material.ionosphere_reference_height_sampler(night)[0] == (
+        THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M
+    )
+    assert simulation.material.ionosphere_scale_height_sampler(night)[0] == (
+        THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M
+    )
+    assert simulation.material.upper_crust_resistivity_ohm_m == 5_000.0
+    assert simulation.material.deep_rock_resistivity_ohm_m == 50.0
+
+
+@requires_natural_earth
+def test_radar_setup_forwards_compiled_chunk_size() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        compile_chunk_size=32,
+    )
+
+    assert simulation.compile_chunk_size == 32
 
 
 @requires_natural_earth

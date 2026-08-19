@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass
 import hashlib
 import json
-from pathlib import Path
 import subprocess
+from dataclasses import dataclass, fields, is_dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -29,12 +29,13 @@ from ..simpson_taflove_2004.materials import (
     SimpsonTaflove2004Material,
 )
 from ..simpson_taflove_2004.model import (
-    AttenuationCurves,
     REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
+    AttenuationCurves,
     ValidationTraces,
     bannister_figure_8_guide,
-    compute_attenuation,
     natural_earth_land_classifier,
+)
+from ..simpson_taflove_2004.model import (
     render_receiver_grid as _render_receiver_grid,
 )
 
@@ -63,6 +64,48 @@ PAPER_OIL_THICKNESS_M = 1_250.0
 PAPER_OIL_MEDIAN_DEPTH_M = 1_200.0
 PAPER_OIL_CONDUCTIVITY_FACTOR = 0.1
 PAPER_FIGURE_7_DURATION_S = 0.085
+PAPER_DAYTIME_IONOSPHERE_REFERENCE_HEIGHT_M = 70_000.0
+PAPER_DAYTIME_IONOSPHERE_SCALE_HEIGHT_M = 1_000.0 / 0.3
+THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M = 92_800.0
+THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M = 2_470.0
+THESIS_FIGURE_15_SHALLOW_RESISTIVITY_LIMIT_OHM_M = 10.0
+THESIS_FIGURE_15_CONTINENTAL_RESISTIVITY_LIMIT_OHM_M = 5_000.0
+THESIS_FIGURE_15_DEEP_RESISTIVITY_LIMIT_OHM_M = 50.0
+THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M = 0.2
+
+
+@dataclass(frozen=True, slots=True)
+class DayNightHemisphereProfile:
+    """Select day/night profile values across a declared solar terminator."""
+
+    daytime_value: float
+    nighttime_value: float
+    subsolar_latitude_deg: float = 0.0
+    subsolar_longitude_deg: float = 0.0
+
+    def __post_init__(self) -> None:
+        values = (
+            self.daytime_value,
+            self.nighttime_value,
+            self.subsolar_latitude_deg,
+            self.subsolar_longitude_deg,
+        )
+        if not all(np.isfinite(value) for value in values):
+            raise ValueError("day/night profile values must be finite")
+        if not -90.0 <= self.subsolar_latitude_deg <= 90.0:
+            raise ValueError("subsolar latitude must be in [-90, 90]")
+
+    def __call__(self, directions: FloatArray) -> FloatArray:
+        points = np.asarray(directions, dtype=np.float64)
+        points = points / np.linalg.norm(points, axis=1, keepdims=True)
+        sunward = geographic_direction(
+            self.subsolar_latitude_deg, self.subsolar_longitude_deg
+        )
+        return np.where(
+            points @ sunward >= 0.0,
+            self.daytime_value,
+            self.nighttime_value,
+        )
 
 
 def render_receiver_grid(
@@ -149,7 +192,9 @@ def paper_anomalies(
         altitude_max_m=oil_surface_altitude_m
         - (PAPER_OIL_MEDIAN_DEPTH_M - half_thickness),
         conductivity_factor=PAPER_OIL_CONDUCTIVITY_FACTOR,
-        maximum_background_conductivity_s_m=0.01,
+        maximum_background_conductivity_s_m=(
+            THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M
+        ),
         target_area_m2=PAPER_OIL_AREA_KM2 * 1.0e6,
     )
     anomalies.append(oil)
@@ -166,6 +211,7 @@ def create_radar_simulation(
     device: str = "auto",
     dtype: str = "float64",
     compile_step: bool = True,
+    compile_chunk_size: int = 8,
     source_center_s: float = PAPER_SOURCE_CENTER_S,
     courant_factor: float = 0.4,
     source_edge_assignment: str = "projected",
@@ -181,6 +227,17 @@ def create_radar_simulation(
     deep_lithosphere_resistivity_ohm_m: float = (
         REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M
     ),
+    upper_crust_resistivity_ohm_m: float = 500.0,
+    asthenosphere_resistivity_ohm_m: float = 200.0,
+    ionosphere_model: str = "daytime",
+    subsolar_latitude_deg: float = 0.0,
+    subsolar_longitude_deg: float = 0.0,
+    nighttime_ionosphere_reference_height_m: float = (
+        THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M
+    ),
+    nighttime_ionosphere_scale_height_m: float = (
+        THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M
+    ),
 ) -> GeodesicFDTD:
     """Create one reference or oil-anomaly model for Figure 7."""
 
@@ -188,10 +245,31 @@ def create_radar_simulation(
         raise ValueError("vertical_reference must be 'sea-level' or 'terrain'")
     material_arguments: dict[str, Any] = {
         "tangential_interface_mode": tangential_interface_mode,
+        "upper_crust_resistivity_ohm_m": upper_crust_resistivity_ohm_m,
+        "asthenosphere_resistivity_ohm_m": asthenosphere_resistivity_ohm_m,
         "deep_rock_resistivity_ohm_m": (
             deep_lithosphere_resistivity_ohm_m
         ),
     }
+    if ionosphere_model == "day-night":
+        shared_solar_geometry = {
+            "subsolar_latitude_deg": subsolar_latitude_deg,
+            "subsolar_longitude_deg": subsolar_longitude_deg,
+        }
+        material_arguments.update(
+            ionosphere_reference_height_sampler=DayNightHemisphereProfile(
+                PAPER_DAYTIME_IONOSPHERE_REFERENCE_HEIGHT_M,
+                nighttime_ionosphere_reference_height_m,
+                **shared_solar_geometry,
+            ),
+            ionosphere_scale_height_sampler=DayNightHemisphereProfile(
+                PAPER_DAYTIME_IONOSPHERE_SCALE_HEIGHT_M,
+                nighttime_ionosphere_scale_height_m,
+                **shared_solar_geometry,
+            ),
+        )
+    elif ionosphere_model != "daytime":
+        raise ValueError("ionosphere_model must be 'daytime' or 'day-night'")
     relief: ETOPO5Relief | None = None
     if material_model == "etopo5":
         if etopo5_path is None:
@@ -266,6 +344,7 @@ def create_radar_simulation(
         device=device,
         dtype=dtype,
         compile_step=compile_step,
+        compile_chunk_size=compile_chunk_size,
     )
     simulation.radar_receiver_altitude_m = receiver_surface_altitude_m
     simulation.radar_vertical_reference = vertical_reference
