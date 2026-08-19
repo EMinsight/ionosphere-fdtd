@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "source": {
     "title": "Three-Dimensional FDTD Modeling of Impulsive Electromagnetic Propagation in the Global Earth-Ionosphere Waveguide",
     "author": "Jamesina J. Simpson",
@@ -22,78 +22,107 @@
     "night_reference_height_m": 92800.0,
     "night_scale_height_m": 2470.0,
     "subsolar_latitude_deg": 0.0,
-    "subsolar_longitude_deg": 0.0,
-    "asthenosphere_resistivity_ohm_m": 200.0,
-    "deep_rock_resistivity_ohm_m": 50.0
+    "subsolar_longitude_deg": 90.0,
+    "dawn_longitude_deg": 0.0
   },
-  "cases": [
+  "reflection_height_check": {
+    "day_height_m": 48000.0,
+    "day_conductivity_s_m": 3.011238526785356e-09,
+    "night_height_m": 76000.0,
+    "night_conductivity_s_m": 2.461404277592658e-09,
+    "interpretation": "The two cited exponential profiles reach a similar conductivity at the dissertation's approximate effective reflection heights."
+  },
+  "figure_15_hypothesis": {
+    "qualification": "Figure 15 is a schematic with inequality-valued classes. Class limits are used as representative values and visual boundaries are snapped to the nominal 5 km radial grid.",
+    "continent": [
+      {"depth_min_m": 0.0, "depth_max_m": 5000.0, "resistivity_ohm_m": 10.0},
+      {"depth_min_m": 5000.0, "depth_max_m": 45000.0, "resistivity_ohm_m": 5000.0},
+      {"depth_min_m": 45000.0, "depth_max_m": 100000.0, "resistivity_ohm_m": 50.0}
+    ],
+    "ocean_below_sea_level": [
+      {"depth_min_m": 0.0, "depth_max_m": 5000.0, "resistivity_ohm_m": 5.0},
+      {"depth_min_m": 5000.0, "depth_max_m": 10000.0, "resistivity_ohm_m": 50.0},
+      {"depth_min_m": 10000.0, "depth_max_m": 20000.0, "resistivity_ohm_m": 500.0},
+      {"depth_min_m": 20000.0, "depth_max_m": 45000.0, "resistivity_ohm_m": 200.0},
+      {"depth_min_m": 45000.0, "depth_max_m": 100000.0, "resistivity_ohm_m": 50.0}
+    ],
+    "omitted_feature": "The isolated <=10 ohm m continental conductor is not placed because Figure 15 does not specify a geographic location."
+  },
+  "normalization_interpretations": {
+    "peak": "Absolute model difference divided by the peak absolute reference field, as stated in the dissertation body.",
+    "pointwise": "Absolute model difference divided by the instantaneous absolute reference field, as implied by the Figure 26 zero-crossing spikes."
+  },
+  "figure_15_cases": [
     {
       "subdivision": 4,
-      "ionosphere": "day-night",
-      "upper_crust_resistivity_ohm_m": 10.0,
-      "compile_chunk_size": 8,
       "steps": 77502,
-      "delta_ht_median_db": -96.5576297,
-      "delta_ht_fraction_below_minus_25_db": 0.99992642,
-      "delta_hr_median_db": 33.2168528,
-      "median_hr_over_ht_advantage_db": 131.652624
+      "compile_chunk_size": 8,
+      "reference_hr_peak_a_m": 1.2491267e-13,
+      "difference_hr_peak_a_m": 4.22150268e-15,
+      "pointwise": {
+        "delta_ht_median_db": -95.7284452,
+        "delta_ht_fraction_below_minus_25_db": 0.997841444,
+        "delta_hr_median_db": -26.2129778,
+        "delta_hr_maximum_db": 51.7222165,
+        "median_hr_over_ht_advantage_db": 68.6546606
+      },
+      "peak": {
+        "delta_ht_median_db": -116.158562,
+        "delta_ht_maximum_db": -102.205706,
+        "delta_hr_median_db": -43.5919785,
+        "delta_hr_maximum_db": -29.4227884,
+        "median_hr_over_ht_advantage_db": 72.5898387
+      }
     },
     {
-      "subdivision": 4,
-      "ionosphere": "day-night",
-      "upper_crust_resistivity_ohm_m": 500.0,
-      "compile_chunk_size": 8,
-      "steps": 77502,
-      "delta_ht_median_db": -77.4450695,
-      "delta_ht_fraction_below_minus_25_db": 0.999484941,
-      "delta_hr_median_db": 8.55194491,
-      "median_hr_over_ht_advantage_db": 88.4639238
-    },
-    {
-      "subdivision": 4,
-      "ionosphere": "day-night",
-      "upper_crust_resistivity_ohm_m": 5000.0,
-      "compile_chunk_size": 8,
-      "steps": 77502,
-      "delta_ht_median_db": -75.5730115,
-      "delta_ht_fraction_below_minus_25_db": 0.999607574,
-      "delta_hr_median_db": -9.78367241,
-      "median_hr_over_ht_advantage_db": 65.7571616
-    },
-    {
-      "subdivision": 4,
-      "ionosphere": "daytime",
-      "upper_crust_resistivity_ohm_m": 500.0,
-      "compile_chunk_size": 8,
-      "steps": 77502,
-      "delta_ht_median_db": -76.0614616,
-      "delta_ht_fraction_below_minus_25_db": 0.999190621,
-      "delta_hr_median_db": 15.5549571,
-      "median_hr_over_ht_advantage_db": 90.2657054
+      "subdivision": 5,
+      "steps": 77504,
+      "compile_chunk_size": 16,
+      "reference_hr_peak_a_m": 7.40344489e-17,
+      "difference_hr_peak_a_m": 1.44230209e-14,
+      "pointwise": {
+        "delta_ht_median_db": -80.390407,
+        "delta_ht_fraction_below_minus_25_db": 0.99975474,
+        "delta_hr_median_db": 44.7993992,
+        "delta_hr_maximum_db": 135.503319,
+        "median_hr_over_ht_advantage_db": 125.893105
+      },
+      "peak": {
+        "delta_ht_median_db": -100.991039,
+        "delta_ht_maximum_db": -86.3999069,
+        "delta_hr_median_db": 31.0545232,
+        "delta_hr_maximum_db": 45.7924477,
+        "median_hr_over_ht_advantage_db": 132.065295
+      }
     },
     {
       "subdivision": 6,
-      "ionosphere": "day-night",
-      "upper_crust_resistivity_ohm_m": 10.0,
-      "compile_chunk_size": 32,
       "steps": 77511,
-      "delta_ht_median_db": -63.0127022,
-      "delta_ht_fraction_below_minus_25_db": 0.996395027,
-      "delta_hr_median_db": 121.480171,
-      "median_hr_over_ht_advantage_db": 187.198153
-    },
-    {
-      "subdivision": 6,
-      "ionosphere": "day-night",
-      "upper_crust_resistivity_ohm_m": 5000.0,
       "compile_chunk_size": 32,
-      "steps": 77511,
-      "delta_ht_median_db": -47.6701838,
-      "delta_ht_fraction_below_minus_25_db": 0.995659318,
-      "delta_hr_median_db": 73.143022,
-      "median_hr_over_ht_advantage_db": 119.360124
+      "reference_hr_peak_a_m": 3.18630389e-17,
+      "difference_hr_peak_a_m": 1.19807335e-12,
+      "pointwise": {
+        "delta_ht_median_db": -60.7243298,
+        "delta_ht_fraction_below_minus_25_db": 0.997743826,
+        "delta_hr_median_db": 86.6596899,
+        "delta_hr_maximum_db": 167.625191,
+        "median_hr_over_ht_advantage_db": 151.087927
+      },
+      "peak": {
+        "delta_ht_median_db": -82.9157579,
+        "delta_ht_maximum_db": -64.1429071,
+        "delta_hr_median_db": 72.8347127,
+        "delta_hr_maximum_db": 91.5039242,
+        "median_hr_over_ht_advantage_db": 155.546288
+      }
     }
   ],
+  "terminator_control": {
+    "subdivision": 4,
+    "subsolar_longitude_deg": 0.0,
+    "peak_delta_hr_maximum_db": -23.1257093,
+    "dawn_aligned_difference_db": -6.2970791
+  },
   "verdict": "fail",
-  "reason": "Neither explicit dissertation Figure 15 resistivity hypothesis retains the published radial scale or 45 dB advantage under surface refinement."
+  "reason": "The layered Figure 15 hypothesis satisfies the tangential threshold but the radial response changes by about 121 dB from subdivisions 4 to 6 and does not converge to the published +20 dB scale."
 }

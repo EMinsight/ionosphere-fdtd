@@ -5,6 +5,7 @@ import pytest
 
 from verification.simpson_taflove_2004.materials import ETOPO5Relief
 from verification.simpson_taflove_2004.model import ValidationTraces
+from verification.simpson_taflove_2006.materials import HermanceFigure15Material
 from verification.simpson_taflove_2006.model import (
     PAPER_ENVELOPE_FWHM_S,
     PAPER_OIL_AREA_KM2,
@@ -12,6 +13,9 @@ from verification.simpson_taflove_2006.model import (
     PAPER_OIL_MEDIAN_DEPTH_M,
     PAPER_OIL_RADIUS_M,
     PAPER_OIL_THICKNESS_M,
+    THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
+    THESIS_DAYTIME_EFFECTIVE_REFLECTION_HEIGHT_M,
+    THESIS_NIGHTTIME_EFFECTIVE_REFLECTION_HEIGHT_M,
     THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M,
     THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M,
     THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M,
@@ -146,6 +150,70 @@ def test_day_night_profile_uses_declared_solar_hemispheres() -> None:
     np.testing.assert_array_equal(values, (70_000.0, 92_800.0))
 
 
+def test_dawn_zero_geometry_places_noon_at_90_degrees_east() -> None:
+    profile = DayNightHemisphereProfile(
+        daytime_value=1.0,
+        nighttime_value=0.0,
+        subsolar_latitude_deg=0.0,
+        subsolar_longitude_deg=THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
+    )
+    longitude = np.deg2rad(np.asarray((90.0, -90.0)))
+    directions = np.column_stack(
+        (np.cos(longitude), np.sin(longitude), np.zeros(2))
+    )
+
+    np.testing.assert_array_equal(profile(directions), (1.0, 0.0))
+
+
+def test_figure_15_material_uses_distinct_land_and_ocean_layers() -> None:
+    material = HermanceFigure15Material(
+        land_classifier=lambda directions: directions[:, 0] > 0.0,
+        ocean_depth_m=1.0,
+    )
+    directions = np.asarray(((1.0, 0.0, 0.0), (-1.0, 0.0, 0.0)))
+    altitudes = np.asarray((-2_500.0, -7_500.0, -15_000.0, -30_000.0, -50_000.0))
+
+    sigma, _ = material.sample(directions, altitudes, 6_371_000.0)
+
+    np.testing.assert_allclose(
+        1.0 / sigma[0], (10.0, 5_000.0, 5_000.0, 5_000.0, 50.0)
+    )
+    np.testing.assert_allclose(
+        1.0 / sigma[1], (5.0, 50.0, 500.0, 200.0, 50.0)
+    )
+
+
+def test_bannister_profiles_match_dissertation_reflection_heights() -> None:
+    material = HermanceFigure15Material(
+        land_classifier=lambda directions: np.ones(len(directions), dtype=np.bool_),
+        ionosphere_reference_height_sampler=DayNightHemisphereProfile(
+            70_000.0,
+            THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M,
+            subsolar_longitude_deg=THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
+        ),
+        ionosphere_scale_height_sampler=DayNightHemisphereProfile(
+            1_000.0 / 0.3,
+            THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M,
+            subsolar_longitude_deg=THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
+        ),
+    )
+    longitude = np.deg2rad(np.asarray((90.0, -90.0)))
+    directions = np.column_stack(
+        (np.cos(longitude), np.sin(longitude), np.zeros(2))
+    )
+    altitudes = np.asarray(
+        (
+            THESIS_DAYTIME_EFFECTIVE_REFLECTION_HEIGHT_M,
+            THESIS_NIGHTTIME_EFFECTIVE_REFLECTION_HEIGHT_M,
+        )
+    )
+
+    sigma, _ = material.sample(directions, altitudes, 6_371_000.0)
+
+    assert sigma[0, 0] == pytest.approx(sigma[1, 1], rel=0.25)
+    assert sigma[0, 0] == pytest.approx(3.0e-9, rel=0.02)
+
+
 @requires_natural_earth
 def test_thesis_radar_setup_installs_day_night_ionosphere() -> None:
     simulation = create_radar_simulation(
@@ -174,6 +242,31 @@ def test_thesis_radar_setup_installs_day_night_ionosphere() -> None:
     )
     assert simulation.material.upper_crust_resistivity_ohm_m == 5_000.0
     assert simulation.material.deep_rock_resistivity_ohm_m == 50.0
+
+
+@requires_natural_earth
+def test_radar_setup_can_install_figure_15_material() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        lithosphere_profile="figure-15",
+        ionosphere_model="day-night",
+    )
+
+    assert isinstance(simulation.material, HermanceFigure15Material)
+    noon = np.asarray(((0.0, 1.0, 0.0),))
+    midnight = np.asarray(((0.0, -1.0, 0.0),))
+    assert simulation.material.ionosphere_reference_height_sampler(noon)[0] == (
+        70_000.0
+    )
+    assert simulation.material.ionosphere_reference_height_sampler(midnight)[0] == (
+        THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M
+    )
+    assert simulation.material.anomalies[0].conductivity_factor == pytest.approx(1.2)
 
 
 @requires_natural_earth
@@ -483,6 +576,18 @@ def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
     metrics = radar_field_metrics(reference, anomaly, curves)
     assert metrics["delta_hr_peak_normalized_db"] == pytest.approx(20.0)
     assert metrics["delta_ht_peak_normalized_db"] == pytest.approx(-30.0)
+
+    peak_curves = compute_radar_perturbation(
+        reference,
+        anomaly,
+        relative_stop_s=0.1,
+        normalization="peak",
+    )
+    assert peak_curves.normalization == "peak"
+    assert np.max(peak_curves.delta_hr_db) == pytest.approx(20.0)
+    assert np.max(peak_curves.delta_ht_db) == pytest.approx(-30.0)
+    assert np.all(peak_curves.valid_hr)
+    assert np.all(peak_curves.valid_ht)
 
 
 def test_radar_perturbation_rejects_incompatible_runs() -> None:

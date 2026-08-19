@@ -33,6 +33,12 @@ $$
 
 where $q$ denotes the radial or tangential magnetic component.
 
+The dissertation body supports this peak-reference denominator, but the
+Figure 26 caption attributes spikes to zero crossings of the reference
+waveform, which instead implies an instantaneous denominator. Both
+interpretations are therefore calculated below; neither is silently selected
+to improve agreement.
+
 ## Results
 
 ![Figure 5 comparison](images/simpson-taflove-2006-fig-5-comparison.png)
@@ -75,52 +81,67 @@ article:
 - dissertation Figure 15 supplies lithosphere resistivity classes, including
   $0.3\ \Omega\,\mathrm{m}$ seawater, a shallow continental class of
   $\leq10\ \Omega\,\mathrm{m}$, a resistive continental class of
-  $\geq5000\ \Omega\,\mathrm{m}$, and a deep class of
+  $\geq5000\ \Omega\,\mathrm{m}$, oceanic classes of $\leq5$, $\leq50$,
+  $\geq500$, and $\leq200\ \Omega\,\mathrm{m}$, and a deep class of
   $\leq50\ \Omega\,\mathrm{m}$;
 - the Laurentian Plateau is described as extending north from the Great Lakes
-  to the Arctic and including much of Canada and Greenland.
+  to the Arctic and including much of Canada and Greenland; and
+- the adjacent ionospheric-radar application states that dawn occurs at
+  $0^\circ$ longitude and gives approximate effective reflection heights of
+  48 km by day and 76 km by night.
 
-The dissertation still does not give the simulation epoch or solar-terminator
-orientation, a cellwise mapping from the Figure 15 classes, an exact Shield
-mask, or the horizontal shape of the hypothetical oil body. The extracted
-classes therefore define bounded hypotheses rather than a unique recovered
-input volume.
+The oil-field section does not explicitly say that it uses the adjacent
+application's dawn orientation. The dissertation also does not provide a
+cellwise Figure 15 volume, an exact Shield mask, the isolated conductor's
+geographic location, or the horizontal shape of the hypothetical oil body.
+The extracted information therefore defines a traceable hypothesis rather
+than a unique recovered input volume.
 
 ### Dissertation-informed experiment
 
-The layered material implementation now accepts direction-dependent
-ionosphere reference-height and scale-height samplers. The 2006 workflow can
-select a declared day/night solar hemisphere and can set the upper-crust,
-asthenosphere, and deep-rock resistivities independently. The experiment used
-the established daytime profile ($H=70\ \mathrm{km}$, scale
-$3.333\ \mathrm{km}$), the cited Bannister ambient-night representative
-($H=92.8\ \mathrm{km}$, scale $2.47\ \mathrm{km}$), and an explicitly
-declared subsolar point at $0^\circ$ N, $0^\circ$ E. This longitude is an
-assumption for sensitivity testing, not a recovered paper input.
+The dissertation-informed material uses separate continental and oceanic
+profiles at the actual E-field sampling directions. Because Figure 15 is a
+schematic with inequality-valued classes, its class limits are used as
+representative values and visual boundaries are snapped to the nominal 5 km
+radial grid. The continental hypothesis is 10 $\Omega\,\mathrm{m}$ from
+0--5 km, 5000 $\Omega\,\mathrm{m}$ from 5--45 km, and
+50 $\Omega\,\mathrm{m}$ below 45 km. The oceanic rock hypothesis is 5, 50,
+500, 200, and 50 $\Omega\,\mathrm{m}$ over boundaries at 5, 10, 20, and
+45 km below sea level. The geographically unspecified isolated conductor in
+Figure 15 is omitted.
+
+The ionosphere uses the established daytime profile ($H=70\ \mathrm{km}$,
+scale $3.333\ \mathrm{km}$), the cited Bannister ambient-night representative
+($H=92.8\ \mathrm{km}$, scale $2.47\ \mathrm{km}$), and a subsolar point at
+$0^\circ$ N, $90^\circ$ E so that dawn occurs at $0^\circ$ longitude. The
+profiles yield $3.011\times10^{-9}$ and $2.461\times10^{-9}\ \mathrm{S/m}$
+at the dissertation's approximate day and night reflection heights,
+respectively, providing a consistent independent check.
 
 ETOPO5, the paper source, the $4800\ \mathrm{km}^2$ conservative oil support,
 the $0.1$ conductivity factor, `float64`, and a Courant factor of 1 were held
-fixed. The two explicit Figure 15 continental limits were tested separately;
-no intermediate resistivity was fitted to the published curve.
+fixed. The table reports the caption-implied pointwise medians and the
+body-defined peak-normalized maxima from the same traces.
 
-| Subdivision | Ionosphere | Upper crust | Median $\Delta H_{tan}$ | Below $-25$ dB | Median $\Delta H_r$ | Median advantage |
-|---:|---|---:|---:|---:|---:|---:|
-| 4 | day/night | $10\ \Omega\,\mathrm{m}$ | $-96.558$ dB | 99.993% | $+33.217$ dB | $+131.653$ dB |
-| 4 | day/night | $500\ \Omega\,\mathrm{m}$ control | $-77.445$ dB | 99.948% | $+8.552$ dB | $+88.464$ dB |
-| 4 | day/night | $5000\ \Omega\,\mathrm{m}$ | $-75.573$ dB | 99.961% | $-9.784$ dB | $+65.757$ dB |
-| 4 | daytime | $500\ \Omega\,\mathrm{m}$ control | $-76.061$ dB | 99.919% | $+15.555$ dB | $+90.266$ dB |
-| 6 | day/night | $10\ \Omega\,\mathrm{m}$ | $-63.013$ dB | 99.640% | $+121.480$ dB | $+187.198$ dB |
-| 6 | day/night | $5000\ \Omega\,\mathrm{m}$ | $-47.670$ dB | 99.566% | $+73.143$ dB | $+119.360$ dB |
+| Subdivision | Reference $H_r$ peak | Pointwise median $\Delta H_{tan}$ | Pointwise median $\Delta H_r$ | Peak-normalized max $\Delta H_{tan}$ | Peak-normalized max $\Delta H_r$ |
+|---:|---:|---:|---:|---:|---:|
+| 4 | $1.249\times10^{-13}$ A/m | $-95.728$ dB | $-26.213$ dB | $-102.206$ dB | $-29.423$ dB |
+| 5 | $7.403\times10^{-17}$ A/m | $-80.390$ dB | $+44.799$ dB | $-86.400$ dB | $+45.792$ dB |
+| 6 | $3.186\times10^{-17}$ A/m | $-60.724$ dB | $+86.660$ dB | $-64.143$ dB | $+91.504$ dB |
 
-At subdivision 4, some radial metrics approach the published $+20$ dB scale.
-Neither explicit Figure 15 hypothesis retains that behavior at subdivision 6:
-the $10\ \Omega\,\mathrm{m}$ radial median changes by $+88.26$ dB and the
-$5000\ \Omega\,\mathrm{m}$ median by $+82.93$ dB. Both also remain far from
-the paper's approximate 45 dB radial-over-tangential advantage. This is not a
-convergent candidate that can justify a costly subdivision-7 promotion.
-The dissertation information narrows the missing-input diagnosis but does not
-change the Figure 7 or complete-reproduction verdict from **FAIL**. Complete
-machine-readable settings and results are stored in
+The tangential perturbation remains below $-25$ dB for 99.774--99.975% of
+valid pointwise samples, but the radial result does not converge. Its
+peak-normalized maximum moves by about 121 dB from subdivision 4 to 6, crossing
+the published $+20$ dB scale without approaching a stable value. The reference
+$H_r$ peak also collapses by more than three orders of magnitude from
+subdivision 4 to 5, while the anomaly-induced peak grows by about 83 times from
+subdivision 5 to 6. A subdivision-4 control with the former $0^\circ$ subsolar
+longitude changes the radial maximum by only 6.30 dB, so the dawn orientation
+does not explain the nonconvergence.
+
+The layered Figure 15 hypothesis therefore does not justify subdivision 7 and
+does not change the Figure 7 or complete-reproduction verdict from **FAIL**.
+Complete machine-readable settings and both normalization results are stored in
 `artifacts/verification/simpson-taflove-2006-thesis.json`.
 
 ## Accuracy research status
@@ -133,13 +154,14 @@ order over subdivisions 2–6, while the P95 directional anisotropy falls from
 decrease monotonically for both radial dual cells and tangential edge diamonds.
 
 For Figure 7, the material API now directly exercises the dissertation's
-day/night statement and can also import three-dimensional conductivity and
-permittivity volumes from a canonical NPZ grid. No cellwise Hermance
-conductivity volume or equivalent observation product is present in this
-repository, so the resistivity classes are not converted into an invented
-global map and the radar scaling verdict remains **FAIL**. A future
-observational run must record dataset identity, units, coordinate datum,
-interpolation policy, and checksum alongside the trace archive.
+day/night statement and the verification package contains an explicitly
+qualified Figure 15 piecewise hypothesis. It can also import three-dimensional
+conductivity and permittivity volumes from a canonical NPZ grid. No cellwise
+Hermance volume or equivalent observation product is present, so the schematic
+hypothesis is not represented as a recovered global map and the radar scaling
+verdict remains **FAIL**. A future observational run must record dataset
+identity, units, coordinate datum, interpolation policy, and checksum alongside
+the trace archive.
 
 ## Reproduction
 

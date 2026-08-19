@@ -38,6 +38,7 @@ from ..simpson_taflove_2004.model import (
 from ..simpson_taflove_2004.model import (
     render_receiver_grid as _render_receiver_grid,
 )
+from .materials import HermanceFigure15Material
 
 FloatArray = NDArray[np.float64]
 
@@ -68,6 +69,10 @@ PAPER_DAYTIME_IONOSPHERE_REFERENCE_HEIGHT_M = 70_000.0
 PAPER_DAYTIME_IONOSPHERE_SCALE_HEIGHT_M = 1_000.0 / 0.3
 THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M = 92_800.0
 THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M = 2_470.0
+THESIS_DAYTIME_EFFECTIVE_REFLECTION_HEIGHT_M = 48_000.0
+THESIS_NIGHTTIME_EFFECTIVE_REFLECTION_HEIGHT_M = 76_000.0
+THESIS_DAWN_LONGITUDE_DEG = 0.0
+THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG = THESIS_DAWN_LONGITUDE_DEG + 90.0
 THESIS_FIGURE_15_SHALLOW_RESISTIVITY_LIMIT_OHM_M = 10.0
 THESIS_FIGURE_15_CONTINENTAL_RESISTIVITY_LIMIT_OHM_M = 5_000.0
 THESIS_FIGURE_15_DEEP_RESISTIVITY_LIMIT_OHM_M = 50.0
@@ -144,6 +149,7 @@ class RadarPerturbation:
     valid_ht: NDArray[np.bool_]
     valid_hr: NDArray[np.bool_]
     ht_projection_east_north: FloatArray
+    normalization: str
 
 
 def radar_radial_altitudes_m() -> tuple[float, ...]:
@@ -159,6 +165,7 @@ def paper_anomalies(
     include_oil: bool,
     include_shield: bool = True,
     shield_radius_m: float = 2_500_000.0,
+    shield_background_resistivity_ohm_m: float = 500.0,
     oil_surface_altitude_m: float = 0.0,
 ) -> tuple[SphericalAnomaly, ...]:
     """Return the approximate Laurentian Shield and optional oil anomaly."""
@@ -169,6 +176,8 @@ def paper_anomalies(
     if include_shield:
         if shield_radius_m <= 0.0:
             raise ValueError("shield_radius_m must be positive")
+        if shield_background_resistivity_ohm_m <= 0.0:
+            raise ValueError("shield background resistivity must be positive")
         anomalies.append(
             SphericalAnomaly(
                 latitude_deg=58.0,
@@ -176,7 +185,9 @@ def paper_anomalies(
                 radius_m=shield_radius_m,
                 altitude_min_m=-20_000.0,
                 altitude_max_m=-1.0,
-                conductivity_factor=2.4e-4 / (1.0 / 500.0),
+                conductivity_factor=(
+                    2.4e-4 / (1.0 / shield_background_resistivity_ohm_m)
+                ),
                 maximum_background_conductivity_s_m=0.01,
             )
         )
@@ -229,9 +240,10 @@ def create_radar_simulation(
     ),
     upper_crust_resistivity_ohm_m: float = 500.0,
     asthenosphere_resistivity_ohm_m: float = 200.0,
+    lithosphere_profile: str = "legacy",
     ionosphere_model: str = "daytime",
     subsolar_latitude_deg: float = 0.0,
-    subsolar_longitude_deg: float = 0.0,
+    subsolar_longitude_deg: float = THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
     nighttime_ionosphere_reference_height_m: float = (
         THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M
     ),
@@ -245,12 +257,22 @@ def create_radar_simulation(
         raise ValueError("vertical_reference must be 'sea-level' or 'terrain'")
     material_arguments: dict[str, Any] = {
         "tangential_interface_mode": tangential_interface_mode,
-        "upper_crust_resistivity_ohm_m": upper_crust_resistivity_ohm_m,
-        "asthenosphere_resistivity_ohm_m": asthenosphere_resistivity_ohm_m,
-        "deep_rock_resistivity_ohm_m": (
-            deep_lithosphere_resistivity_ohm_m
-        ),
     }
+    if lithosphere_profile == "legacy":
+        material_class = SimpsonTaflove2004Material
+        material_arguments.update(
+            upper_crust_resistivity_ohm_m=upper_crust_resistivity_ohm_m,
+            asthenosphere_resistivity_ohm_m=asthenosphere_resistivity_ohm_m,
+            deep_rock_resistivity_ohm_m=deep_lithosphere_resistivity_ohm_m,
+        )
+        shield_background_resistivity_ohm_m = upper_crust_resistivity_ohm_m
+    elif lithosphere_profile == "figure-15":
+        material_class = HermanceFigure15Material
+        shield_background_resistivity_ohm_m = (
+            THESIS_FIGURE_15_CONTINENTAL_RESISTIVITY_LIMIT_OHM_M
+        )
+    else:
+        raise ValueError("lithosphere_profile must be 'legacy' or 'figure-15'")
     if ionosphere_model == "day-night":
         shared_solar_geometry = {
             "subsolar_latitude_deg": subsolar_latitude_deg,
@@ -299,10 +321,13 @@ def create_radar_simulation(
         include_oil=include_oil,
         include_shield=include_shield,
         shield_radius_m=shield_radius_m,
+        shield_background_resistivity_ohm_m=(
+            shield_background_resistivity_ohm_m
+        ),
         oil_surface_altitude_m=receiver_surface_altitude_m,
     )
     material_arguments["anomalies"] = anomalies
-    material = SimpsonTaflove2004Material(**material_arguments)
+    material = material_class(**material_arguments)
     effective_source_altitude_m = (
         source_surface_altitude_m
         if source_altitude_m is None
@@ -529,8 +554,9 @@ def compute_radar_perturbation(
     relative_start_s: float = 0.0,
     relative_stop_s: float = PAPER_FIGURE_7_DURATION_S,
     denominator_floor_fraction: float = 1.0e-6,
+    normalization: str = "pointwise",
 ) -> RadarPerturbation:
-    """Compute the Figure 7 pointwise reference-normalized perturbations."""
+    """Compute either interpretation of Figure 7 reference normalization."""
 
     if reference.case != "reference" or anomaly.case != "anomaly":
         raise ValueError("radar traces must be ordered as reference then anomaly")
@@ -548,6 +574,8 @@ def compute_radar_perturbation(
     )
     if not np.any(selected):
         raise ValueError("requested Figure 7 window is absent from the traces")
+    if normalization not in {"pointwise", "peak"}:
+        raise ValueError("normalization must be 'pointwise' or 'peak'")
 
     reference_ht_vector = np.column_stack(
         (reference.ht_east_a_m[selected], reference.ht_north_a_m[selected])
@@ -569,9 +597,14 @@ def compute_radar_perturbation(
         peak = float(np.max(np.abs(base)))
         if peak == 0.0:
             raise ValueError("reference magnetic field is identically zero")
-        valid = np.abs(base) >= denominator_floor_fraction * peak
+        if normalization == "pointwise":
+            denominator = np.abs(base)
+            valid = denominator >= denominator_floor_fraction * peak
+        else:
+            denominator = np.full_like(base, peak)
+            valid = np.ones_like(base, dtype=np.bool_)
         ratio = np.full_like(base, np.nan)
-        ratio[valid] = np.abs(changed[valid] - base[valid]) / np.abs(base[valid])
+        ratio[valid] = np.abs(changed[valid] - base[valid]) / denominator[valid]
         ratio[valid] = np.maximum(ratio[valid], np.finfo(np.float64).tiny)
         return 20.0 * np.log10(ratio), valid
 
@@ -584,6 +617,7 @@ def compute_radar_perturbation(
         valid_ht=valid_ht,
         valid_hr=valid_hr,
         ht_projection_east_north=projection,
+        normalization=normalization,
     )
 
 

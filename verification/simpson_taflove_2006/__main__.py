@@ -13,6 +13,7 @@ from .model import (
     PAPER_FIGURE_7_DURATION_S,
     PAPER_SOURCE_CENTER_S,
     REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
+    THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
     compute_radar_perturbation,
     create_radar_simulation,
     load_radar_traces,
@@ -57,10 +58,20 @@ def _parser() -> argparse.ArgumentParser:
         "--asthenosphere-resistivity-ohm-m", type=float, default=200.0
     )
     radar.add_argument(
+        "--lithosphere-profile",
+        choices=("legacy", "figure-15"),
+        default="legacy",
+    )
+    radar.add_argument(
         "--ionosphere", choices=("daytime", "day-night"), default="daytime"
     )
     radar.add_argument("--subsolar-latitude-deg", type=float, default=0.0)
-    radar.add_argument("--subsolar-longitude-deg", type=float, default=0.0)
+    radar.add_argument(
+        "--subsolar-longitude-deg",
+        type=float,
+        default=THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
+        help="90 degrees places the dawn terminator at 0 degrees longitude",
+    )
     radar.add_argument(
         "--tangential-interface",
         choices=("point", "fractional"),
@@ -123,6 +134,9 @@ def _parser() -> argparse.ArgumentParser:
     analyze.add_argument("--reference", type=Path, required=True)
     analyze.add_argument("--anomaly", type=Path, required=True)
     analyze.add_argument("--figure", type=Path, required=True)
+    analyze.add_argument(
+        "--normalization", choices=("pointwise", "peak"), default="pointwise"
+    )
     return parser
 
 
@@ -184,6 +198,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         ),
         upper_crust_resistivity_ohm_m=args.upper_crust_resistivity_ohm_m,
         asthenosphere_resistivity_ohm_m=args.asthenosphere_resistivity_ohm_m,
+        lithosphere_profile=args.lithosphere_profile,
         ionosphere_model=args.ionosphere,
         subsolar_latitude_deg=args.subsolar_latitude_deg,
         subsolar_longitude_deg=args.subsolar_longitude_deg,
@@ -202,6 +217,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"receiver={args.receiver_support} "
         f"vertical_reference={args.vertical_reference} "
         f"horizontal_anomaly={args.horizontal_anomaly} "
+        f"lithosphere_profile={args.lithosphere_profile} "
         f"ionosphere={args.ionosphere} "
         f"subsolar={args.subsolar_latitude_deg:g},"
         f"{args.subsolar_longitude_deg:g} "
@@ -231,9 +247,11 @@ def _run_radar(args: argparse.Namespace) -> int:
 def _analyze_radar(args: argparse.Namespace) -> int:
     reference = load_radar_traces(args.reference)
     anomaly = load_radar_traces(args.anomaly)
-    curves = compute_radar_perturbation(reference, anomaly)
+    curves = compute_radar_perturbation(
+        reference, anomaly, normalization=args.normalization
+    )
     figure = render_figure_7(curves, args.figure)
-    print(f"figure={figure}")
+    print(f"figure={figure} normalization={args.normalization}")
     metrics = radar_metrics(curves)
     metrics.update(radar_field_metrics(reference, anomaly, curves))
     for name, value in metrics.items():
