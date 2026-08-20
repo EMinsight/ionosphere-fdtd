@@ -195,6 +195,27 @@ def test_radar_resolution_comparison_interpolates_paired_fields() -> None:
         assert getattr(result, name) < 3.0e-4
 
 
+def test_radar_resolution_comparison_clips_to_common_half_step_window() -> None:
+    def traces(time: np.ndarray, case: str, signature: str) -> RadarTraces:
+        values = np.sin(2.0 * np.pi * 5.0 * time)
+        if case == "anomaly":
+            values = 1.1 * values
+        return RadarTraces(time, values, values, values, 0.0, case, signature)
+
+    coarse_time = np.linspace(-0.01, 0.0849998, 101)
+    fine_time = np.linspace(-0.01, 0.0849999, 201)
+    result = compare_radar_resolution_pairs(
+        traces(coarse_time, "reference", "coarse"),
+        traces(coarse_time, "anomaly", "coarse"),
+        traces(fine_time, "reference", "fine"),
+        traces(fine_time, "anomaly", "fine"),
+        coarse_target_subdivision=9,
+        fine_target_subdivision=10,
+    )
+
+    assert result.comparison_stop_s <= coarse_time[-1]
+
+
 def test_radar_resolution_comparison_rejects_unpaired_mesh_runs() -> None:
     time = np.linspace(0.0, 0.1, 11)
     values = np.sin(2.0 * np.pi * 5.0 * time)

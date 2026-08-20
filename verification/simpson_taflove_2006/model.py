@@ -246,12 +246,12 @@ def compare_radar_resolution_pairs(
     source_center = fine_reference.source_center_s
     coarse_time = coarse_reference.time_s - source_center
     fine_time = fine_reference.time_s - source_center
-    selected = (fine_time >= relative_start_s) & (fine_time <= relative_stop_s)
+    common_start = max(relative_start_s, float(coarse_time[0]), float(fine_time[0]))
+    common_stop = min(relative_stop_s, float(coarse_time[-1]), float(fine_time[-1]))
+    selected = (fine_time >= common_start) & (fine_time <= common_stop)
     comparison_time = fine_time[selected]
     if len(comparison_time) < 2:
         raise ValueError("comparison window must contain at least two fine samples")
-    if comparison_time[0] < coarse_time[0] or comparison_time[-1] > coarse_time[-1]:
-        raise ValueError("coarse traces do not cover the comparison window")
 
     def scalar(values: FloatArray) -> FloatArray:
         return np.interp(comparison_time, coarse_time, values)
