@@ -17,10 +17,11 @@ from .mesh import (
     build_geodesic_mesh_from_vertices,
 )
 from .sources import GaussianCurrent, TangentialGaussianCurrent
+from .surface_impedance import ConductiveHalfSpaceSurface
 
 CHECKPOINT_FORMAT = "ionosphere-fdtd-checkpoint"
-CHECKPOINT_VERSION = 2
-SUPPORTED_CHECKPOINT_VERSIONS = (1, CHECKPOINT_VERSION)
+CHECKPOINT_VERSION = 3
+SUPPORTED_CHECKPOINT_VERSIONS = (1, 2, CHECKPOINT_VERSION)
 
 
 class CheckpointError(ValueError):
@@ -31,7 +32,8 @@ def save_checkpoint(simulation: Any, path: str | Path) -> Path:
     """Atomically save a portable checkpoint and return its path.
 
     The NPZ file contains JSON metadata plus host NumPy copies of the mesh and
-    four evolving fields. It never stores pickled Python objects.
+    four evolving fields and any surface-impedance ADE memory. It never stores
+    pickled Python objects.
     """
 
     destination = Path(path)
@@ -52,6 +54,11 @@ def save_checkpoint(simulation: Any, path: str | Path) -> Path:
         "et": simulation.to_numpy(simulation.et),
         "hr": simulation.to_numpy(simulation.hr),
         "ht": simulation.to_numpy(simulation.ht),
+        "surface_impedance_memory": (
+            simulation.to_numpy(simulation._surface_impedance_ade.memory)
+            if simulation._surface_impedance_ade is not None
+            else np.empty((0, 0), dtype=np.float64)
+        ),
     }
     temporary_name: str | None = None
     try:
@@ -95,6 +102,8 @@ def load_checkpoint(
             required = {"metadata", "mesh_vertices", "er", "et", "hr", "ht"}
             if metadata["version"] >= 2:
                 required.update(("mesh_faces", "mesh_face_levels"))
+            if metadata["version"] >= 3:
+                required.add("surface_impedance_memory")
             missing = required.difference(archive.files)
             if missing:
                 raise CheckpointError(
@@ -115,6 +124,11 @@ def load_checkpoint(
                 name: np.array(archive[name], copy=True)
                 for name in ("er", "et", "hr", "ht")
             }
+            surface_impedance_memory = (
+                np.array(archive["surface_impedance_memory"], copy=True)
+                if metadata["version"] >= 3
+                else np.empty((0, 0), dtype=np.float64)
+            )
     except CheckpointError:
         raise
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
@@ -165,6 +179,11 @@ def load_checkpoint(
             )
         material = _deserialize_material(metadata["material"])
         source = _deserialize_source(metadata["source"])
+        surface_impedance = (
+            _deserialize_surface_impedance(metadata["surface_impedance"])
+            if metadata["version"] >= 3
+            else None
+        )
     except CheckpointError:
         raise
     except (KeyError, TypeError, ValueError, RuntimeError) as error:
@@ -177,6 +196,7 @@ def load_checkpoint(
         construction_config,
         material=material,
         source=source,
+        surface_impedance=surface_impedance,
         mesh=mesh,
         backend=backend,
         device=device,
@@ -201,6 +221,26 @@ def load_checkpoint(
         if not np.all(np.isfinite(values)):
             raise CheckpointError(f"checkpoint field {name} contains non-finite values")
         setattr(simulation, name, simulation.backend.asarray(values))
+    if simulation._surface_impedance_ade is None:
+        if surface_impedance_memory.shape != (0, 0):
+            raise CheckpointError(
+                "checkpoint has ADE state without a surface impedance model"
+            )
+    else:
+        expected_ade_shape = tuple(simulation._surface_impedance_ade.memory.shape)
+        if surface_impedance_memory.shape != expected_ade_shape:
+            raise CheckpointError(
+                "checkpoint surface impedance state has shape "
+                f"{surface_impedance_memory.shape}, expected {expected_ade_shape}"
+            )
+        if (
+            not np.issubdtype(surface_impedance_memory.dtype, np.floating)
+            or not np.all(np.isfinite(surface_impedance_memory))
+        ):
+            raise CheckpointError("checkpoint surface impedance state is invalid")
+        simulation._surface_impedance_ade.memory = simulation.backend.asarray(
+            surface_impedance_memory
+        )
 
     steps = metadata["state"]["steps"]
     if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
@@ -247,6 +287,11 @@ def _metadata(simulation: Any) -> dict[str, Any]:
         },
         "material": _serialize_material(simulation.material),
         "source": _serialize_source(simulation.source),
+        "surface_impedance": (
+            simulation.surface_impedance.to_metadata()
+            if simulation.surface_impedance is not None
+            else None
+        ),
         "state": {
             "steps": simulation.steps,
             "time_s": simulation.time_s,
@@ -278,6 +323,8 @@ def _read_metadata(value: np.ndarray) -> dict[str, Any]:
     required = {"simulation_config", "material", "source", "state", "runtime"}
     if metadata["version"] >= 2:
         required.add("mesh")
+    if metadata["version"] >= 3:
+        required.add("surface_impedance")
     missing = required.difference(metadata)
     if missing:
         raise CheckpointError(
@@ -329,6 +376,23 @@ def _deserialize_source(data: Any) -> GaussianCurrent | None:
         return source_type(**values)
     except (KeyError, TypeError, ValueError) as error:
         raise CheckpointError(f"invalid checkpoint source: {error}") from error
+
+
+def _deserialize_surface_impedance(
+    data: Any,
+) -> ConductiveHalfSpaceSurface | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise CheckpointError(
+            "checkpoint surface impedance metadata must be an object"
+        )
+    try:
+        return ConductiveHalfSpaceSurface.from_metadata(data)
+    except (KeyError, TypeError, ValueError) as error:
+        raise CheckpointError(
+            f"invalid checkpoint surface impedance: {error}"
+        ) from error
 
 
 def _json_default(value: Any) -> Any:

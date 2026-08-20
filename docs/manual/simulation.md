@@ -61,10 +61,57 @@ a legacy discretization is required.
 
 ## Boundaries and stability
 
-The supported radial boundary is PEC. Odd tangential-electric ghost cells place
-the tangential electric trace at zero on both radial boundaries. The solver
-computes a geometry- and material-aware CFL limit and rejects an explicit
-`time_step_s` above `courant_factor * cfl_time_step_limit_s`.
+The default `radial_boundary_condition="pec"` uses odd tangential-electric
+ghost cells to place the electric trace at zero on both radial boundaries.
+
+For an atmosphere-only physical model, set the minimum altitude to zero,
+select `radial_boundary_condition="surface-impedance"`, and pass a
+`ConductiveHalfSpaceSurface` to `GeodesicFDTD`. The upper boundary remains PEC;
+the lower boundary applies
+
+$$
+E_t(s)=-Z_s(s)H_t(s),\qquad
+Z_s(s)\simeq\sqrt{\frac{\mu s}{\sigma}}.
+$$
+
+The default 16-term diffusive approximation is fitted over 5–45 Hz. Positive
+poles and residues make it causal and passive, and its trapezoidal ADE is
+coupled implicitly to the lower magnetic update. Conductivity may be scalar or
+contain one value per surface edge, so a preprocessed land/ocean/crust map can
+drive a global boundary without an explicit underground volume.
+
+```python
+from ionosphere_fdtd import (
+    ConductiveHalfSpaceSurface,
+    GeodesicFDTD,
+    SimulationConfig,
+)
+
+config = SimulationConfig(
+    minimum_altitude_m=0.0,
+    maximum_altitude_m=100_000.0,
+    radial_boundary_condition="surface-impedance",
+)
+surface = ConductiveHalfSpaceSurface(
+    conductivity_s_m=1.0 / 50.0,
+)
+simulation = GeodesicFDTD(config, surface_impedance=surface)
+```
+
+The array length must match the chosen mesh's edge count. The approximation is
+the conductive half-space limit; displacement current and explicit layered
+resonances are not represented. Generate and validate a different passive
+rational model before using it where those effects are material.
+
+An ADE stores `terms * n_edges` scalar states. On a closed triangular mesh this
+cost is recovered after eliminating roughly six explicit underground radial
+cells; a skin-depth-resolving seawater or crust volume would require many more.
+Checkpoint version 3 preserves the ADE memory so a resumed run has no boundary
+transient. Single-backend compilation and the two-rank NCCL CUDA Graph path
+both update the state in place.
+
+The solver computes a geometry- and material-aware CFL limit and rejects an
+explicit `time_step_s` above `courant_factor * cfl_time_step_limit_s`.
 
 ## Material support controls
 
@@ -93,5 +140,5 @@ print(simulation.persistent_backend_bytes)
 ```
 
 `memory_bytes` counts the four evolving fields. `persistent_backend_bytes`
-also includes material coefficients, geometry, and topology resident on the
-selected backend.
+also includes material coefficients, geometry, topology, and any surface ADE
+state resident on the selected backend.

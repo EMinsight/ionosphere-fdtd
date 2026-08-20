@@ -19,6 +19,10 @@ from .materials import (
 )
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .sources import GaussianCurrent, TangentialGaussianCurrent
+from .surface_impedance import (
+    ConductiveHalfSpaceSurface,
+    SurfaceImpedanceADE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,8 +83,17 @@ class SimulationConfig:
             raise ValueError(
                 "horizontal_anomaly_mode must be 'point' or 'conservative-nearest'"
             )
-        if self.radial_boundary_condition != "pec":
-            raise ValueError("radial_boundary_condition must be 'pec'")
+        if self.radial_boundary_condition not in {"pec", "surface-impedance"}:
+            raise ValueError(
+                "radial_boundary_condition must be 'pec' or 'surface-impedance'"
+            )
+        if (
+            self.radial_boundary_condition == "surface-impedance"
+            and self.minimum_altitude_m != 0.0
+        ):
+            raise ValueError(
+                "surface-impedance boundary requires minimum_altitude_m=0"
+            )
         if self.loss_integration not in {"exponential", "trapezoidal"}:
             raise ValueError(
                 "loss_integration must be 'exponential' or 'trapezoidal'"
@@ -162,6 +175,7 @@ class GeodesicFDTD:
         config: SimulationConfig | None = None,
         material: EarthIonosphereMaterial | None = None,
         source: GaussianCurrent | TangentialGaussianCurrent | None = None,
+        surface_impedance: ConductiveHalfSpaceSurface | None = None,
         mesh: GeodesicMesh | None = None,
         backend: str = "numpy",
         device: str = "auto",
@@ -218,6 +232,17 @@ class GeodesicFDTD:
         )
         self.material = material or EarthIonosphereMaterial()
         self.source = source
+        self.surface_impedance = surface_impedance
+        if self.config.radial_boundary_condition == "surface-impedance":
+            if surface_impedance is None:
+                raise ValueError(
+                    "surface-impedance boundary requires a surface model"
+                )
+        elif surface_impedance is not None:
+            raise ValueError(
+                "surface impedance model requires radial_boundary_condition="
+                "'surface-impedance'"
+            )
 
         if self.config.radial_altitudes_m is None:
             self.altitudes_m = np.linspace(
@@ -279,6 +304,16 @@ class GeodesicFDTD:
         )
         self.hr = self.backend.zeros(
             (self.mesh.n_faces, len(self.radial_midpoints_m))
+        )
+        self._surface_impedance_ade = (
+            SurfaceImpedanceADE(
+                surface_impedance,
+                edge_count=self.mesh.n_edges,
+                time_step_s=self.time_step_s,
+                backend=self.backend,
+            )
+            if surface_impedance is not None
+            else None
         )
 
         self._prepare_geometry()
@@ -802,14 +837,38 @@ class GeodesicFDTD:
         surface_gradient_er = self.backend.edge_difference(self.er)
         surface_gradient_er *= self._inverse_primal_edge_angles
         surface_gradient_er *= self._inverse_radii
+        lower_surface_gradient = (
+            surface_gradient_er[:, 0] + 0.0
+            if self._surface_impedance_ade is not None
+            else None
+        )
+        lower_h_old = (
+            self.ht[:, 0] + 0.0
+            if self._surface_impedance_ade is not None
+            else None
+        )
 
-        # Et is odd across each radial boundary. This ghost-cell construction
-        # places zero tangential electric field on the boundary (PEC).
+        # The default odd Et ghosts place zero tangential electric field at
+        # both radial boundaries. A lower surface ADE overwrites its Ht update
+        # below; the upper boundary remains PEC.
         radial_derivative_et = self._radial_derivative_et()
 
         surface_gradient_er -= radial_derivative_et
         surface_gradient_er *= self.time_step_s / MU_0
         self.ht += surface_gradient_er
+        if self._surface_impedance_ade is not None:
+            boundary_metric = (
+                self.radial_midpoints_m[0] / self.radii_m[0]
+                if self.config.geometry_mode == "full-spherical"
+                else 1.0
+            )
+            self.ht[:, 0] = self._surface_impedance_ade.advance_lower_boundary(
+                lower_h_old,
+                boundary_metric * self.et[:, 0],
+                lower_surface_gradient,
+                self._radial_steps[0],
+                self.time_step_s,
+            )
         del surface_gradient_er, radial_derivative_et
 
         electric_circulation = self.backend.face_circulation(
@@ -892,6 +951,16 @@ class GeodesicFDTD:
             "compiled": self.compiled,
             "compile_chunk_size": self.compile_chunk_size,
             "radial_boundary_condition": self.config.radial_boundary_condition,
+            "surface_impedance_terms": (
+                self.surface_impedance.terms
+                if self.surface_impedance is not None
+                else 0
+            ),
+            "surface_impedance_state_bytes": (
+                self._surface_impedance_ade.state_bytes
+                if self._surface_impedance_ade is not None
+                else 0
+            ),
             "loss_integration": self.config.loss_integration,
             "geometry_mode": self.config.geometry_mode,
             "cfl_time_step_limit_s": self.cfl_time_step_limit_s,
@@ -1152,4 +1221,7 @@ class GeodesicFDTD:
             if distribution is not None:
                 arrays.extend(distribution)
         unique = {id(array): array for array in arrays}
-        return sum(self.backend.nbytes(array) for array in unique.values())
+        total = sum(self.backend.nbytes(array) for array in unique.values())
+        if self._surface_impedance_ade is not None:
+            total += self._surface_impedance_ade.persistent_bytes
+        return total

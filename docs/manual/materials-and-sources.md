@@ -110,6 +110,12 @@ mesh coordinates requires generating a new artifact; silently reusing an
 almost-matching file is prohibited. `content_sha256` is the stable identity to
 record in run metadata.
 
+For a mesh-native ground map, pass its edge-associated shallow conductivity to
+`ConductiveHalfSpaceSurface`. The surface ADE then replaces the explicit
+underground volume; it does not consume the artifact's vertex-by-altitude
+arrays. Preserve the conductivity map's provenance and the resulting surface
+model parameters together with the run configuration.
+
 ## Spherical anomalies
 
 ```python

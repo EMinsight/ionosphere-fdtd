@@ -15,6 +15,10 @@ from .mesh import GeodesicMesh
 from .partition import FieldHalo, SurfacePartition
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
+from .surface_impedance import (
+    ConductiveHalfSpaceSurface,
+    SurfaceImpedanceADE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +218,7 @@ class DistributedGeodesicFDTD:
         mesh: GeodesicMesh,
         material: EarthIonosphereMaterial | None = None,
         source: GaussianCurrent | TangentialGaussianCurrent | None = None,
+        surface_impedance: ConductiveHalfSpaceSurface | None = None,
         device: str | None = None,
         dtype: str = "float64",
     ) -> None:
@@ -261,6 +266,7 @@ class DistributedGeodesicFDTD:
             config,
             material=self.material,
             source=self.source,
+            surface_impedance=surface_impedance,
             mesh=mesh,
             backend="numpy",
             dtype="float64",
@@ -328,6 +334,18 @@ class DistributedGeodesicFDTD:
             ht_layout=self._ht_layout,
         )
         self.halo_exchange.prepare(self.er, self.et, self.hr, self.ht)
+        self._surface_impedance_ade = (
+            SurfaceImpedanceADE(
+                surface_impedance,
+                edge_count=len(self.rank_partition.owned_edges),
+                time_step_s=self.time_step_s,
+                backend=_TorchArrayAdapter(torch, self.dtype, self.device),
+                global_edge_count=mesh.n_edges,
+                global_edge_indices=self.rank_partition.owned_edges,
+            )
+            if surface_impedance is not None
+            else None
+        )
         self._cuda_graph = None
         self._cuda_graph_currents = None
         self._cuda_graph_chunk_size = 0
@@ -571,6 +589,16 @@ class DistributedGeodesicFDTD:
         )
         surface_gradient_er *= self._inverse_primal_edge_angles[rows]
         surface_gradient_er *= self._inverse_radii
+        lower_surface_gradient = (
+            surface_gradient_er[:, 0] + 0.0
+            if self._surface_impedance_ade is not None
+            else None
+        )
+        lower_h_old = (
+            self.ht[rows, 0] + 0.0
+            if self._surface_impedance_ade is not None
+            else None
+        )
         values = self.et[rows]
         if self.config.geometry_mode == "full-spherical":
             values = values * self._radial_midpoints[None, :]
@@ -586,6 +614,22 @@ class DistributedGeodesicFDTD:
         self.ht[rows] += (surface_gradient_er - radial_derivative) * (
             self.time_step_s / MU_0
         )
+        if self._surface_impedance_ade is not None:
+            boundary_metric = (
+                self.radial_midpoints_m[0] / self.radii_m[0]
+                if self.config.geometry_mode == "full-spherical"
+                else 1.0
+            )
+            self.ht[rows, 0] = (
+                self._surface_impedance_ade.advance_lower_boundary(
+                    lower_h_old,
+                    boundary_metric * self.et[rows, 0],
+                    lower_surface_gradient,
+                    self._radial_steps[0],
+                    self.time_step_s,
+                    rows=rows,
+                )
+            )
 
     def _update_magnetic_faces(self, rows: Any) -> None:
         edge_values = (
@@ -826,6 +870,16 @@ class DistributedGeodesicFDTD:
             )
         )
 
+    @property
+    def surface_impedance_state_bytes(self) -> int:
+        """Return rank-local surface ADE memory."""
+
+        return (
+            self._surface_impedance_ade.state_bytes
+            if self._surface_impedance_ade is not None
+            else 0
+        )
+
     def close(self) -> None:
         """Release captured graphs and auxiliary groups before group teardown."""
 
@@ -846,6 +900,25 @@ def _layout(global_count: int, owned: np.ndarray, ghost: np.ndarray) -> _EntityL
     lookup = np.full(global_count, -1, dtype=np.int64)
     lookup[indices] = np.arange(len(indices), dtype=np.int64)
     return _EntityLayout(indices, lookup, len(owned))
+
+
+class _TorchArrayAdapter:
+    """Minimal ADE allocation interface for a rank-local torch device."""
+
+    def __init__(self, torch: Any, dtype: Any, device: Any) -> None:
+        self.torch = torch
+        self.dtype = dtype
+        self.device = device
+
+    def asarray(self, values: Any) -> Any:
+        return self.torch.as_tensor(values, dtype=self.dtype, device=self.device)
+
+    def zeros(self, shape: tuple[int, ...]) -> Any:
+        return self.torch.zeros(shape, dtype=self.dtype, device=self.device)
+
+    @staticmethod
+    def nbytes(values: Any) -> int:
+        return int(values.numel() * values.element_size())
 
 
 def initialize_torchrun_process_group(backend: str = "nccl") -> Any:

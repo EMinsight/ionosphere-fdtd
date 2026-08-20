@@ -16,6 +16,7 @@ from ionosphere_fdtd.mesh import (
 )
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import GaussianCurrent, TangentialGaussianCurrent
+from ionosphere_fdtd.surface_impedance import ConductiveHalfSpaceSurface
 
 
 def checkpoint_config(**changes: object) -> SimulationConfig:
@@ -28,6 +29,19 @@ def assert_same_state(first: GeodesicFDTD, second: GeodesicFDTD) -> None:
     assert second.config == first.config
     assert second.material == first.material
     assert second.source == first.source
+    if first.surface_impedance is None:
+        assert second.surface_impedance is None
+        assert second._surface_impedance_ade is None
+    else:
+        assert second.surface_impedance is not None
+        assert (
+            second.surface_impedance.to_metadata()
+            == first.surface_impedance.to_metadata()
+        )
+        np.testing.assert_array_equal(
+            second.to_numpy(second._surface_impedance_ade.memory),
+            first.to_numpy(first._surface_impedance_ade.memory),
+        )
     assert second.steps == first.steps
     assert second.time_s == pytest.approx(first.time_s)
     np.testing.assert_array_equal(second.mesh.vertices, first.mesh.vertices)
@@ -102,7 +116,7 @@ def test_checkpoint_preserves_tangential_source_and_optimized_mesh(tmp_path) -> 
         )
 
 
-def test_checkpoint_v2_preserves_custom_topology_and_refinement_metadata(
+def test_checkpoint_v3_preserves_custom_topology_and_refinement_metadata(
     tmp_path,
 ) -> None:
     uniform = build_geodesic_mesh(1)
@@ -121,7 +135,7 @@ def test_checkpoint_v2_preserves_custom_topology_and_refinement_metadata(
     path = simulation.save_checkpoint(tmp_path / "adaptive.npz")
     with np.load(path, allow_pickle=False) as archive:
         metadata = json.loads(str(archive["metadata"].item()))
-        assert metadata["version"] == 2
+        assert metadata["version"] == 3
         np.testing.assert_array_equal(archive["mesh_faces"], faces)
         np.testing.assert_array_equal(archive["mesh_face_levels"], face_levels)
 
@@ -151,6 +165,57 @@ def test_checkpoint_loads_legacy_v1_uniform_mesh(tmp_path) -> None:
     restored = GeodesicFDTD.load_checkpoint(legacy)
 
     assert_same_state(simulation, restored)
+
+
+def test_checkpoint_loads_legacy_v2_without_surface_state(tmp_path) -> None:
+    simulation = GeodesicFDTD(checkpoint_config())
+    path = simulation.save_checkpoint(tmp_path / "current.npz")
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {
+            name: np.array(archive[name], copy=True)
+            for name in archive.files
+            if name != "surface_impedance_memory"
+        }
+    metadata = json.loads(str(arrays["metadata"].item()))
+    metadata["version"] = 2
+    metadata.pop("surface_impedance")
+    arrays["metadata"] = np.asarray(json.dumps(metadata))
+    legacy = tmp_path / "legacy-v2.npz"
+    np.savez_compressed(legacy, **arrays)
+
+    restored = GeodesicFDTD.load_checkpoint(legacy)
+
+    assert_same_state(simulation, restored)
+
+
+def test_checkpoint_preserves_surface_impedance_ade_state(tmp_path) -> None:
+    config = SimulationConfig(
+        subdivision=0,
+        radial_cells=4,
+        minimum_altitude_m=0.0,
+        maximum_altitude_m=100_000.0,
+        courant_factor=0.2,
+        radial_boundary_condition="surface-impedance",
+    )
+    surface = ConductiveHalfSpaceSurface(
+        np.linspace(0.01, 0.03, build_geodesic_mesh(0).n_edges)
+    )
+    source = GaussianCurrent(peak_current_a=1.0e6)
+    uninterrupted = GeodesicFDTD(
+        config, source=source, surface_impedance=surface
+    )
+    checkpointed = GeodesicFDTD(
+        config, source=source, surface_impedance=surface
+    )
+    uninterrupted.step(12)
+    checkpointed.step(5)
+
+    restored = GeodesicFDTD.load_checkpoint(
+        checkpointed.save_checkpoint(tmp_path / "surface.npz")
+    )
+    assert_same_state(checkpointed, restored)
+    restored.step(7)
+    assert_same_state(uninterrupted, restored)
 
 
 def test_checkpoint_rejects_unsupported_material(tmp_path) -> None:

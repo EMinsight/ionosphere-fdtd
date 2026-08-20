@@ -9,6 +9,7 @@ from ionosphere_fdtd.mesh import build_geodesic_mesh
 from ionosphere_fdtd.partition import partition_surface_mesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import GaussianCurrent
+from ionosphere_fdtd.surface_impedance import ConductiveHalfSpaceSurface
 
 
 def _distributed_worker(
@@ -17,6 +18,7 @@ def _distributed_worker(
     output: str,
     backend: str = "gloo",
     cuda_graph_chunk_size: int = 0,
+    use_surface_impedance: bool = False,
 ) -> None:
     import torch
     import torch.distributed as distributed
@@ -39,14 +41,27 @@ def _distributed_worker(
         mesh = build_geodesic_mesh(0)
         partition = partition_surface_mesh(mesh)
         config = SimulationConfig(
-            subdivision=0, radial_cells=4, courant_factor=0.2
+            subdivision=0,
+            radial_cells=4,
+            minimum_altitude_m=0.0 if use_surface_impedance else -100_000.0,
+            maximum_altitude_m=100_000.0,
+            courant_factor=0.2,
+            radial_boundary_condition=(
+                "surface-impedance" if use_surface_impedance else "pec"
+            ),
         )
         source = GaussianCurrent(peak_current_a=1.0e6)
+        surface = (
+            ConductiveHalfSpaceSurface(1.0 / 50.0)
+            if use_surface_impedance
+            else None
+        )
         simulation = DistributedGeodesicFDTD(
             partition,
             config=config,
             mesh=mesh,
             source=source,
+            surface_impedance=surface,
             device="cpu" if backend == "gloo" else f"cuda:{rank}",
             dtype="float64",
         )
@@ -214,6 +229,92 @@ def test_two_rank_nccl_cuda_graph_matches_single_solver(tmp_path: Path) -> None:
     reference = GeodesicFDTD(
         config,
         source=GaussianCurrent(peak_current_a=1.0e6),
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+    )
+    reference.step(8)
+
+    with np.load(output) as values:
+        for name in ("er", "et", "hr", "ht"):
+            np.testing.assert_allclose(
+                values[name],
+                reference.to_numpy(getattr(reference, name)),
+                rtol=2.0e-13,
+                atol=1.0e-24,
+            )
+
+
+def test_two_rank_surface_impedance_matches_single_solver(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    rendezvous = tmp_path / "surface-init"
+    output = tmp_path / "surface-fields.npz"
+    torch.multiprocessing.start_processes(
+        _distributed_worker,
+        args=(str(rendezvous), str(output), "gloo", 0, True),
+        nprocs=2,
+        join=True,
+        start_method="spawn",
+    )
+    config = SimulationConfig(
+        subdivision=0,
+        radial_cells=4,
+        minimum_altitude_m=0.0,
+        maximum_altitude_m=100_000.0,
+        courant_factor=0.2,
+        radial_boundary_condition="surface-impedance",
+    )
+    reference = GeodesicFDTD(
+        config,
+        source=GaussianCurrent(peak_current_a=1.0e6),
+        surface_impedance=ConductiveHalfSpaceSurface(1.0 / 50.0),
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+    )
+    reference.step(8)
+
+    with np.load(output) as values:
+        for name in ("er", "et", "hr", "ht"):
+            np.testing.assert_allclose(
+                values[name],
+                reference.to_numpy(getattr(reference, name)),
+                rtol=2.0e-13,
+                atol=1.0e-24,
+            )
+
+
+def test_two_rank_nccl_graph_preserves_surface_impedance_state(
+    tmp_path: Path,
+) -> None:
+    torch = pytest.importorskip("torch")
+    if (
+        not torch.cuda.is_available()
+        or torch.cuda.device_count() < 2
+        or not torch.distributed.is_nccl_available()
+    ):
+        pytest.skip("two CUDA devices with NCCL are required")
+    rendezvous = tmp_path / "surface-nccl-init"
+    output = tmp_path / "surface-nccl-fields.npz"
+    torch.multiprocessing.start_processes(
+        _distributed_worker,
+        args=(str(rendezvous), str(output), "nccl", 2, True),
+        nprocs=2,
+        join=True,
+        start_method="spawn",
+    )
+    config = SimulationConfig(
+        subdivision=0,
+        radial_cells=4,
+        minimum_altitude_m=0.0,
+        maximum_altitude_m=100_000.0,
+        courant_factor=0.2,
+        radial_boundary_condition="surface-impedance",
+    )
+    reference = GeodesicFDTD(
+        config,
+        source=GaussianCurrent(peak_current_a=1.0e6),
+        surface_impedance=ConductiveHalfSpaceSurface(1.0 / 50.0),
         backend="torch",
         device="cpu",
         dtype="float64",

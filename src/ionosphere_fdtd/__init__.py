@@ -47,6 +47,7 @@ from .partition import (
 )
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
+from .surface_impedance import ConductiveHalfSpaceSurface
 from .visualization import (
     RadialSection,
     Receiver,
@@ -66,6 +67,7 @@ __all__ = [
     "ArrayBackend",
     "BackendUnavailableError",
     "CheckpointError",
+    "ConductiveHalfSpaceSurface",
     "DataArtifactError",
     "DatasetProvenance",
     "DistributedGeodesicFDTD",
