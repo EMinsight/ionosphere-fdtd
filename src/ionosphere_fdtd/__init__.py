@@ -14,6 +14,11 @@ from .backends import (
     create_backend,
 )
 from .checkpoint import CheckpointError
+from .distributed import (
+    DistributedGeodesicFDTD,
+    TorchDistributedHaloExchange,
+    initialize_torchrun_process_group,
+)
 from .materials import (
     EarthIonosphereMaterial,
     GriddedMaterial,
@@ -55,6 +60,7 @@ __all__ = [
     "ArrayBackend",
     "BackendUnavailableError",
     "CheckpointError",
+    "DistributedGeodesicFDTD",
     "EarthIonosphereMaterial",
     "FieldHalo",
     "GriddedMaterial",
@@ -75,11 +81,13 @@ __all__ = [
     "SurfacePartition",
     "SpatialEarthIonosphereMaterial",
     "TorchBackend",
+    "TorchDistributedHaloExchange",
     "animate_surface_field",
     "build_geodesic_mesh",
     "build_geodesic_mesh_from_topology",
     "build_adaptive_geodesic_mesh",
     "create_backend",
+    "initialize_torchrun_process_group",
     "plot_mesh_3d",
     "partition_surface_mesh",
     "plot_radial_section",

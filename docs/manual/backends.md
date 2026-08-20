@@ -30,6 +30,28 @@ uv run --extra pytorch ionosphere \
   --backend torch --device mps --dtype float32 --steps 1000
 ```
 
+## Two-GPU execution
+
+The distributed solver assigns complete radial columns to two surface
+partitions and exchanges only the electric or magnetic ghost rows required by
+the next curl. Launch the paired Simpson 2006 adaptive run with one process per
+GPU:
+
+```bash
+uv run --extra pytorch torchrun --standalone --nproc-per-node=2 \
+  -m verification.simpson_taflove_2006.distributed_run \
+  --output-dir artifacts/verification/adaptive-s10 \
+  --target-subdivision 10 \
+  --etopo5-path /path/to/ETOPO5.DAT \
+  --dtype float64
+```
+
+The production path uses NCCL. Rank-local CUDA devices come from
+`LOCAL_RANK`; do not rely on `nvidia-smi` ordering. `--capacities A B` changes
+the target surface workload ratio when the two GPUs have different measured
+throughput or usable memory. Reference and anomaly cases run sequentially on
+the same mesh so their signatures and anomaly subtraction remain compatible.
+
 ## Compilation
 
 `--torch-compile` captures several static field steps in each PyTorch compiled
