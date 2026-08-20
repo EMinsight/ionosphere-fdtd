@@ -12,9 +12,25 @@ Figures 5–6 reuse the global propagation geometry of the 2004 study. Figure 7
 models a 20 Hz tangential transmitter near Clam Lake and compares magnetic
 fields in Alaska with and without a $4800\ \mathrm{km}^2$ subsurface oil body.
 
+This verification has three deliberately separate objectives:
+
+1. test whether the implementation reproduces the published qualitative
+   phenomena and trends, including waveform timing, path ordering, weak
+   tangential oil perturbations, and enhanced radial sensitivity;
+2. build an independently converged, physically defensible model whose
+   assumptions and input data are explicit; and
+3. identify the unpublished information required for exact numerical and
+   curve-level reproduction.
+
+Exact agreement with the published samples is not an acceptance target with
+the currently available sources. Undisclosed inputs are not tuned or inferred
+solely to force curve agreement. The exact-reproduction question is reopened
+only if the original input volume, mesh, sampling rules, or source package
+becomes available.
+
 ## Numerical model
 
-The production configuration uses a subdivision-7 geodesic surface
+The paper-target baseline uses a subdivision-7 geodesic surface
 (163,842 cells), 40 nominal radial cells, $5\ \mathrm{km}$ radial spacing,
 PyTorch CUDA, and `float64`. The oil anomaly reduces conductivity by a factor
 of 0.1 over a $1250\ \mathrm{m}$ vertical interval centered near
@@ -52,22 +68,28 @@ to improve agreement.
 
 ![Figure 7 comparison](images/simpson-taflove-2006-fig-7-comparison.png)
 
-| Criterion | Reproduced result | Verdict |
-|---|---:|---|
-| Figure 5 morphology and arrival ordering | Reproduced | **PASS** |
-| Figure 5 relative amplitudes/path similarity | Far peaks 0.31141/0.35571; path RMS 37.41%/18.47% | **FAIL** |
-| Figure 6 east-path attenuation | MAE 0.921, maximum 3.020 dB/Mm | **FAIL** |
-| Figure 6 west-path attenuation | MAE 0.284, maximum 2.125 dB/Mm | **FAIL** |
-| Figure 7 tangential perturbation median | $-43.253$ dB | **PASS** |
-| Figure 7 fraction below $-25$ dB | 92.469% | **FAIL** |
-| Figure 7 radial perturbation scale | Median $+126.000$ dB | **FAIL** |
-| Complete Figures 5–7 reproduction | At least one quantitative criterion fails per figure | **FAIL** |
+The numerical comparisons below are retained as diagnostic evidence rather
+than as a requirement to tune the independent model to the published pixels.
 
-The implementation reproduces timing and qualitative waveform structure but
-does not reproduce all published relative amplitudes, high-frequency
-attenuation, or radar component scaling. Exact Mesquite parameters and the full
-three-dimensional Hermance-derived conductivity model were not published, so
-the report does not tune undisclosed inputs to force agreement.
+| Criterion | Reproduced result | Status |
+|---|---:|---|
+| Figure 5 morphology and arrival ordering | Reproduced | **SUPPORTED** |
+| Figure 5 relative amplitudes/path similarity | Far peaks 0.31141/0.35571; path RMS 37.41%/18.47% | Diagnostic mismatch |
+| Figure 6 east-path attenuation | MAE 0.921, maximum 3.020 dB/Mm | Diagnostic mismatch |
+| Figure 6 west-path attenuation | MAE 0.284, maximum 2.125 dB/Mm | Diagnostic mismatch |
+| Figure 7 weak tangential perturbation | Median $-43.253$ dB | **SUPPORTED** |
+| Figure 7 fraction below $-25$ dB | 92.469% | Diagnostic mismatch |
+| Figure 7 enhanced radial sensitivity | Positive published-scale crossings occur, but the value is mesh-sensitive | **PROVISIONAL** |
+| Independent spatial convergence | Background $H_{tan}$ is stable; perturbation and $H_r$ are not | **NOT YET CONVERGED** |
+| Exact Figures 5–7 curves | Original inputs and observation rules are unavailable | **INFORMATION-LIMITED** |
+
+The implementation reproduces timing, qualitative waveform structure, and the
+reported ordering in which the oil-induced tangential response is weak while
+the radial response is much more sensitive. The radial claim remains
+provisional because its magnitude has not converged. The model also does not
+reproduce all published relative amplitudes or high-frequency attenuation.
+These mismatches bound the present evidence; they are not targets for empirical
+curve fitting.
 
 ## Dissertation supplement
 
@@ -200,9 +222,9 @@ $H_r$.
 
 The review therefore changes the preferred implementation to full-spherical
 geometry and vector-difference $H_{tan}$, and establishes Mesquite coordinates
-as the appropriate production-mesh input. It does not change the Figure 7 or
-complete-reproduction verdict from **FAIL**, and subdivision 7 remains
-scientifically unjustified. Complete settings, mesh checksums, quality metrics,
+as the appropriate production-mesh input. It does not establish converged
+Figure 7 scaling, and subdivision 7 remains scientifically unjustified for a
+final independent result. Complete settings, mesh checksums, quality metrics,
 and sensitivity results are stored in
 `artifacts/verification/simpson-taflove-2006-thesis.json`.
 
@@ -234,8 +256,9 @@ respectively. These values are not promoted into the main Figure 7 acceptance
 table because the s9--s10 radial response fails the convergence screen.
 
 The adaptive result therefore confirms that the earlier Figure 7 mismatch
-cannot yet be treated as a resolved uniform-grid limitation. A more expensive
-`float64` run is not justified until radial convergence is improved. Complete
+cannot yet be treated as a resolved uniform-grid limitation. A full s9--s10
+`float64` production rerun remains deferred; smaller precision controls and
+radial and receiver-sampling convergence checks should precede it. Complete
 metrics, mesh checksums, time steps, and run revisions are stored in
 `artifacts/verification/simpson-taflove-2006-adaptive-float32/convergence.json`.
 
@@ -255,10 +278,67 @@ thin-shell geometry, deterministic or externally optimized meshes, and five
 explicit $H_{tan}$ definitions. It can also import three-dimensional
 conductivity and permittivity volumes from a canonical NPZ grid. No cellwise
 Hermance volume or equivalent observation product is present, so the schematic
-hypothesis is not represented as a recovered global map and the radar scaling
-verdict remains **FAIL**. A future observational run must record dataset
-identity, units, coordinate datum, interpolation policy, and checksum alongside
-the trace archive.
+hypothesis is not represented as a recovered global map and the radial scaling
+remains provisional. A future observational run must record dataset identity,
+units, coordinate datum, interpolation policy, and checksum alongside the trace
+archive.
+
+## Final verification position
+
+### Qualitative phenomena and trends
+
+The available evidence supports the propagation timing and waveform ordering
+of Figures 5–6 and the Figure 7 trend that the tangential oil perturbation is
+weak relative to the reference field. The implementation also produces radial
+perturbations that can exceed the radial reference field, consistent with the
+paper's proposed sensitivity mechanism. Because the radial waveform is not yet
+mesh-converged, this last result is qualitative evidence rather than a
+validated magnitude or detection-performance prediction.
+
+### Independent physical model
+
+Further work is directed toward an independently reproducible model, not a
+pixel match. Its acceptance requires documented material datasets and receiver
+operators, stable results under horizontal and radial refinement, a precision
+check for the small radial signal, and conservation and stability tests. The
+paper's disclosed 1.25 km near-surface radial spacing remains a benchmark case;
+finer radial grids are convergence controls rather than attempts to reconstruct
+an unpublished author grid.
+
+The present adaptive result does not satisfy this standard: background
+$H_{tan}$ changes by about 0.1%, but the tangential perturbation changes by
+7.975% and all recorded $H_r$ quantities change by more than 100% from the s9
+to s10 local refinement. Accordingly, no quantitative oil-detection claim is
+accepted from these traces.
+
+### Information required for exact reproduction
+
+Exact numerical and curve-level reproduction would require an original source
+package or equivalent author-supplied documentation containing at least:
+
+- the final geodesic vertex coordinates and exact mesh-optimization software,
+  objective, constraints, and stopping criteria;
+- the cellwise three-dimensional conductivity and permittivity volume,
+  including the Hermance-derived lithosphere mapping, Laurentian Plateau mask,
+  isolated conductor, shoreline classification, and topography/bathymetry
+  rasterization rules;
+- the exact oil-body horizontal footprint, terrain-relative placement, radial
+  subgrid transition, and component-specific subcell material assignment;
+- the day/night ionosphere assignment and solar or terminator orientation used
+  for the oil-field run;
+- the transmitter-to-grid projection, source altitude, current-density
+  normalization, waveform phase, and time origin;
+- the observation triangle or cells, radial sampling plane, interpolation or
+  averaging rule for $H_r$, scalar definition of $H_{tan}$, output cadence, and
+  normalization implementation; and
+- the numerical precision, time step, boundary treatment, raw reference and
+  anomaly traces, and any post-processing applied before plotting.
+
+Without these items, many distinct implementations are consistent with the
+published description but produce different small $H_r$ reference signals and
+therefore very different decibel ratios. Exact curve identity is consequently
+recorded as information-limited rather than as an engineering objective for
+this repository.
 
 ## Reproduction
 
