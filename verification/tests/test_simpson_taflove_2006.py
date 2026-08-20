@@ -1,4 +1,5 @@
 import importlib.util
+import json
 
 import numpy as np
 import pytest
@@ -35,6 +36,7 @@ from verification.simpson_taflove_2006.model import (
     record_radar_traces,
     save_radar_traces,
 )
+from verification.simpson_taflove_2006.__main__ import main
 
 requires_natural_earth = pytest.mark.skipif(
     any(
@@ -212,6 +214,61 @@ def test_radar_resolution_comparison_rejects_unpaired_mesh_runs() -> None:
             coarse_target_subdivision=9,
             fine_target_subdivision=10,
         )
+
+
+def test_adaptive_analysis_writes_screening_verdict(tmp_path) -> None:
+    def traces(time: np.ndarray, case: str, level: int) -> RadarTraces:
+        scale = 1.0 if level == 10 else 1.01
+        hr = scale * np.sin(2.0 * np.pi * 5.0 * time)
+        east = scale * np.cos(2.0 * np.pi * 5.0 * time)
+        north = 0.5 * hr
+        if case == "anomaly":
+            hr *= 1.1
+            east *= 1.2
+            north *= 1.3
+        signature = json.dumps(
+            {
+                "backend": "torch",
+                "dtype": "float32",
+                "git_revision": "test",
+                "mesh_vertices_sha256": f"vertices-{level}",
+                "mesh_faces_sha256": f"faces-{level}",
+                "time_step_s": float(time[1] - time[0]),
+            }
+        )
+        return RadarTraces(time, hr, east, north, 0.0, case, signature)
+
+    input_dir = tmp_path / "traces"
+    for level, samples in ((9, 101), (10, 201)):
+        time = np.linspace(-0.01, 0.09, samples)
+        for case in ("reference", "anomaly"):
+            save_radar_traces(
+                traces(time, case, level), input_dir / f"s{level}-{case}.npz"
+            )
+    summary = tmp_path / "summary.json"
+
+    assert (
+        main(
+            [
+                "analyze-adaptive",
+                "--input-dir",
+                str(input_dir),
+                "--summary",
+                str(summary),
+                "--relative-l2-threshold",
+                "0.02",
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(summary.read_text(encoding="utf-8"))
+
+    assert payload["screening"]["backend"] == "torch"
+    assert payload["screening"]["dtype"] == "float32"
+    assert payload["screening"]["relative_l2_threshold"] == 0.02
+    assert payload["screening"]["maximum_relative_l2"] < 0.011
+    assert payload["screening"]["converged"] is True
+    assert set(payload["fine_metrics"]) == {"peak", "pointwise"}
 
 
 @requires_natural_earth

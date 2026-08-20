@@ -198,6 +198,19 @@ def _parser() -> argparse.ArgumentParser:
     )
     convergence.add_argument("--synchronize-every", type=int, default=256)
     convergence.add_argument("--sample-every", type=int, default=32)
+
+    analyze_adaptive = commands.add_parser("analyze-adaptive")
+    analyze_adaptive.add_argument("--input-dir", type=Path, required=True)
+    analyze_adaptive.add_argument("--summary", type=Path, required=True)
+    analyze_adaptive.add_argument("--figure", type=Path)
+    analyze_adaptive.add_argument("--coarse-target", type=int, default=9)
+    analyze_adaptive.add_argument("--fine-target", type=int, default=10)
+    analyze_adaptive.add_argument(
+        "--relative-l2-threshold",
+        type=float,
+        default=0.05,
+        help="screening threshold applied to all six relative-L2 changes",
+    )
     return parser
 
 
@@ -457,6 +470,114 @@ def _run_adaptive_convergence(args: argparse.Namespace) -> int:
     return 0
 
 
+def _analyze_adaptive(args: argparse.Namespace) -> int:
+    if args.coarse_target >= args.fine_target:
+        raise SystemExit("--coarse-target must be below --fine-target")
+    if not 0.0 < args.relative_l2_threshold < 1.0:
+        raise SystemExit("--relative-l2-threshold must be in (0, 1)")
+
+    def load(target: int, case: str):
+        return load_radar_traces(args.input_dir / f"s{target}-{case}.npz")
+
+    coarse_reference = load(args.coarse_target, "reference")
+    coarse_anomaly = load(args.coarse_target, "anomaly")
+    fine_reference = load(args.fine_target, "reference")
+    fine_anomaly = load(args.fine_target, "anomaly")
+    signatures = [
+        json.loads(traces.run_signature)
+        for traces in (
+            coarse_reference,
+            coarse_anomaly,
+            fine_reference,
+            fine_anomaly,
+        )
+    ]
+    dtypes = {signature["dtype"] for signature in signatures}
+    backends = {signature["backend"] for signature in signatures}
+    if len(dtypes) != 1 or len(backends) != 1:
+        raise SystemExit("adaptive traces must share one backend and dtype")
+
+    convergence = compare_radar_resolution_pairs(
+        coarse_reference,
+        coarse_anomaly,
+        fine_reference,
+        fine_anomaly,
+        coarse_target_subdivision=args.coarse_target,
+        fine_target_subdivision=args.fine_target,
+    )
+    convergence_values = {
+        name: value
+        for name, value in asdict(convergence).items()
+        if name.endswith("_relative_l2")
+    }
+    maximum_relative_l2 = max(convergence_values.values())
+    fine_metrics = {}
+    pointwise_curves = None
+    for normalization in ("pointwise", "peak"):
+        curves = compute_radar_perturbation(
+            fine_reference,
+            fine_anomaly,
+            normalization=normalization,
+            ht_definition="vector-difference",
+        )
+        metrics = radar_metrics(curves)
+        metrics.update(radar_field_metrics(fine_reference, fine_anomaly, curves))
+        fine_metrics[normalization] = metrics
+        if normalization == "pointwise":
+            pointwise_curves = curves
+
+    payload = {
+        "format_version": 1,
+        "screening": {
+            "backend": backends.pop(),
+            "dtype": dtypes.pop(),
+            "relative_l2_threshold": args.relative_l2_threshold,
+            "maximum_relative_l2": maximum_relative_l2,
+            "converged": bool(
+                np.isfinite(maximum_relative_l2)
+                and maximum_relative_l2 <= args.relative_l2_threshold
+            ),
+        },
+        "comparison": asdict(convergence),
+        "fine_metrics": fine_metrics,
+        "provenance": {
+            f"s{target}_{case}": {
+                "path": str(args.input_dir / f"s{target}-{case}.npz"),
+                "git_revision": signatures[index]["git_revision"],
+                "mesh_vertices_sha256": signatures[index][
+                    "mesh_vertices_sha256"
+                ],
+                "mesh_faces_sha256": signatures[index]["mesh_faces_sha256"],
+                "time_step_s": signatures[index]["time_step_s"],
+            }
+            for index, (target, case) in enumerate(
+                (
+                    (args.coarse_target, "reference"),
+                    (args.coarse_target, "anomaly"),
+                    (args.fine_target, "reference"),
+                    (args.fine_target, "anomaly"),
+                )
+            )
+        },
+    }
+    args.summary.parent.mkdir(parents=True, exist_ok=True)
+    temporary = args.summary.with_suffix(args.summary.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(args.summary)
+    print(
+        f"summary={args.summary} max_relative_l2={maximum_relative_l2:.9g} "
+        f"converged={payload['screening']['converged']}",
+        flush=True,
+    )
+    if args.figure is not None:
+        assert pointwise_curves is not None
+        figure = render_figure_7(pointwise_curves, args.figure)
+        print(f"figure={figure}", flush=True)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "figures-5-6":
@@ -465,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_radar(args)
     if args.command == "analyze-radar":
         return _analyze_radar(args)
+    if args.command == "analyze-adaptive":
+        return _analyze_adaptive(args)
     return _run_adaptive_convergence(args)
 
 
