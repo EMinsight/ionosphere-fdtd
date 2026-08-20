@@ -45,6 +45,7 @@ from .partition import (
     partition_surface_mesh,
     validate_surface_partition,
 )
+from .plasma import ColdPlasmaSpecies, MeshPlasmaModel
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import ConductiveHalfSpaceSurface
@@ -67,6 +68,7 @@ __all__ = [
     "ArrayBackend",
     "BackendUnavailableError",
     "CheckpointError",
+    "ColdPlasmaSpecies",
     "ConductiveHalfSpaceSurface",
     "DataArtifactError",
     "DatasetProvenance",
@@ -76,6 +78,7 @@ __all__ = [
     "GriddedMaterial",
     "LayeredEarthIonosphereMaterial",
     "MeshMaterialArtifact",
+    "MeshPlasmaModel",
     "GaussianCurrent",
     "TangentialGaussianCurrent",
     "GeodesicFDTD",

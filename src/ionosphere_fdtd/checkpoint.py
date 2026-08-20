@@ -16,12 +16,13 @@ from .mesh import (
     build_geodesic_mesh_from_topology,
     build_geodesic_mesh_from_vertices,
 )
+from .plasma import MeshPlasmaModel
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import ConductiveHalfSpaceSurface
 
 CHECKPOINT_FORMAT = "ionosphere-fdtd-checkpoint"
-CHECKPOINT_VERSION = 3
-SUPPORTED_CHECKPOINT_VERSIONS = (1, 2, CHECKPOINT_VERSION)
+CHECKPOINT_VERSION = 4
+SUPPORTED_CHECKPOINT_VERSIONS = (1, 2, 3, CHECKPOINT_VERSION)
 
 
 class CheckpointError(ValueError):
@@ -60,6 +61,19 @@ def save_checkpoint(simulation: Any, path: str | Path) -> Path:
             else np.empty((0, 0), dtype=np.float64)
         ),
     }
+    if simulation.plasma is not None:
+        _, plasma_arrays = simulation.plasma.archive_payload()
+        arrays.update(
+            {f"plasma_model_{name}": values for name, values in plasma_arrays.items()}
+        )
+        arrays.update(
+            {
+                f"plasma_current_{index}": simulation.to_numpy(values)
+                for index, values in enumerate(
+                    simulation._plasma_coupler.ade.current_density
+                )
+            }
+        )
     temporary_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -104,6 +118,18 @@ def load_checkpoint(
                 required.update(("mesh_faces", "mesh_face_levels"))
             if metadata["version"] >= 3:
                 required.add("surface_impedance_memory")
+            plasma_metadata = (
+                metadata.get("plasma") if metadata["version"] >= 4 else None
+            )
+            if plasma_metadata is not None:
+                required.update(
+                    f"plasma_model_{name}"
+                    for name in plasma_metadata["arrays"]
+                )
+                required.update(
+                    f"plasma_current_{index}"
+                    for index in range(len(plasma_metadata["species"]))
+                )
             missing = required.difference(archive.files)
             if missing:
                 raise CheckpointError(
@@ -128,6 +154,22 @@ def load_checkpoint(
                 np.array(archive["surface_impedance_memory"], copy=True)
                 if metadata["version"] >= 3
                 else np.empty((0, 0), dtype=np.float64)
+            )
+            plasma_arrays = (
+                {
+                    name: np.array(archive[f"plasma_model_{name}"], copy=True)
+                    for name in plasma_metadata["arrays"]
+                }
+                if plasma_metadata is not None
+                else {}
+            )
+            plasma_currents = (
+                tuple(
+                    np.array(archive[f"plasma_current_{index}"], copy=True)
+                    for index in range(len(plasma_metadata["species"]))
+                )
+                if plasma_metadata is not None
+                else ()
             )
     except CheckpointError:
         raise
@@ -184,6 +226,13 @@ def load_checkpoint(
             if metadata["version"] >= 3
             else None
         )
+        plasma = (
+            MeshPlasmaModel.from_archive_payload(
+                plasma_metadata, plasma_arrays
+            )
+            if plasma_metadata is not None
+            else None
+        )
     except CheckpointError:
         raise
     except (KeyError, TypeError, ValueError, RuntimeError) as error:
@@ -197,6 +246,7 @@ def load_checkpoint(
         material=material,
         source=source,
         surface_impedance=surface_impedance,
+        plasma=plasma,
         mesh=mesh,
         backend=backend,
         device=device,
@@ -241,6 +291,25 @@ def load_checkpoint(
         simulation._surface_impedance_ade.memory = simulation.backend.asarray(
             surface_impedance_memory
         )
+    if simulation._plasma_coupler is not None:
+        expected_currents = simulation._plasma_coupler.ade.current_density
+        if len(plasma_currents) != len(expected_currents):
+            raise CheckpointError("checkpoint plasma species state count is invalid")
+        for index, (saved, expected) in enumerate(
+            zip(plasma_currents, expected_currents, strict=True)
+        ):
+            if saved.shape != tuple(expected.shape):
+                raise CheckpointError(
+                    f"checkpoint plasma current {index} has shape {saved.shape}, "
+                    f"expected {tuple(expected.shape)}"
+                )
+            if not np.issubdtype(saved.dtype, np.floating) or not np.all(
+                np.isfinite(saved)
+            ):
+                raise CheckpointError(
+                    f"checkpoint plasma current {index} is invalid"
+                )
+            expected_currents[index] = simulation.backend.asarray(saved)
 
     steps = metadata["state"]["steps"]
     if isinstance(steps, bool) or not isinstance(steps, int) or steps < 0:
@@ -292,6 +361,11 @@ def _metadata(simulation: Any) -> dict[str, Any]:
             if simulation.surface_impedance is not None
             else None
         ),
+        "plasma": (
+            simulation.plasma.archive_payload()[0]
+            if simulation.plasma is not None
+            else None
+        ),
         "state": {
             "steps": simulation.steps,
             "time_s": simulation.time_s,
@@ -325,6 +399,8 @@ def _read_metadata(value: np.ndarray) -> dict[str, Any]:
         required.add("mesh")
     if metadata["version"] >= 3:
         required.add("surface_impedance")
+    if metadata["version"] >= 4:
+        required.add("plasma")
     missing = required.difference(metadata)
     if missing:
         raise CheckpointError(

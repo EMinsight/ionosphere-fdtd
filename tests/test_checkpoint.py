@@ -42,6 +42,20 @@ def assert_same_state(first: GeodesicFDTD, second: GeodesicFDTD) -> None:
             second.to_numpy(second._surface_impedance_ade.memory),
             first.to_numpy(first._surface_impedance_ade.memory),
         )
+    if first.plasma is None:
+        assert second.plasma is None
+        assert second._plasma_coupler is None
+    else:
+        assert second.plasma is not None
+        assert second.plasma.content_sha256 == first.plasma.content_sha256
+        for second_current, first_current in zip(
+            second._plasma_coupler.ade.current_density,
+            first._plasma_coupler.ade.current_density,
+            strict=True,
+        ):
+            np.testing.assert_array_equal(
+                second.to_numpy(second_current), first.to_numpy(first_current)
+            )
     assert second.steps == first.steps
     assert second.time_s == pytest.approx(first.time_s)
     np.testing.assert_array_equal(second.mesh.vertices, first.mesh.vertices)
@@ -116,7 +130,7 @@ def test_checkpoint_preserves_tangential_source_and_optimized_mesh(tmp_path) -> 
         )
 
 
-def test_checkpoint_v3_preserves_custom_topology_and_refinement_metadata(
+def test_checkpoint_v4_preserves_custom_topology_and_refinement_metadata(
     tmp_path,
 ) -> None:
     uniform = build_geodesic_mesh(1)
@@ -135,7 +149,7 @@ def test_checkpoint_v3_preserves_custom_topology_and_refinement_metadata(
     path = simulation.save_checkpoint(tmp_path / "adaptive.npz")
     with np.load(path, allow_pickle=False) as archive:
         metadata = json.loads(str(archive["metadata"].item()))
-        assert metadata["version"] == 3
+        assert metadata["version"] == 4
         np.testing.assert_array_equal(archive["mesh_faces"], faces)
         np.testing.assert_array_equal(archive["mesh_face_levels"], face_levels)
 

@@ -116,6 +116,72 @@ underground volume; it does not consume the artifact's vertex-by-altitude
 arrays. Preserve the conductivity map's provenance and the resulting surface
 model parameters together with the run configuration.
 
+## Magnetized ionosphere tensor and ADE
+
+`MeshPlasmaModel` represents the ionosphere as one or more charged fluids at
+mesh-face/radial-cell centers. Each `ColdPlasmaSpecies` stores number density,
+collision frequency, signed charge, and mass; the model stores the geocentric
+Cartesian magnetic field. For angular frequency $\omega$, each species
+contributes
+
+$$
+\begin{aligned}
+\sigma_\parallel &= \frac{nq^2/m}{\nu+i\omega},\\
+\sigma_P &= \frac{(nq^2/m)(\nu+i\omega)}{(\nu+i\omega)^2+\Omega^2},\\
+\sigma_H &= \frac{(nq^2/m)\Omega}{(\nu+i\omega)^2+\Omega^2},
+\qquad \Omega=\frac{q|B|}{m}.
+\end{aligned}
+$$
+
+The Hall coefficient multiplies $E\times\hat b$, so its sign follows the
+species charge. In time domain, an exact constant-$E$ ADE advances
+
+$$
+\frac{dJ_s}{dt}=\frac{n_sq_s^2}{m_s}E-\nu_sJ_s
+                  +\Omega_s J_s\times\hat b.
+$$
+
+The solver reconstructs a three-component electric vector from the three
+oriented edge samples and the face-centered radial interpolation, advances all
+fluid currents, then projects the result back to the staggered `Er` and `Et`
+supports. This is the required path for Hall coupling; a scalar `sigma` cannot
+represent it.
+
+Prepare source data outside the solver and bind it to the exact mesh with
+`MeshPlasmaModel.from_mesh()`. A production provenance set should normally
+identify electron/ion densities from IRI, collision inputs derived from a
+declared neutral-atmosphere product, and the IGRF magnetic-field release. The
+pickle-free NPZ produced by `save()` records those provenance entries and
+checksums every density, collision, magnetic-field, and radial-grid array.
+
+```python
+from ionosphere_fdtd import ColdPlasmaSpecies, MeshPlasmaModel
+
+electrons = ColdPlasmaSpecies(
+    name="electron",
+    charge_c=-1.602176634e-19,
+    mass_kg=9.1093837139e-31,
+    number_density_m3=electron_density_on_faces,
+    collision_frequency_hz=electron_neutral_collision_on_faces,
+)
+plasma = MeshPlasmaModel.from_mesh(
+    mesh,
+    radial_midpoint_altitudes_m,
+    magnetic_field_t,
+    (electrons,),
+    provenance=(iri_source, neutral_source, igrf_source),
+    interpolation="declared geographic/time interpolation policy",
+)
+simulation = GeodesicFDTD(config, mesh=mesh, plasma=plasma)
+```
+
+The explicit electric/current coupling adds a plasma-frequency stability limit
+$\Delta t\,\omega_p\leq2$ in addition to the electromagnetic CFL limit. The
+current solver enforces the tighter value. Checkpoint version 4 embeds the
+plasma artifact and every species-current ADE state. Distributed vector-current
+halos are not yet implemented; that path is rejected rather than silently
+dropping Hall coupling.
+
 ## Spherical anomalies
 
 ```python

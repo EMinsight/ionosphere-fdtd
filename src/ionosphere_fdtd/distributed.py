@@ -13,6 +13,7 @@ from .constants import MU_0
 from .materials import EarthIonosphereMaterial
 from .mesh import GeodesicMesh
 from .partition import FieldHalo, SurfacePartition
+from .plasma import MeshPlasmaModel
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import (
@@ -219,6 +220,7 @@ class DistributedGeodesicFDTD:
         material: EarthIonosphereMaterial | None = None,
         source: GaussianCurrent | TangentialGaussianCurrent | None = None,
         surface_impedance: ConductiveHalfSpaceSurface | None = None,
+        plasma: MeshPlasmaModel | None = None,
         device: str | None = None,
         dtype: str = "float64",
     ) -> None:
@@ -235,6 +237,10 @@ class DistributedGeodesicFDTD:
             raise ValueError("distributed FDTD currently requires exactly two ranks")
         if dtype not in {"float32", "float64"}:
             raise ValueError("distributed dtype must be 'float32' or 'float64'")
+        if plasma is not None:
+            raise NotImplementedError(
+                "distributed plasma coupling requires expanded vector-current halos"
+            )
 
         self.torch = torch
         self.distributed = distributed

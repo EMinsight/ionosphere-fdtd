@@ -18,6 +18,7 @@ from .materials import (
     conservative_anomaly_fractions,
 )
 from .mesh import GeodesicMesh, build_geodesic_mesh
+from .plasma import GeodesicPlasmaCoupler, MeshPlasmaModel
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import (
     ConductiveHalfSpaceSurface,
@@ -176,6 +177,7 @@ class GeodesicFDTD:
         material: EarthIonosphereMaterial | None = None,
         source: GaussianCurrent | TangentialGaussianCurrent | None = None,
         surface_impedance: ConductiveHalfSpaceSurface | None = None,
+        plasma: MeshPlasmaModel | None = None,
         mesh: GeodesicMesh | None = None,
         backend: str = "numpy",
         device: str = "auto",
@@ -233,6 +235,7 @@ class GeodesicFDTD:
         self.material = material or EarthIonosphereMaterial()
         self.source = source
         self.surface_impedance = surface_impedance
+        self.plasma = plasma
         if self.config.radial_boundary_condition == "surface-impedance":
             if surface_impedance is None:
                 raise ValueError(
@@ -268,6 +271,8 @@ class GeodesicFDTD:
         self.radial_node_control_lengths_m[1:-1] = np.diff(
             self.radial_midpoints_m
         )
+        if plasma is not None:
+            plasma.validate_grid(self.mesh, self.radial_midpoint_altitudes_m)
 
         # Material permittivity controls the fastest supported wave speed, so it
         # must be known before an automatic or user-supplied time step is
@@ -315,6 +320,17 @@ class GeodesicFDTD:
             if surface_impedance is not None
             else None
         )
+        self._plasma_coupler = (
+            GeodesicPlasmaCoupler(
+                plasma,
+                self.mesh,
+                self.radial_midpoint_altitudes_m,
+                self.time_step_s,
+                self.backend,
+            )
+            if plasma is not None
+            else None
+        )
 
         self._prepare_geometry()
         self._prepare_material_coefficients()
@@ -360,9 +376,24 @@ class GeodesicFDTD:
             float(np.min(self.epsilon_r_er)),
             float(np.min(self.epsilon_r_et)),
         )
-        return np.sqrt(minimum_epsilon_r) / (
+        geometric_limit = np.sqrt(minimum_epsilon_r) / (
             C_0 * np.sqrt(inverse_length_squared)
         )
+        if self.plasma is None:
+            return geometric_limit
+        plasma_drive = np.zeros(self.plasma.magnetic_field_t.shape[:2])
+        for species in self.plasma.species:
+            plasma_drive += (
+                species.number_density_m3
+                * species.charge_c**2
+                / species.mass_kg
+            )
+        maximum_plasma_frequency = np.sqrt(
+            float(np.max(plasma_drive)) / (EPSILON_0 * minimum_epsilon_r)
+        )
+        if maximum_plasma_frequency == 0.0:
+            return geometric_limit
+        return min(geometric_limit, 2.0 / maximum_plasma_frequency)
 
     def _prepare_geometry(self) -> None:
         # Spherical metric tensors are separable into horizontal angles and
@@ -880,6 +911,11 @@ class GeodesicFDTD:
         self.hr -= electric_circulation
 
     def _update_electric_fields(self, current_a: Any = 0.0) -> None:
+        plasma_current = (
+            self._plasma_coupler.advance(self.er, self.et)
+            if self._plasma_coupler is not None
+            else None
+        )
         magnetic_circulation = self.backend.dual_cell_circulation(
             self.ht * self._dual_edge_angles
         )
@@ -911,6 +947,9 @@ class GeodesicFDTD:
             self.er[vertices, layers] -= (
                 self._cb_er[coefficient_vertices, layers] * current_density
             )
+        if plasma_current is not None:
+            radial_plasma_current, tangential_plasma_current = plasma_current
+            self.er -= self._cb_er * radial_plasma_current
 
         surface_gradient_hr = self.backend.dual_edge_difference(self.hr)
         surface_gradient_hr *= self._inverse_dual_edge_angles
@@ -936,6 +975,8 @@ class GeodesicFDTD:
             self.et[edges, layers] -= (
                 self._cb_et[coefficient_edges, layers] * current_density
             )
+        if plasma_current is not None:
+            self.et -= self._cb_et * tangential_plasma_current
 
     def diagnostics(self) -> dict[str, float | int | str]:
         """Return inexpensive scalar diagnostics without saving field data."""
@@ -959,6 +1000,12 @@ class GeodesicFDTD:
             "surface_impedance_state_bytes": (
                 self._surface_impedance_ade.state_bytes
                 if self._surface_impedance_ade is not None
+                else 0
+            ),
+            "plasma_species": len(self.plasma.species) if self.plasma else 0,
+            "plasma_state_bytes": (
+                self._plasma_coupler.ade.state_bytes
+                if self._plasma_coupler is not None
                 else 0
             ),
             "loss_integration": self.config.loss_integration,
@@ -1224,4 +1271,6 @@ class GeodesicFDTD:
         total = sum(self.backend.nbytes(array) for array in unique.values())
         if self._surface_impedance_ade is not None:
             total += self._surface_impedance_ade.persistent_bytes
+        if self._plasma_coupler is not None:
+            total += self._plasma_coupler.persistent_bytes
         return total
