@@ -793,6 +793,7 @@ class DistributedGeodesicFDTD:
         steps: int,
         *,
         synchronize_every: int = 128,
+        sample_every: int = 1,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Record distributed H observations with one final trace reduction."""
 
@@ -814,6 +815,12 @@ class DistributedGeodesicFDTD:
             raise ValueError("distributed observation weights must match their indices")
         if steps < 0:
             raise ValueError("observation step count must be non-negative")
+        if (
+            isinstance(sample_every, bool)
+            or not isinstance(sample_every, (int, np.integer))
+            or sample_every < 1
+        ):
+            raise ValueError("sample_every must be a positive integer")
 
         local_faces = self._face_layout.global_to_local[faces]
         local_edges = self._ht_layout.global_to_local[edges]
@@ -829,8 +836,15 @@ class DistributedGeodesicFDTD:
         backend_edges = self._indices(safe_edges)
         backend_edge_layers = self._indices(edge_layers)
         backend_edge_weights = self._tensor(local_edge_weights)
-        radial_traces = self._zeros((steps + 1, faces.shape[0]))
-        tangential_traces = self._zeros((steps + 1, edges.shape[0]))
+        sample_steps = np.concatenate(
+            (
+                np.arange(0, steps + 1, sample_every, dtype=np.int64),
+                np.asarray((steps,), dtype=np.int64),
+            )
+        )
+        sample_steps = np.unique(sample_steps)
+        radial_traces = self._zeros((len(sample_steps), faces.shape[0]))
+        tangential_traces = self._zeros((len(sample_steps), edges.shape[0]))
 
         def sample(row: int) -> None:
             radial_traces[row] = self.torch.sum(
@@ -845,8 +859,8 @@ class DistributedGeodesicFDTD:
             )
 
         sample(0)
-        for row in range(1, steps + 1):
-            self.step()
+        for row, target_step in enumerate(sample_steps[1:], start=1):
+            self.step(int(target_step) - self.steps)
             sample(row)
         if self._host_process_group is None:
             self.distributed.all_reduce(radial_traces)

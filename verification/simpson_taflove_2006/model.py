@@ -656,6 +656,7 @@ def record_radar_traces(
     case: str,
     synchronize_every: int = 128,
     receiver_support: str = "local-linear",
+    sample_every: int = 1,
 ) -> RadarTraces:
     """Record interpolated surface ``Hr`` and east/north ``Htan`` traces."""
 
@@ -675,10 +676,16 @@ def record_radar_traces(
         *distributions,
         steps,
         synchronize_every=synchronize_every,
+        sample_every=sample_every,
     )
-    time_s = (
-        np.arange(steps + 1, dtype=np.float64) - 0.5
-    ) * simulation.time_step_s
+    sample_steps = np.concatenate(
+        (
+            np.arange(0, steps + 1, sample_every, dtype=np.int64),
+            np.asarray((steps,), dtype=np.int64),
+        )
+    )
+    sample_steps = np.unique(sample_steps)
+    time_s = (sample_steps.astype(np.float64) - 0.5) * simulation.time_step_s
     source_center = (
         simulation.source.center_time_s
         if simulation.source is not None

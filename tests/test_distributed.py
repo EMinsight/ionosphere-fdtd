@@ -79,6 +79,7 @@ def _distributed_worker(
                 np.asarray(((0,),), dtype=np.int64),
                 np.asarray(((1.0,),)),
                 8,
+                sample_every=3,
             )
         fields = {}
         for name in ("er", "et", "hr", "ht"):
@@ -149,6 +150,7 @@ def test_two_rank_gloo_matches_single_torch_solver(tmp_path: Path) -> None:
         np.asarray(((0,),), dtype=np.int64),
         np.asarray(((1.0,),)),
         8,
+        sample_every=3,
     )
 
     with np.load(output) as values:

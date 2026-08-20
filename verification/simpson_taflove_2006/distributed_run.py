@@ -53,7 +53,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--etopo5-path", type=Path)
     parser.add_argument("--dtype", choices=("float32", "float64"), default="float64")
     parser.add_argument("--capacities", type=float, nargs=2, default=(1.0, 1.0))
-    parser.add_argument("--cuda-graph-chunk-size", type=int, default=1)
+    parser.add_argument("--cuda-graph-chunk-size", type=int, default=32)
+    parser.add_argument("--sample-every", type=int, default=32)
     parser.add_argument(
         "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
     )
@@ -71,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--stop-after-center must be positive")
     if args.cuda_graph_chunk_size < 0:
         raise SystemExit("--cuda-graph-chunk-size must be nonnegative")
+    if args.sample_every < 1:
+        raise SystemExit("--sample-every must be positive")
 
     device = initialize_torchrun_process_group("nccl")
     import torch.distributed as distributed
@@ -147,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
                     steps=steps,
                     case=case,
                     synchronize_every=args.synchronize_every,
+                    sample_every=args.sample_every,
                 )
             finally:
                 simulation.close()

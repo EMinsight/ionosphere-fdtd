@@ -1146,6 +1146,7 @@ class GeodesicFDTD:
         steps: int,
         *,
         synchronize_every: int = 128,
+        sample_every: int = 1,
     ) -> tuple[NDArray[np.generic], NDArray[np.generic]]:
         """Advance while recording weighted radial and tangential H samples.
 
@@ -1167,6 +1168,9 @@ class GeodesicFDTD:
         steps = self._validated_count(steps, "step count", minimum=0)
         synchronize_every = self._validated_count(
             synchronize_every, "synchronize_every", minimum=1
+        )
+        sample_every = self._validated_count(
+            sample_every, "sample_every", minimum=1
         )
         if faces.ndim != 2 or radial_weights.shape != faces.shape:
             raise ValueError("face indices and weights must have matching 2-D shapes")
@@ -1195,8 +1199,15 @@ class GeodesicFDTD:
         backend_edges = self.backend.index_array(edges)
         backend_edge_layers = self.backend.index_array(edge_layers)
         backend_tangential_weights = self.backend.asarray(tangential_weights)
-        radial_traces = self.backend.zeros((steps + 1, faces.shape[0]))
-        tangential_traces = self.backend.zeros((steps + 1, edges.shape[0]))
+        sample_steps = np.concatenate(
+            (
+                np.arange(0, steps + 1, sample_every, dtype=np.int64),
+                np.asarray((steps,), dtype=np.int64),
+            )
+        )
+        sample_steps = np.unique(sample_steps)
+        radial_traces = self.backend.zeros((len(sample_steps), faces.shape[0]))
+        tangential_traces = self.backend.zeros((len(sample_steps), edges.shape[0]))
 
         def sample(row: int) -> None:
             selected_hr = self.hr[backend_faces, backend_face_layers]
@@ -1209,13 +1220,10 @@ class GeodesicFDTD:
             ).sum(axis=1)
 
         sample(0)
-        currents = self._source_currents(steps)
-        for offset in range(steps):
-            self._field_step(currents[offset])
-            self.steps += 1
-            self.time_s = self.steps * self.time_step_s
-            sample(offset + 1)
-            if (offset + 1) % synchronize_every == 0:
+        for row, target_step in enumerate(sample_steps[1:], start=1):
+            self.step(int(target_step) - self.steps)
+            sample(row)
+            if int(target_step) % synchronize_every == 0:
                 self.backend.synchronize()
         self.backend.synchronize()
         return self.to_numpy(radial_traces), self.to_numpy(tangential_traces)

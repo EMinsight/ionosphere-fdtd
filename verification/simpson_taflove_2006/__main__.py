@@ -137,6 +137,7 @@ def _parser() -> argparse.ArgumentParser:
         "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
     )
     radar.add_argument("--synchronize-every", type=int, default=256)
+    radar.add_argument("--sample-every", type=int, default=1)
     radar.add_argument(
         "--receiver-support",
         choices=("face", "local-linear"),
@@ -196,6 +197,7 @@ def _parser() -> argparse.ArgumentParser:
         "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
     )
     convergence.add_argument("--synchronize-every", type=int, default=256)
+    convergence.add_argument("--sample-every", type=int, default=32)
     return parser
 
 
@@ -224,6 +226,8 @@ def _run_radar(args: argparse.Namespace) -> int:
         raise SystemExit("--stop-after-center must be positive")
     if args.material == "etopo5" and args.etopo5_path is None:
         raise SystemExit("--etopo5-path is required with --material etopo5")
+    if args.sample_every < 1:
+        raise SystemExit("--sample-every must be positive")
     if args.mesh_coordinates is not None and args.mesh_optimization_steps:
         raise SystemExit(
             "--mesh-coordinates cannot be combined with --mesh-optimization-steps"
@@ -317,6 +321,7 @@ def _run_radar(args: argparse.Namespace) -> int:
         case=args.case,
         synchronize_every=args.synchronize_every,
         receiver_support=args.receiver_support,
+        sample_every=args.sample_every,
     )
     output = save_radar_traces(traces, args.output)
     print(f"elapsed_s={time.perf_counter() - started:.3f} output={output}", flush=True)
@@ -354,6 +359,8 @@ def _run_adaptive_convergence(args: argparse.Namespace) -> int:
         raise SystemExit("--stop-after-center must be positive")
     if args.material == "etopo5" and args.etopo5_path is None:
         raise SystemExit("--etopo5-path is required with --material etopo5")
+    if args.sample_every < 1:
+        raise SystemExit("--sample-every must be positive")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     traces_by_level = {}
     level_metadata = []
@@ -399,6 +406,7 @@ def _run_adaptive_convergence(args: argparse.Namespace) -> int:
                 steps=steps,
                 case=case,
                 synchronize_every=args.synchronize_every,
+                sample_every=args.sample_every,
             )
             pair[case] = traces
             del simulation

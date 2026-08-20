@@ -811,6 +811,32 @@ def test_backend_native_h_recording_includes_initial_state() -> None:
     assert np.isfinite(ht).all()
 
 
+def test_h_observation_decimation_preserves_selected_samples_and_final_step() -> None:
+    arguments = (
+        np.asarray(((0,),), dtype=np.int64),
+        np.asarray(((2,),), dtype=np.int64),
+        np.asarray(((1.0,),)),
+        np.asarray(((0, 1, 2),), dtype=np.int64),
+        np.asarray(((2, 2, 2),), dtype=np.int64),
+        np.asarray(((0.2, -0.3, 0.5),)),
+    )
+    full = GeodesicFDTD(
+        config=small_config(), source=GaussianCurrent(peak_current_a=1.0e6)
+    )
+    sampled = GeodesicFDTD(
+        config=small_config(), source=GaussianCurrent(peak_current_a=1.0e6)
+    )
+
+    full_hr, full_ht = full.record_h_observations(*arguments, 8)
+    sampled_hr, sampled_ht = sampled.record_h_observations(
+        *arguments, 8, sample_every=3
+    )
+
+    np.testing.assert_allclose(sampled_hr, full_hr[[0, 3, 6, 8]])
+    np.testing.assert_allclose(sampled_ht, full_ht[[0, 3, 6, 8]])
+    assert sampled.steps == 8
+
+
 def test_electric_and_magnetic_clocks_follow_leapfrog_staggering() -> None:
     simulation = GeodesicFDTD(config=small_config())
 
