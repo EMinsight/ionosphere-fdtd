@@ -8,6 +8,20 @@ uv sync --extra visualization
 
 ## Surface maps
 
+Render an existing checkpoint without rerunning its model:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --resume artifacts/runs/demo.npz \
+  surface --component er --scale symlog --output surface.png
+```
+
+With `--resume`, the default warm-up is zero steps and the saved field state is
+rendered directly. An explicit global `--steps N` advances the restored solver
+by `N` additional steps first.
+
+To construct a standalone demonstration instead, omit `--resume`:
+
 ```bash
 uv run --extra visualization ionosphere-visualize \
   --subdivision 2 --radial-cells 24 --steps 1200 \

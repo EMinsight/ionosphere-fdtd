@@ -162,7 +162,7 @@ requested step count is not an exact checkpoint interval.
 subcommand:
 
 ```text
-ionosphere-visualize [--config PATH] [simulation options] COMMAND [render options]
+ionosphere-visualize [--config PATH] [--resume CHECKPOINT] [simulation options] COMMAND [render options]
 ```
 
 | Command | Output |
@@ -175,7 +175,10 @@ ionosphere-visualize [--config PATH] [simulation options] COMMAND [render option
 | `traces` | One or more receiver time series |
 
 Global `--steps` are warm-up steps performed before rendering or trace
-recording. Options after the subcommand belong to that output mode. Show
+recording. A new model defaults to 100 warm-up steps. A resumed model defaults
+to zero additional steps, so a surface, section, or mesh command renders the
+saved state unless `--steps` is explicitly supplied. Options after the
+subcommand belong to that output mode. Show
 subcommand-specific help by placing `--help` after its name:
 
 ```bash
@@ -187,6 +190,20 @@ Angles are in degrees. Receiver altitude and visualization `--altitude-km`
 values are in kilometres; source coordinates use the model's configured
 default altitude because the visualization runner exposes only source latitude
 and longitude.
+
+Render the exact model and field state saved by a simulation:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --resume artifacts/runs/demo.npz \
+  surface --component er --scale symlog --output surface.png
+```
+
+The checkpoint owns the mesh, radial grid, material, source, time step, and
+current field state. Backend, device, dtype, and compilation options may be
+changed while loading. For `traces`, `--trace-steps` advances from the saved
+state and records new samples; checkpoints do not contain historical receiver
+traces.
 
 ## Exit behavior
 

@@ -19,18 +19,13 @@ source_longitude = 126.8526
 
 checkpoint = "artifacts/runs/demo.npz"
 
-# Use the same model when rendering a standalone demonstration.
+# Render the exact model and fields saved by the simulation above.
 [visualization]
-steps = 200
-subdivision = 2
-radial_cells = 24
+resume = "artifacts/runs/demo.npz"
+steps = 0
 backend = "numpy"
 device = "cpu"
 dtype = "float64"
-source_current = 1.0e6
-source_frequency = 0.0
-source_latitude = 35.1595
-source_longitude = 126.8526
 
 [visualization.surface]
 component = "er"

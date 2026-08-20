@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from .backends import BackendUnavailableError
+from .checkpoint import CheckpointError
 from .cli_common import DefaultsHelpFormatter, add_version_argument
 from .cli_config import (
     add_config_argument,
@@ -43,6 +44,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     add_config_argument(parser)
     add_version_argument(parser)
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        help="load model and fields from an NPZ checkpoint",
+    )
     parser.add_argument(
         "--backend",
         choices=("numpy", "torch"),
@@ -90,7 +96,12 @@ def _parser() -> argparse.ArgumentParser:
         default=24,
         help="number of radial intervals",
     )
-    parser.add_argument("--steps", type=int, default=100, help="warm-up steps")
+    parser.add_argument(
+        "--steps",
+        type=int,
+        help="warm-up steps for a new model; additional steps after a checkpoint "
+        "(default: 100 new, 0 resumed)",
+    )
     parser.add_argument(
         "--source-current",
         type=float,
@@ -231,6 +242,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         command_parser = subparser(parser, command)
         clear_explicit_append_defaults(command_parser, argv)
     args = parser.parse_args(argv)
+    if args.steps is None:
+        args.steps = 0 if args.resume is not None else 100
     if args.command != "live" and args.output is None:
         parser.error(f"{args.command} requires --output or a TOML output value")
     return args
@@ -245,24 +258,35 @@ def main(argv: list[str] | None = None) -> int:
     if args.torch_compile_chunk_size < 1:
         raise SystemExit("--torch-compile-chunk-size must be positive")
     try:
-        simulation = GeodesicFDTD(
-            config=SimulationConfig(
-                subdivision=args.subdivision, radial_cells=args.radial_cells
-            ),
-            source=GaussianCurrent(
-                latitude_deg=args.source_latitude,
-                longitude_deg=args.source_longitude,
-                peak_current_a=args.source_current,
-                carrier_frequency_hz=args.source_frequency,
-            ),
-            backend=args.backend,
-            device=args.device,
-            dtype=args.dtype,
-            compile_step=args.torch_compile,
-            compile_chunk_size=args.torch_compile_chunk_size,
-            torch_threads=args.torch_threads,
-        )
-    except BackendUnavailableError as error:
+        if args.resume is not None:
+            simulation = GeodesicFDTD.load_checkpoint(
+                args.resume,
+                backend=args.backend,
+                device=args.device,
+                dtype=None if args.dtype == "auto" else args.dtype,
+                compile_step=args.torch_compile,
+                compile_chunk_size=args.torch_compile_chunk_size,
+                torch_threads=args.torch_threads,
+            )
+        else:
+            simulation = GeodesicFDTD(
+                config=SimulationConfig(
+                    subdivision=args.subdivision, radial_cells=args.radial_cells
+                ),
+                source=GaussianCurrent(
+                    latitude_deg=args.source_latitude,
+                    longitude_deg=args.source_longitude,
+                    peak_current_a=args.source_current,
+                    carrier_frequency_hz=args.source_frequency,
+                ),
+                backend=args.backend,
+                device=args.device,
+                dtype=args.dtype,
+                compile_step=args.torch_compile,
+                compile_chunk_size=args.torch_compile_chunk_size,
+                torch_threads=args.torch_threads,
+            )
+    except (BackendUnavailableError, CheckpointError, OSError) as error:
         raise SystemExit(str(error)) from error
     thread_text = (
         f" threads={simulation.backend.threads}"
@@ -275,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
         f"compiled={simulation.compiled} "
         f"compile_chunk_size={simulation.compile_chunk_size}"
     )
+    if args.resume is not None:
+        print(f"checkpoint={args.resume} loaded_step={simulation.steps}")
     simulation.step(args.steps)
     output = getattr(args, "output", None)
     if output is not None:

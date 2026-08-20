@@ -29,6 +29,8 @@ from ionosphere_fdtd.visualization import (
     run_live_surface,
     sample_radial_section,
 )
+from ionosphere_fdtd.viz_cli import _parse_args as parse_visualization_args
+from ionosphere_fdtd.viz_cli import main as visualization_main
 
 
 @pytest.fixture
@@ -53,6 +55,35 @@ def test_surface_field_renders_headlessly(simulation: GeodesicFDTD) -> None:
     figure.canvas.draw()
     assert ax.get_title().startswith("ER")
     assert artist.get_array().size > simulation.mesh.n_vertices
+
+
+def test_visualization_cli_renders_saved_checkpoint_without_advancing(
+    tmp_path: Path,
+    simulation: GeodesicFDTD,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    checkpoint = simulation.save_checkpoint(tmp_path / "state.npz")
+    output = tmp_path / "surface.png"
+
+    args = parse_visualization_args(
+        ["--resume", str(checkpoint), "surface", "--output", str(output)]
+    )
+    assert args.steps == 0
+    assert visualization_main(
+        ["--resume", str(checkpoint), "surface", "--output", str(output)]
+    ) == 0
+
+    text = capsys.readouterr().out
+    assert f"checkpoint={checkpoint} loaded_step={simulation.steps}" in text
+    assert output.stat().st_size > 0
+
+
+def test_visualization_new_model_retains_default_warmup(tmp_path: Path) -> None:
+    args = parse_visualization_args(
+        ["surface", "--output", str(tmp_path / "surface.png")]
+    )
+
+    assert args.steps == 100
 
 
 def test_magnetic_surface_uses_half_step_timestamp(

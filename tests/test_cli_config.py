@@ -26,12 +26,14 @@ def test_shipped_example_is_cpu_safe_and_uses_one_demo_model() -> None:
     assert simulation.backend == visualization.backend == "numpy"
     assert simulation.device == visualization.device == "cpu"
     assert simulation.dtype == visualization.dtype == "float64"
-    assert simulation.subdivision == visualization.subdivision == 2
-    assert simulation.radial_cells == visualization.radial_cells == 24
-    assert simulation.steps == visualization.steps == 200
+    assert simulation.subdivision == 2
+    assert simulation.radial_cells == 24
+    assert simulation.steps == 200
+    assert visualization.steps == 0
     assert simulation.torch_compile is False
     assert visualization.coastlines is False
     assert simulation.checkpoint == Path("artifacts/runs/demo.npz")
+    assert visualization.resume == simulation.checkpoint
 
 
 def test_shipped_research_template_remains_parseable() -> None:
@@ -44,9 +46,11 @@ def test_shipped_research_template_remains_parseable() -> None:
 
     assert simulation.backend == visualization.backend == "torch"
     assert simulation.device == visualization.device == "cuda:0"
-    assert simulation.subdivision == visualization.subdivision == 5
-    assert simulation.steps == visualization.steps == 20_000
+    assert simulation.subdivision == 5
+    assert simulation.steps == 20_000
+    assert visualization.steps == 0
     assert simulation.torch_compile is True
+    assert visualization.resume == simulation.checkpoint
 
 
 def test_simulation_toml_defaults_and_cli_precedence(tmp_path: Path) -> None:

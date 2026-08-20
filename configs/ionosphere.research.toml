@@ -23,16 +23,11 @@ checkpoint = "artifacts/runs/research.npz"
 checkpoint_every = 5000
 
 [visualization]
-steps = 20000
-subdivision = 5
-radial_cells = 40
+resume = "artifacts/runs/research.npz"
+steps = 0
 backend = "torch"
 device = "cuda:0"
 dtype = "float32"
-source_current = 1.0e6
-source_frequency = 20.0
-source_latitude = 35.1595
-source_longitude = 126.8526
 
 [visualization.surface]
 component = "er"
