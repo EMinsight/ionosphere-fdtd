@@ -41,7 +41,7 @@ def test_local_refinement_is_conforming_balanced_and_well_centered() -> None:
     assert set(np.unique(mesh.face_levels)) == {1, 2, 3}
     assert mesh.n_faces < build_geodesic_mesh(3).n_faces
     assert validation.maximum_adjacent_level_jump <= 1
-    assert validation.minimum_circumcenter_halfspace_margin > 0.0
+    assert validation.minimum_dual_edge_angle > 0.0
     assert validation.primal_area_error < 1.0e-12
     assert validation.dual_area_error < 1.0e-12
 
@@ -66,6 +66,23 @@ def test_two_refinement_regions_cover_source_and_receiver() -> None:
         assert mesh.face_levels[nearest] == region.target_subdivision
     assert mesh.refinement_spec["regions"][0]["label"] == "source"
     assert mesh.refinement_spec["regions"][1]["label"] == "oil"
+
+
+def test_multilevel_two_region_mesh_has_positive_disjoint_hodge_supports() -> None:
+    mesh = build_adaptive_geodesic_mesh(
+        1,
+        (
+            SphericalRefinementRegion(46.5, -90.9, 8.0, 3, 8.0, "source"),
+            SphericalRefinementRegion(69.0, -156.0, 8.0, 3, 8.0, "oil"),
+        ),
+    )
+
+    validation = validate_adaptive_mesh(mesh)
+
+    assert validation.minimum_dual_edge_angle > 0.0
+    assert np.all(mesh.dual_cell_solid_angles > 0.0)
+    assert np.all(mesh.edge_diamond_solid_angles() > 0.0)
+    assert np.sum(mesh.edge_diamond_solid_angles()) == pytest.approx(4.0 * np.pi)
 
 
 def test_adaptive_mesh_runs_in_solver_without_changing_zero_state() -> None:

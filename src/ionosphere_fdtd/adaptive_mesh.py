@@ -78,7 +78,7 @@ class AdaptiveMeshValidation:
     """Invariant measurements for a conforming adaptive spherical mesh."""
 
     maximum_adjacent_level_jump: int
-    minimum_circumcenter_halfspace_margin: float
+    minimum_dual_edge_angle: float
     primal_area_error: float
     dual_area_error: float
 
@@ -169,7 +169,7 @@ def build_adaptive_geodesic_mesh(
         face_levels=levels,
         refinement_spec=refinement_spec,
         topology_kind="adaptive",
-        require_well_centered=True,
+        require_well_centered=False,
     )
     validate_adaptive_mesh(mesh)
     return mesh
@@ -188,29 +188,45 @@ def validate_adaptive_mesh(mesh: GeodesicMesh) -> AdaptiveMeshValidation:
     if maximum_jump > 1:
         raise ValueError("adaptive mesh violates 2:1 face-level balance")
 
-    triangles = mesh.vertices[mesh.faces]
-    halfspace = np.column_stack(
-        tuple(
-            np.einsum(
-                "ij,ij->i",
-                np.cross(triangles[:, corner], triangles[:, (corner + 1) % 3]),
-                mesh.face_centers,
-            )
-            for corner in range(3)
-        )
+    tail = mesh.vertices[mesh.edges[:, 0]]
+    head = mesh.vertices[mesh.edges[:, 1]]
+    midpoint = _normalize(tail + head)
+    left_normal = _normalize(np.cross(tail, head))
+    left = mesh.face_centers[mesh.edge_left_faces]
+    right = mesh.face_centers[mesh.edge_right_faces]
+    left_coordinate = np.arctan2(
+        np.einsum("ij,ij->i", left, left_normal),
+        np.einsum("ij,ij->i", left, midpoint),
     )
-    minimum_margin = float(np.min(halfspace))
+    right_coordinate = np.arctan2(
+        np.einsum("ij,ij->i", right, left_normal),
+        np.einsum("ij,ij->i", right, midpoint),
+    )
+    signed_dual_angles = left_coordinate - right_coordinate
+    minimum_dual_angle = float(np.min(signed_dual_angles))
     tolerance = 64.0 * np.finfo(np.float64).eps
-    if minimum_margin <= tolerance:
+    if minimum_dual_angle <= tolerance:
         raise ValueError("adaptive mesh has a non-positive circumcentric Hodge star")
+    if not np.allclose(
+        signed_dual_angles,
+        mesh.dual_edge_angles,
+        rtol=1.0e-12,
+        atol=tolerance,
+    ):
+        raise ValueError("adaptive mesh dual-edge orientation is inconsistent")
 
     primal_error = float(abs(np.sum(mesh.face_solid_angles) - 4.0 * np.pi))
     dual_error = float(abs(np.sum(mesh.dual_cell_solid_angles) - 4.0 * np.pi))
     if primal_error > 1.0e-11 or dual_error > 1.0e-10:
         raise ValueError("adaptive mesh areas do not close on the sphere")
+    edge_supports = mesh.edge_diamond_solid_angles()
+    if np.any(edge_supports <= 0.0) or not np.isclose(
+        np.sum(edge_supports), 4.0 * np.pi, rtol=0.0, atol=1.0e-10
+    ):
+        raise ValueError("adaptive edge supports are not positive and disjoint")
     return AdaptiveMeshValidation(
         maximum_adjacent_level_jump=maximum_jump,
-        minimum_circumcenter_halfspace_margin=minimum_margin,
+        minimum_dual_edge_angle=minimum_dual_angle,
         primal_area_error=primal_error,
         dual_area_error=dual_error,
     )

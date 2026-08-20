@@ -97,7 +97,9 @@ class GeodesicMesh:
         head = self.vertices[self.edges[:, 1]]
         left = self.face_centers[self.edge_left_faces]
         right = self.face_centers[self.edge_right_faces]
-        return _spherical_triangle_area(tail, head, left) + _spherical_triangle_area(
+        return _signed_spherical_triangle_area(
+            tail, head, left
+        ) - _signed_spherical_triangle_area(
             tail, head, right
         )
 
@@ -109,12 +111,12 @@ class GeodesicMesh:
         midpoint = self.edge_midpoints()
         left = self.face_centers[self.edge_left_faces]
         right = self.face_centers[self.edge_right_faces]
-        return np.column_stack(
+        return -np.column_stack(
             (
-                _spherical_triangle_area(midpoint, tail, left),
-                _spherical_triangle_area(midpoint, left, head),
-                _spherical_triangle_area(midpoint, head, right),
-                _spherical_triangle_area(midpoint, right, tail),
+                _signed_spherical_triangle_area(midpoint, tail, left),
+                _signed_spherical_triangle_area(midpoint, left, head),
+                _signed_spherical_triangle_area(midpoint, head, right),
+                _signed_spherical_triangle_area(midpoint, right, tail),
             )
         )
 
@@ -147,7 +149,9 @@ class GeodesicMesh:
         left = self.face_centers[self.edge_left_faces[edges]]
         right = self.face_centers[self.edge_right_faces[edges]]
         directions = _normalize(vertex_points + left + right)
-        areas = _spherical_triangle_area(vertex_points, left, right)
+        signed_areas = _signed_spherical_triangle_area(vertex_points, left, right)
+        is_head = self.edges[edges, 1] == vertices
+        areas = np.where(is_head, signed_areas, -signed_areas)
         return directions, areas
 
     def face_circulation(self, edge_values: FloatArray) -> FloatArray:
@@ -745,7 +749,13 @@ def _arc_length(first: FloatArray, second: FloatArray) -> FloatArray:
 
 
 def _spherical_triangle_area(a: FloatArray, b: FloatArray, c: FloatArray) -> FloatArray:
-    numerator = np.abs(np.einsum("ij,ij->i", a, np.cross(b, c)))
+    return np.abs(_signed_spherical_triangle_area(a, b, c))
+
+
+def _signed_spherical_triangle_area(
+    a: FloatArray, b: FloatArray, c: FloatArray
+) -> FloatArray:
+    numerator = np.einsum("ij,ij->i", a, np.cross(b, c))
     denominator = (
         1.0
         + np.einsum("ij,ij->i", a, b)
@@ -769,9 +779,11 @@ def _dual_geometry(
     dual_area = np.zeros(vertices.shape[0], dtype=np.float64)
     for endpoint in range(2):
         vertex_indices = edges[:, endpoint]
-        wedges = _spherical_triangle_area(
+        wedges = _signed_spherical_triangle_area(
             vertices[vertex_indices], left_centers, right_centers
         )
+        if endpoint == 0:
+            wedges = -wedges
         np.add.at(dual_area, vertex_indices, wedges)
     degree = np.bincount(edges.ravel(), minlength=len(vertices))
     return dual_area, degree
