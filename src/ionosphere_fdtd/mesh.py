@@ -8,6 +8,8 @@ vertices and six sides everywhere else.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from typing import Any, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
@@ -33,7 +35,10 @@ class GeodesicMesh:
     face_solid_angles: FloatArray
     dual_cell_solid_angles: FloatArray
     vertex_degree: IntArray
-    subdivision: int
+    subdivision: int | None
+    topology_kind: str
+    face_levels: IntArray | None
+    refinement_spec_json: str | None
 
     def __post_init__(self) -> None:
         # ``frozen=True`` protects attribute bindings but not array contents.
@@ -55,6 +60,8 @@ class GeodesicMesh:
             self.vertex_degree,
         ):
             values.setflags(write=False)
+        if self.face_levels is not None:
+            self.face_levels.setflags(write=False)
 
     @property
     def n_vertices(self) -> int:
@@ -67,6 +74,17 @@ class GeodesicMesh:
     @property
     def n_faces(self) -> int:
         return int(self.faces.shape[0])
+
+    @property
+    def refinement_spec(self) -> dict[str, Any] | None:
+        """Return a detached copy of the JSON-compatible refinement recipe."""
+
+        if self.refinement_spec_json is None:
+            return None
+        value = json.loads(self.refinement_spec_json)
+        if not isinstance(value, dict):  # Guard manually constructed instances.
+            raise RuntimeError("mesh refinement specification is not a JSON object")
+        return value
 
     def edge_midpoints(self) -> FloatArray:
         points = self.vertices[self.edges].sum(axis=1)
@@ -196,7 +214,13 @@ def build_geodesic_mesh(
         vertices = _relax(vertices, faces)
     if optimization_steps:
         vertices = _optimize_edge_lengths(vertices, faces, optimization_steps)
-    return _assemble_geodesic_mesh(vertices, faces, subdivision)
+    return _assemble_geodesic_mesh(
+        vertices,
+        faces,
+        subdivision,
+        topology_kind="uniform",
+        face_levels=np.full(len(faces), subdivision, dtype=np.int64),
+    )
 
 
 def build_geodesic_mesh_from_vertices(
@@ -239,7 +263,113 @@ def build_geodesic_mesh_from_vertices(
         assembled_vertices,
         faces,
         subdivision,
+        topology_kind="uniform",
+        face_levels=np.full(len(faces), subdivision, dtype=np.int64),
         require_well_centered=True,
+    )
+
+
+def build_geodesic_mesh_from_topology(
+    vertices: FloatArray,
+    faces: IntArray,
+    *,
+    subdivision: int | None = None,
+    face_levels: IntArray | None = None,
+    refinement_spec: Mapping[str, Any] | None = None,
+    normalize_vertices: bool = True,
+    require_well_centered: bool = True,
+) -> GeodesicMesh:
+    """Build a geodesic mesh from an arbitrary closed spherical triangulation.
+
+    The input may use any vertex and face ordering. Faces are oriented outward
+    before the incidence operators are assembled. The triangulation must be a
+    closed two-manifold covering the unit sphere and, by default, must be
+    well-centered so the unsigned circumcentric Hodge factors remain positive.
+
+    ``subdivision`` is optional provenance for a custom topology. ``face_levels``
+    and ``refinement_spec`` carry immutable adaptive-mesh metadata without
+    changing the discrete geometry; refinement builders are responsible for
+    assigning their physical meaning.
+    """
+
+    if subdivision is not None and (
+        isinstance(subdivision, bool)
+        or not isinstance(subdivision, (int, np.integer))
+        or subdivision < 0
+    ):
+        raise ValueError("subdivision must be a non-negative integer or None")
+
+    coordinates = np.asarray(vertices, dtype=np.float64)
+    if coordinates.ndim != 2 or coordinates.shape[1:] != (3,):
+        raise ValueError("vertices must have shape (n_vertices, 3)")
+    if len(coordinates) < 4:
+        raise ValueError("a closed spherical triangulation needs at least 4 vertices")
+    if not np.all(np.isfinite(coordinates)):
+        raise ValueError("vertices must be finite")
+    radii = np.linalg.norm(coordinates, axis=1)
+    if np.any(~np.isfinite(radii)) or np.any(radii == 0.0):
+        raise ValueError("vertices must have finite non-zero radii")
+    if not np.allclose(radii, 1.0, rtol=0.0, atol=1.0e-7):
+        raise ValueError("vertices must lie on the unit sphere")
+    assembled_vertices = (
+        coordinates / radii[:, None] if normalize_vertices else coordinates.copy()
+    )
+
+    raw_faces = np.asarray(faces)
+    if raw_faces.ndim != 2 or raw_faces.shape[1:] != (3,):
+        raise ValueError("faces must have shape (n_faces, 3)")
+    if not np.issubdtype(raw_faces.dtype, np.integer):
+        raise ValueError("faces must contain integer vertex indices")
+    assembled_faces = np.asarray(raw_faces, dtype=np.int64)
+    if len(assembled_faces) < 4:
+        raise ValueError("a closed spherical triangulation needs at least 4 faces")
+    if np.any(assembled_faces < 0) or np.any(assembled_faces >= len(coordinates)):
+        raise ValueError("face vertex index is out of bounds")
+    if np.any(
+        (assembled_faces[:, 0] == assembled_faces[:, 1])
+        | (assembled_faces[:, 1] == assembled_faces[:, 2])
+        | (assembled_faces[:, 2] == assembled_faces[:, 0])
+    ):
+        raise ValueError("faces must reference three distinct vertices")
+
+    levels: IntArray | None = None
+    if face_levels is not None:
+        raw_levels = np.asarray(face_levels)
+        if raw_levels.shape != (len(assembled_faces),):
+            raise ValueError(
+                f"face_levels must have shape ({len(assembled_faces)},)"
+            )
+        if not np.issubdtype(raw_levels.dtype, np.integer):
+            raise ValueError("face_levels must contain integers")
+        levels = np.array(raw_levels, dtype=np.int64, copy=True)
+        if np.any(levels < 0):
+            raise ValueError("face_levels must be non-negative")
+
+    specification_json: str | None = None
+    if refinement_spec is not None:
+        if not isinstance(refinement_spec, Mapping):
+            raise ValueError("refinement_spec must be a mapping or None")
+        try:
+            specification_json = json.dumps(
+                dict(refinement_spec),
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                "refinement_spec must contain JSON-compatible finite values"
+            ) from error
+
+    topology_kind = "adaptive" if levels is not None else "custom"
+    return _assemble_geodesic_mesh(
+        assembled_vertices,
+        assembled_faces,
+        int(subdivision) if subdivision is not None else None,
+        topology_kind=topology_kind,
+        face_levels=levels,
+        refinement_spec_json=specification_json,
+        require_well_centered=require_well_centered,
     )
 
 
@@ -257,8 +387,11 @@ def _subdivided_icosahedron(
 def _assemble_geodesic_mesh(
     vertices: FloatArray,
     faces: IntArray,
-    subdivision: int,
+    subdivision: int | None,
     *,
+    topology_kind: str,
+    face_levels: IntArray | None = None,
+    refinement_spec_json: str | None = None,
     require_well_centered: bool = False,
 ) -> GeodesicMesh:
     faces = _orient_faces(vertices, faces)
@@ -285,8 +418,10 @@ def _assemble_geodesic_mesh(
         right_faces,
     )
 
-    if not np.all(degree >= 5):
+    if not np.all(degree >= 3):
         raise RuntimeError("invalid closed geodesic topology")
+    if vertices.shape[0] - edges.shape[0] + faces.shape[0] != 2:
+        raise RuntimeError("geodesic mesh topology is not a sphere")
     if not np.all(np.isfinite(primal_angles)) or not np.all(primal_angles > 0.0):
         raise ValueError("geodesic mesh contains degenerate primal edges")
     if not np.all(np.isfinite(dual_angles)) or not np.all(dual_angles > 0.0):
@@ -317,6 +452,9 @@ def _assemble_geodesic_mesh(
         dual_cell_solid_angles=dual_areas,
         vertex_degree=degree,
         subdivision=subdivision,
+        topology_kind=topology_kind,
+        face_levels=face_levels,
+        refinement_spec_json=refinement_spec_json,
     )
 
 

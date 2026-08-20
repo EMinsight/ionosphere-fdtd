@@ -3,6 +3,7 @@ import pytest
 
 from ionosphere_fdtd.mesh import (
     build_geodesic_mesh,
+    build_geodesic_mesh_from_topology,
     build_geodesic_mesh_from_vertices,
 )
 
@@ -37,7 +38,10 @@ def test_mesh_geometry_and_topology_arrays_are_read_only() -> None:
         mesh.face_solid_angles,
         mesh.dual_cell_solid_angles,
         mesh.vertex_degree,
+        mesh.face_levels,
     ):
+        if values is None:
+            continue
         assert not values.flags.writeable
         with pytest.raises(ValueError, match="read-only"):
             values.flat[0] = values.flat[0]
@@ -225,3 +229,70 @@ def test_mesh_rejects_external_vertices_with_invalid_circumcentric_dual() -> Non
 
     with pytest.raises(ValueError, match="well-centered"):
         build_geodesic_mesh_from_vertices(1, distorted)
+
+
+def test_mesh_builds_arbitrary_closed_spherical_topology() -> None:
+    vertices = np.asarray(
+        (
+            (1.0, 0.0, 0.0),
+            (-1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, -1.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (0.0, 0.0, -1.0),
+        )
+    )
+    faces = np.asarray(
+        (
+            (0, 2, 4),
+            (2, 1, 4),
+            (1, 3, 4),
+            (3, 0, 4),
+            (2, 0, 5),
+            (1, 2, 5),
+            (3, 1, 5),
+            (0, 3, 5),
+        )
+    )
+    levels = np.full(len(faces), 3)
+
+    mesh = build_geodesic_mesh_from_topology(
+        vertices,
+        faces[:, ::-1],
+        subdivision=3,
+        face_levels=levels,
+        refinement_spec={"regions": [{"level": 3, "radius_deg": 10.0}]},
+    )
+
+    assert mesh.topology_kind == "adaptive"
+    assert mesh.subdivision == 3
+    assert mesh.n_vertices == 6
+    assert mesh.n_edges == 12
+    assert mesh.n_faces == 8
+    assert np.all(mesh.vertex_degree == 4)
+    assert mesh.refinement_spec == {
+        "regions": [{"level": 3, "radius_deg": 10.0}]
+    }
+    assert np.all(mesh.face_levels == 3)
+    assert np.isclose(mesh.face_solid_angles.sum(), 4.0 * np.pi)
+    assert np.isclose(mesh.dual_cell_solid_angles.sum(), 4.0 * np.pi)
+    assert not mesh.faces.flags.writeable
+    assert not mesh.face_levels.flags.writeable
+
+
+def test_mesh_rejects_open_or_invalid_custom_topology() -> None:
+    base = build_geodesic_mesh(0)
+    with pytest.raises(RuntimeError, match="closed two-manifold"):
+        build_geodesic_mesh_from_topology(base.vertices, base.faces[:-1])
+    with pytest.raises(ValueError, match="out of bounds"):
+        invalid_faces = base.faces.copy()
+        invalid_faces[0, 0] = len(base.vertices)
+        build_geodesic_mesh_from_topology(base.vertices, invalid_faces)
+    with pytest.raises(ValueError, match="face_levels"):
+        build_geodesic_mesh_from_topology(
+            base.vertices, base.faces, face_levels=np.zeros(len(base.faces) - 1)
+        )
+    with pytest.raises(ValueError, match="refinement_spec"):
+        build_geodesic_mesh_from_topology(
+            base.vertices, base.faces, refinement_spec={"radius": np.nan}
+        )

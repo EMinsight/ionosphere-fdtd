@@ -7,7 +7,10 @@ from ionosphere_fdtd.materials import (
     LayeredEarthIonosphereMaterial,
     SphericalAnomaly,
 )
-from ionosphere_fdtd.mesh import build_geodesic_mesh
+from ionosphere_fdtd.mesh import (
+    build_geodesic_mesh,
+    build_geodesic_mesh_from_topology,
+)
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import (
     GaussianCurrent,
@@ -43,6 +46,23 @@ def test_simulation_config_rejects_nonfinite_and_inconsistent_geometry() -> None
 def test_zero_fields_are_stationary() -> None:
     simulation = GeodesicFDTD(config=small_config())
     simulation.step(3)
+    assert not np.any(simulation.er)
+    assert not np.any(simulation.et)
+    assert not np.any(simulation.hr)
+    assert not np.any(simulation.ht)
+
+
+def test_solver_accepts_custom_closed_topology() -> None:
+    uniform = build_geodesic_mesh(1)
+    custom = build_geodesic_mesh_from_topology(
+        uniform.vertices,
+        np.roll(uniform.faces, 1, axis=0),
+    )
+    simulation = GeodesicFDTD(config=small_config(), mesh=custom)
+
+    simulation.step(3)
+
+    assert simulation.mesh.topology_kind == "custom"
     assert not np.any(simulation.er)
     assert not np.any(simulation.et)
     assert not np.any(simulation.hr)

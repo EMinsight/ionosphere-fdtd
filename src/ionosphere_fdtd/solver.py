@@ -191,17 +191,23 @@ class GeodesicFDTD:
                     "mesh relaxation and optimization controls cannot accompany "
                     "a provided mesh"
                 )
-            polar_pentagons = np.count_nonzero(
-                (mesh.vertex_degree == 5)
-                & np.isclose(np.abs(mesh.vertices[:, 2]), 1.0, rtol=0.0, atol=1.0e-13)
-            )
-            expected_polar_pentagons = (
-                2 if self.config.mesh_orientation == "polar" else 0
-            )
-            if polar_pentagons != expected_polar_pentagons:
-                raise ValueError("provided mesh orientation does not match config")
+            if mesh.topology_kind == "uniform":
+                polar_pentagons = np.count_nonzero(
+                    (mesh.vertex_degree == 5)
+                    & np.isclose(
+                        np.abs(mesh.vertices[:, 2]), 1.0, rtol=0.0, atol=1.0e-13
+                    )
+                )
+                expected_polar_pentagons = (
+                    2 if self.config.mesh_orientation == "polar" else 0
+                )
+                if polar_pentagons != expected_polar_pentagons:
+                    raise ValueError("provided mesh orientation does not match config")
             self.mesh = mesh
-        if self.mesh.subdivision != self.config.subdivision:
+        if (
+            self.mesh.subdivision is not None
+            and self.mesh.subdivision != self.config.subdivision
+        ):
             raise ValueError("provided mesh subdivision does not match config")
         self.backend: ArrayBackend = create_backend(
             backend,

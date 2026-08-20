@@ -15,7 +15,11 @@ from .materials import (
     SphericalAnomaly,
     SpatialEarthIonosphereMaterial,
 )
-from .mesh import GeodesicMesh, build_geodesic_mesh
+from .mesh import (
+    GeodesicMesh,
+    build_geodesic_mesh,
+    build_geodesic_mesh_from_topology,
+)
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .visualization import (
@@ -53,6 +57,7 @@ __all__ = [
     "TorchBackend",
     "animate_surface_field",
     "build_geodesic_mesh",
+    "build_geodesic_mesh_from_topology",
     "create_backend",
     "plot_mesh_3d",
     "plot_radial_section",
