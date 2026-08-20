@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
+import gc
+import json
 import time
 from pathlib import Path
 
@@ -15,6 +18,8 @@ from .model import (
     PAPER_SOURCE_CENTER_S,
     REPRESENTATIVE_DEEP_LITHOSPHERE_RESISTIVITY_OHM_M,
     THESIS_DAWN_ALIGNED_SUBSOLAR_LONGITUDE_DEG,
+    build_paper_adaptive_mesh,
+    compare_radar_resolution_pairs,
     compute_radar_perturbation,
     create_radar_simulation,
     load_radar_traces,
@@ -165,6 +170,32 @@ def _parser() -> argparse.ArgumentParser:
         ),
         default="vector-difference",
     )
+
+    convergence = commands.add_parser("adaptive-convergence")
+    convergence.add_argument("--output-dir", type=Path, required=True)
+    convergence.add_argument("--base-subdivision", type=int, default=7)
+    convergence.add_argument(
+        "--target-subdivisions", type=int, nargs=2, default=(9, 10)
+    )
+    convergence.add_argument("--core-radius-deg", type=float, default=1.0)
+    convergence.add_argument("--transition-width-deg", type=float, default=1.0)
+    convergence.add_argument(
+        "--material", choices=("etopo5", "natural-earth"), default="etopo5"
+    )
+    convergence.add_argument("--etopo5-path", type=Path)
+    convergence.add_argument("--backend", choices=("numpy", "torch"), default="torch")
+    convergence.add_argument("--device", default="auto")
+    convergence.add_argument(
+        "--dtype", choices=("float32", "float64"), default="float64"
+    )
+    convergence.add_argument(
+        "--torch-compile", action=argparse.BooleanOptionalAction, default=True
+    )
+    convergence.add_argument("--torch-compile-chunk-size", type=int, default=8)
+    convergence.add_argument(
+        "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
+    )
+    convergence.add_argument("--synchronize-every", type=int, default=256)
     return parser
 
 
@@ -313,13 +344,120 @@ def _analyze_radar(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_adaptive_convergence(args: argparse.Namespace) -> int:
+    coarse_target, fine_target = args.target_subdivisions
+    if not args.base_subdivision < coarse_target < fine_target:
+        raise SystemExit(
+            "--target-subdivisions must be increasing and above --base-subdivision"
+        )
+    if args.stop_after_center <= 0.0:
+        raise SystemExit("--stop-after-center must be positive")
+    if args.material == "etopo5" and args.etopo5_path is None:
+        raise SystemExit("--etopo5-path is required with --material etopo5")
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    traces_by_level = {}
+    level_metadata = []
+
+    for target in (coarse_target, fine_target):
+        mesh = build_paper_adaptive_mesh(
+            target,
+            base_subdivision=args.base_subdivision,
+            core_radius_deg=args.core_radius_deg,
+            transition_width_deg=args.transition_width_deg,
+        )
+        pair = {}
+        level_started = time.perf_counter()
+        for case in ("reference", "anomaly"):
+            simulation = create_radar_simulation(
+                include_oil=case == "anomaly",
+                subdivision=args.base_subdivision,
+                material_model=args.material,
+                etopo5_path=args.etopo5_path,
+                backend=args.backend,
+                device=args.device,
+                dtype=args.dtype,
+                compile_step=args.torch_compile,
+                compile_chunk_size=args.torch_compile_chunk_size,
+                mesh=mesh,
+                lithosphere_profile="figure-15",
+                ionosphere_model="day-night",
+            )
+            steps = int(
+                np.ceil(
+                    (PAPER_SOURCE_CENTER_S + args.stop_after_center)
+                    / simulation.time_step_s
+                )
+            )
+            print(
+                f"target=s{target} case={case} faces={mesh.n_faces:,} "
+                f"dt={simulation.time_step_s:.9e}s steps={steps:,} "
+                f"device={simulation.backend.device}",
+                flush=True,
+            )
+            traces = record_radar_traces(
+                simulation,
+                steps=steps,
+                case=case,
+                synchronize_every=args.synchronize_every,
+            )
+            pair[case] = traces
+            del simulation
+            gc.collect()
+        for case, traces in pair.items():
+            path = save_radar_traces(
+                traces, args.output_dir / f"s{target}-{case}.npz"
+            )
+            print(f"output={path}", flush=True)
+        traces_by_level[target] = pair
+        level_metadata.append(
+            {
+                "target_subdivision": target,
+                "vertices": mesh.n_vertices,
+                "edges": mesh.n_edges,
+                "faces": mesh.n_faces,
+                "face_level_counts": {
+                    str(level): int(np.count_nonzero(mesh.face_levels == level))
+                    for level in np.unique(mesh.face_levels)
+                },
+                "refinement_spec": mesh.refinement_spec,
+                "elapsed_s": time.perf_counter() - level_started,
+            }
+        )
+        del mesh
+        gc.collect()
+
+    convergence = compare_radar_resolution_pairs(
+        traces_by_level[coarse_target]["reference"],
+        traces_by_level[coarse_target]["anomaly"],
+        traces_by_level[fine_target]["reference"],
+        traces_by_level[fine_target]["anomaly"],
+        coarse_target_subdivision=coarse_target,
+        fine_target_subdivision=fine_target,
+        relative_stop_s=args.stop_after_center,
+    )
+    summary = args.output_dir / "convergence.json"
+    summary.write_text(
+        json.dumps(
+            {"levels": level_metadata, "comparison": asdict(convergence)},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"summary={summary}", flush=True)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "figures-5-6":
         return _run_figures_5_6(args)
     if args.command == "radar-run":
         return _run_radar(args)
-    return _analyze_radar(args)
+    if args.command == "analyze-radar":
+        return _analyze_radar(args)
+    return _run_adaptive_convergence(args)
 
 
 if __name__ == "__main__":

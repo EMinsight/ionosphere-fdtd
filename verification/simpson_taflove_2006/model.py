@@ -12,6 +12,10 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ionosphere_fdtd.adaptive_mesh import (
+    SphericalRefinementRegion,
+    build_adaptive_geodesic_mesh,
+)
 from ionosphere_fdtd.materials import SphericalAnomaly
 from ionosphere_fdtd.mesh import GeodesicMesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
@@ -66,6 +70,10 @@ PAPER_OIL_THICKNESS_M = 1_250.0
 PAPER_OIL_MEDIAN_DEPTH_M = 1_200.0
 PAPER_OIL_CONDUCTIVITY_FACTOR = 0.1
 PAPER_FIGURE_7_DURATION_S = 0.085
+PAPER_ADAPTIVE_BASE_SUBDIVISION = 7
+PAPER_ADAPTIVE_TARGET_SUBDIVISIONS = (9, 10)
+PAPER_ADAPTIVE_CORE_RADIUS_DEG = 1.0
+PAPER_ADAPTIVE_TRANSITION_WIDTH_DEG = 1.0
 PAPER_DAYTIME_IONOSPHERE_REFERENCE_HEIGHT_M = 70_000.0
 PAPER_DAYTIME_IONOSPHERE_SCALE_HEIGHT_M = 1_000.0 / 0.3
 THESIS_NIGHTTIME_IONOSPHERE_REFERENCE_HEIGHT_M = 92_800.0
@@ -152,6 +160,173 @@ class RadarPerturbation:
     ht_projection_east_north: FloatArray
     normalization: str
     ht_definition: str
+
+
+@dataclass(frozen=True, slots=True)
+class RadarResolutionConvergence:
+    """Relative L2 changes between two adaptive radar resolutions."""
+
+    coarse_target_subdivision: int
+    fine_target_subdivision: int
+    comparison_start_s: float
+    comparison_stop_s: float
+    samples: int
+    reference_hr_relative_l2: float
+    reference_ht_relative_l2: float
+    anomaly_hr_relative_l2: float
+    anomaly_ht_relative_l2: float
+    perturbation_hr_relative_l2: float
+    perturbation_ht_relative_l2: float
+
+
+def build_paper_adaptive_mesh(
+    target_subdivision: int,
+    *,
+    base_subdivision: int = PAPER_ADAPTIVE_BASE_SUBDIVISION,
+    core_radius_deg: float = PAPER_ADAPTIVE_CORE_RADIUS_DEG,
+    transition_width_deg: float = PAPER_ADAPTIVE_TRANSITION_WIDTH_DEG,
+) -> GeodesicMesh:
+    """Build the shared source/oil composite mesh for one convergence level."""
+
+    if target_subdivision <= base_subdivision:
+        raise ValueError("target subdivision must exceed the adaptive base")
+    regions = (
+        SphericalRefinementRegion(
+            PAPER_TRANSMITTER_LATITUDE_DEG,
+            PAPER_TRANSMITTER_LONGITUDE_DEG,
+            core_radius_deg,
+            target_subdivision,
+            transition_width_deg,
+            "transmitter",
+        ),
+        SphericalRefinementRegion(
+            PAPER_OIL_LATITUDE_DEG,
+            PAPER_OIL_LONGITUDE_DEG,
+            core_radius_deg,
+            target_subdivision,
+            transition_width_deg,
+            "oil-receiver",
+        ),
+    )
+    return build_adaptive_geodesic_mesh(base_subdivision, regions)
+
+
+def compare_radar_resolution_pairs(
+    coarse_reference: RadarTraces,
+    coarse_anomaly: RadarTraces,
+    fine_reference: RadarTraces,
+    fine_anomaly: RadarTraces,
+    *,
+    coarse_target_subdivision: int,
+    fine_target_subdivision: int,
+    relative_start_s: float = 0.0,
+    relative_stop_s: float = PAPER_FIGURE_7_DURATION_S,
+) -> RadarResolutionConvergence:
+    """Compare paired-mesh radar fields on the fine run's time samples."""
+
+    if coarse_target_subdivision >= fine_target_subdivision:
+        raise ValueError("coarse target subdivision must be below fine target")
+    for reference, anomaly in (
+        (coarse_reference, coarse_anomaly),
+        (fine_reference, fine_anomaly),
+    ):
+        if reference.case != "reference" or anomaly.case != "anomaly":
+            raise ValueError("each resolution must provide reference then anomaly")
+        if reference.run_signature != anomaly.run_signature:
+            raise ValueError("each resolution pair must share one run signature")
+        if reference.source_center_s != anomaly.source_center_s:
+            raise ValueError("each resolution pair must share one source center")
+        if not np.array_equal(reference.time_s, anomaly.time_s):
+            raise ValueError("each resolution pair must share one time grid")
+    if coarse_reference.source_center_s != fine_reference.source_center_s:
+        raise ValueError("resolution pairs must share one source center")
+    if not 0.0 <= relative_start_s < relative_stop_s:
+        raise ValueError("comparison window must be positive and ordered")
+
+    source_center = fine_reference.source_center_s
+    coarse_time = coarse_reference.time_s - source_center
+    fine_time = fine_reference.time_s - source_center
+    selected = (fine_time >= relative_start_s) & (fine_time <= relative_stop_s)
+    comparison_time = fine_time[selected]
+    if len(comparison_time) < 2:
+        raise ValueError("comparison window must contain at least two fine samples")
+    if comparison_time[0] < coarse_time[0] or comparison_time[-1] > coarse_time[-1]:
+        raise ValueError("coarse traces do not cover the comparison window")
+
+    def scalar(values: FloatArray) -> FloatArray:
+        return np.interp(comparison_time, coarse_time, values)
+
+    def vector(east: FloatArray, north: FloatArray) -> FloatArray:
+        return np.column_stack((scalar(east), scalar(north)))
+
+    coarse_fields = {
+        "reference_hr": scalar(coarse_reference.hr_a_m),
+        "reference_ht": vector(
+            coarse_reference.ht_east_a_m, coarse_reference.ht_north_a_m
+        ),
+        "anomaly_hr": scalar(coarse_anomaly.hr_a_m),
+        "anomaly_ht": vector(
+            coarse_anomaly.ht_east_a_m, coarse_anomaly.ht_north_a_m
+        ),
+    }
+    fine_fields = {
+        "reference_hr": fine_reference.hr_a_m[selected],
+        "reference_ht": np.column_stack(
+            (
+                fine_reference.ht_east_a_m[selected],
+                fine_reference.ht_north_a_m[selected],
+            )
+        ),
+        "anomaly_hr": fine_anomaly.hr_a_m[selected],
+        "anomaly_ht": np.column_stack(
+            (
+                fine_anomaly.ht_east_a_m[selected],
+                fine_anomaly.ht_north_a_m[selected],
+            )
+        ),
+    }
+
+    def relative_l2(coarse: FloatArray, fine: FloatArray, label: str) -> float:
+        denominator = float(np.linalg.norm(fine.ravel()))
+        if denominator == 0.0:
+            raise ValueError(f"fine {label} field is identically zero")
+        return float(np.linalg.norm((coarse - fine).ravel()) / denominator)
+
+    reference_hr = relative_l2(
+        coarse_fields["reference_hr"], fine_fields["reference_hr"], "reference Hr"
+    )
+    reference_ht = relative_l2(
+        coarse_fields["reference_ht"], fine_fields["reference_ht"], "reference Ht"
+    )
+    anomaly_hr = relative_l2(
+        coarse_fields["anomaly_hr"], fine_fields["anomaly_hr"], "anomaly Hr"
+    )
+    anomaly_ht = relative_l2(
+        coarse_fields["anomaly_ht"], fine_fields["anomaly_ht"], "anomaly Ht"
+    )
+    perturbation_hr = relative_l2(
+        coarse_fields["anomaly_hr"] - coarse_fields["reference_hr"],
+        fine_fields["anomaly_hr"] - fine_fields["reference_hr"],
+        "perturbation Hr",
+    )
+    perturbation_ht = relative_l2(
+        coarse_fields["anomaly_ht"] - coarse_fields["reference_ht"],
+        fine_fields["anomaly_ht"] - fine_fields["reference_ht"],
+        "perturbation Ht",
+    )
+    return RadarResolutionConvergence(
+        coarse_target_subdivision=coarse_target_subdivision,
+        fine_target_subdivision=fine_target_subdivision,
+        comparison_start_s=float(comparison_time[0]),
+        comparison_stop_s=float(comparison_time[-1]),
+        samples=len(comparison_time),
+        reference_hr_relative_l2=reference_hr,
+        reference_ht_relative_l2=reference_ht,
+        anomaly_hr_relative_l2=anomaly_hr,
+        anomaly_ht_relative_l2=anomaly_ht,
+        perturbation_hr_relative_l2=perturbation_hr,
+        perturbation_ht_relative_l2=perturbation_ht,
+    )
 
 
 def radar_radial_altitudes_m() -> tuple[float, ...]:

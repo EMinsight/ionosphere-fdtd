@@ -20,8 +20,11 @@ from verification.simpson_taflove_2006.model import (
     THESIS_NIGHTTIME_IONOSPHERE_SCALE_HEIGHT_M,
     THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M,
     DayNightHemisphereProfile,
+    RadarResolutionConvergence,
     RadarTraces,
     _surface_h_distributions,
+    build_paper_adaptive_mesh,
+    compare_radar_resolution_pairs,
     compute_radar_perturbation,
     create_radar_simulation,
     load_radar_traces,
@@ -84,6 +87,131 @@ def test_paper_oil_geometry_matches_area_depth_and_contrast() -> None:
         THESIS_OIL_MAXIMUM_BACKGROUND_CONDUCTIVITY_S_M
     )
     assert oil.target_area_m2 == PAPER_OIL_AREA_KM2 * 1.0e6
+
+
+def test_paper_adaptive_mesh_refines_transmitter_and_oil_on_one_surface() -> None:
+    mesh = build_paper_adaptive_mesh(
+        2,
+        base_subdivision=1,
+        core_radius_deg=8.0,
+        transition_width_deg=8.0,
+    )
+    targets = (
+        (46.5, -90.9, "transmitter"),
+        (69.0, -156.0, "oil-receiver"),
+    )
+
+    for latitude, longitude, _ in targets:
+        latitude_rad = np.deg2rad(latitude)
+        longitude_rad = np.deg2rad(longitude)
+        direction = np.asarray(
+            (
+                np.cos(latitude_rad) * np.cos(longitude_rad),
+                np.cos(latitude_rad) * np.sin(longitude_rad),
+                np.sin(latitude_rad),
+            )
+        )
+        nearest = int(np.argmax(mesh.face_centers @ direction))
+        assert mesh.face_levels[nearest] == 2
+    assert [
+        region["label"] for region in mesh.refinement_spec["regions"]
+    ] == [target[2] for target in targets]
+    assert mesh.n_faces < 20 * 4**2
+
+
+@requires_natural_earth
+def test_adaptive_reference_and_anomaly_runs_share_exact_mesh_signature() -> None:
+    mesh = build_paper_adaptive_mesh(
+        1,
+        base_subdivision=0,
+        core_radius_deg=12.0,
+        transition_width_deg=12.0,
+    )
+    reference_simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        mesh=mesh,
+    )
+    anomaly_simulation = create_radar_simulation(
+        include_oil=True,
+        subdivision=0,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        mesh=mesh,
+    )
+
+    reference = record_radar_traces(
+        reference_simulation, steps=1, case="reference"
+    )
+    anomaly = record_radar_traces(anomaly_simulation, steps=1, case="anomaly")
+
+    assert reference.run_signature == anomaly.run_signature
+    np.testing.assert_array_equal(
+        reference_simulation.mesh.faces, anomaly_simulation.mesh.faces
+    )
+
+
+def test_radar_resolution_comparison_interpolates_paired_fields() -> None:
+    def traces(time: np.ndarray, case: str, signature: str) -> RadarTraces:
+        hr = np.sin(2.0 * np.pi * 5.0 * time)
+        east = np.cos(2.0 * np.pi * 5.0 * time)
+        north = 0.5 * hr
+        if case == "anomaly":
+            hr = 1.1 * hr
+            east = 1.2 * east
+            north = 1.3 * north
+        return RadarTraces(time, hr, east, north, 0.0, case, signature)
+
+    coarse_time = np.linspace(-0.01, 0.09, 101)
+    fine_time = np.linspace(-0.01, 0.09, 201)
+    result = compare_radar_resolution_pairs(
+        traces(coarse_time, "reference", "coarse"),
+        traces(coarse_time, "anomaly", "coarse"),
+        traces(fine_time, "reference", "fine"),
+        traces(fine_time, "anomaly", "fine"),
+        coarse_target_subdivision=9,
+        fine_target_subdivision=10,
+        relative_stop_s=0.085,
+    )
+
+    assert isinstance(result, RadarResolutionConvergence)
+    assert result.samples == 171
+    for name in (
+        "reference_hr_relative_l2",
+        "reference_ht_relative_l2",
+        "anomaly_hr_relative_l2",
+        "anomaly_ht_relative_l2",
+        "perturbation_hr_relative_l2",
+        "perturbation_ht_relative_l2",
+    ):
+        assert getattr(result, name) < 3.0e-4
+
+
+def test_radar_resolution_comparison_rejects_unpaired_mesh_runs() -> None:
+    time = np.linspace(0.0, 0.1, 11)
+    values = np.sin(2.0 * np.pi * 5.0 * time)
+    reference = RadarTraces(
+        time, values, values, values, 0.0, "reference", "mesh-a"
+    )
+    anomaly = RadarTraces(
+        time, values, values, values, 0.0, "anomaly", "mesh-b"
+    )
+
+    with pytest.raises(ValueError, match="share one run signature"):
+        compare_radar_resolution_pairs(
+            reference,
+            anomaly,
+            reference,
+            anomaly,
+            coarse_target_subdivision=9,
+            fine_target_subdivision=10,
+        )
 
 
 @requires_natural_earth
