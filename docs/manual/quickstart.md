@@ -10,6 +10,10 @@ The default uses NumPy CPU, subdivision 2, 24 radial cells, a Gwangju vertical
 Gaussian current, and the data-free Earth–ionosphere material. Progress output
 includes simulation time and maximum electric and magnetic amplitudes.
 
+Expected setup output begins with a 162-cell surface mesh, NumPy on CPU,
+`float64`, a field allocation of about 0.27 MiB, and a conservative time step.
+The exact field maxima depend on the requested step count.
+
 ## Reuse run parameters
 
 Copy the CPU-safe example TOML file when a run needs more than a few options:
@@ -20,11 +24,40 @@ uv run ionosphere --config run.toml
 ```
 
 The starter uses the same subdivision, radial grid, backend, source, and dtype
-for its simulation and visualization tables. It writes a final checkpoint to
-`artifacts/runs/demo.npz`. The separate
+by restoring the simulation checkpoint for visualization. It writes a final
+checkpoint to `artifacts/runs/demo.npz`. The separate
 [`ionosphere.research.toml`](../../configs/ionosphere.research.toml) retains a
 long compiled CUDA example; review its device, resolution, step count, and
 checkpoint path before running it.
+
+Validate the complete model without advancing fields or writing the configured
+checkpoint:
+
+```bash
+uv run ionosphere --config run.toml --dry-run
+```
+
+Run the model, then render that exact saved state:
+
+```bash
+uv run ionosphere --config run.toml
+uv run --extra visualization ionosphere-visualize \
+  --config run.toml surface
+```
+
+The second command reads `artifacts/runs/demo.npz`; it does not construct a
+look-alike model. A successful workflow creates:
+
+```text
+artifacts/
+├── figures/demo-surface.png
+└── runs/demo.npz
+```
+
+The image confirms that the numerical workflow is operating. The starter is a
+data-free demonstration and is not an observational Earth prediction. Continue
+with the [Learning Path](learning-path.md) before interpreting amplitudes or
+travel times physically.
 
 Edit values below `[ionosphere]` in `run.toml`. An option supplied directly on
 the command line takes precedence, which makes one-off changes concise:

@@ -9,12 +9,13 @@
 The repository includes `uv.lock`; `uv` is the recommended environment and
 dependency manager.
 
-## Source checkout
+## Minimal source checkout
 
-Install the runtime and every development extra:
+From a source checkout, install only the NumPy runtime needed by the first CPU
+simulation:
 
 ```bash
-uv sync --extra test --extra visualization --extra pytorch --extra verification
+uv sync
 ```
 
 Run commands through `uv run`:
@@ -22,6 +23,12 @@ Run commands through `uv run`:
 ```bash
 uv run ionosphere --steps 10
 uv run python -c "import ionosphere_fdtd; print(ionosphere_fdtd.__name__)"
+```
+
+Add plotting only when creating the first figure:
+
+```bash
+uv sync --extra visualization
 ```
 
 ## Optional dependency groups
@@ -36,6 +43,13 @@ uv run python -c "import ionosphere_fdtd; print(ionosphere_fdtd.__name__)"
 
 Install only what a deployment needs. A minimal NumPy CPU installation does
 not require PyTorch or visualization packages.
+
+For repository development and the complete test suite, install every
+development extra:
+
+```bash
+uv sync --extra test --extra visualization --extra pytorch --extra verification
+```
 
 ## Editable pip installation
 

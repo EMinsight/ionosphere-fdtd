@@ -25,12 +25,18 @@ current evidence and stopping boundary.
 
 1. [Installation](installation.md)
 2. [Quick start](quickstart.md)
-3. [Command-line reference](command-line-reference.md)
-4. [Simulation configuration](simulation.md)
-5. [Materials and sources](materials-and-sources.md)
-6. [Backends and performance](backends.md)
-7. [Visualization and output](visualization-and-output.md)
-8. [Troubleshooting](troubleshooting.md)
+3. [Learning path](learning-path.md)
+4. [Command-line reference](command-line-reference.md)
+5. [Simulation configuration](simulation.md)
+6. [Materials and sources](materials-and-sources.md)
+7. [Backends and performance](backends.md)
+8. [Visualization and output](visualization-and-output.md)
+9. [Troubleshooting](troubleshooting.md)
+
+If this is your first run, stop after the Quick Start has produced both
+`demo.npz` and `demo-surface.png`. The Learning Path then explains which model
+choice to change next and which checks are required before interpreting a run
+quantitatively.
 
 ## Interfaces
 

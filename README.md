@@ -26,9 +26,12 @@ sampling, and two- and three-dimensional visualization.
 Python 3.11 or newer is required.
 
 ```bash
-uv sync --extra test --extra visualization --extra pytorch
+uv sync
 uv run ionosphere --steps 200
 ```
+
+This first CPU run requires no optional backend or plotting packages. It prints
+the selected mesh, stable time step, field memory, and finite field maxima.
 
 For repeatable runs, copy the CPU-safe starter configuration and edit it instead
 of repeating command-line options:
@@ -42,6 +45,18 @@ This starter remains on NumPy CPU and writes
 `artifacts/runs/demo.npz`. Use
 [`configs/ionosphere.research.toml`](configs/ionosphere.research.toml) only
 after selecting and sizing the intended accelerator workload.
+
+Render the exact saved state from the starter run:
+
+```bash
+uv run --extra visualization ionosphere-visualize \
+  --config run.toml surface
+```
+
+The resulting checkpoint and surface map are
+`artifacts/runs/demo.npz` and `artifacts/figures/demo-surface.png`. Follow the
+[learning path](docs/manual/learning-path.md) before moving from this
+data-free demonstration to a physical or observational model.
 
 Explicit command-line options override values from the file. See the
 [command-line reference](docs/manual/command-line-reference.md#toml-configuration-files)
@@ -65,6 +80,7 @@ print(simulation.diagnostics())
 - [User manual](docs/manual/index.md)
 - [Installation](docs/manual/installation.md)
 - [Quick start](docs/manual/quickstart.md)
+- [Learning path](docs/manual/learning-path.md)
 - [Command-line reference](docs/manual/command-line-reference.md)
 - [Simulation configuration](docs/manual/simulation.md)
 - [Materials and sources](docs/manual/materials-and-sources.md)
