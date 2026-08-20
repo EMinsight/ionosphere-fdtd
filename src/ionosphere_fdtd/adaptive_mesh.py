@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -12,6 +13,7 @@ from .mesh import (
     GeodesicMesh,
     IntArray,
     _arc_length,
+    _build_edges,
     _normalize,
     _optimize_edge_lengths,
     _relax,
@@ -153,6 +155,7 @@ def build_adaptive_geodesic_mesh(
             vertices = _optimize_edge_lengths(
                 vertices, faces, int(optimization_steps_per_level)
             )
+        faces, levels = _enforce_local_delaunay(vertices, faces, levels)
 
     refinement_spec = {
         "algorithm": "conforming-red-transition-v1",
@@ -342,3 +345,136 @@ def _transition_children(
     else:
         x, y, z, xy, yz = a, b, c, ab, bc
     return [(y, yz, xy), (x, xy, z), (xy, yz, z)]
+
+
+def _enforce_local_delaunay(
+    vertices: FloatArray,
+    faces: IntArray,
+    levels: IntArray,
+) -> tuple[IntArray, IntArray]:
+    """Apply deterministic Lawson flips until every dual edge is positive."""
+
+    result = np.array(faces, dtype=np.int64, copy=True)
+    result_levels = np.array(levels, dtype=np.int64, copy=True)
+    adjacency: dict[tuple[int, int], list[int]] = {}
+
+    def face_edges(face: IntArray) -> tuple[tuple[int, int], ...]:
+        a, b, c = (int(value) for value in face)
+        return (
+            tuple(sorted((a, b))),
+            tuple(sorted((b, c))),
+            tuple(sorted((c, a))),
+        )
+
+    edges, _, _, left_faces, right_faces = _build_edges(result)
+    for edge, left_face, right_face in zip(
+        edges, left_faces, right_faces, strict=True
+    ):
+        adjacency[(int(edge[0]), int(edge[1]))] = [
+            int(left_face),
+            int(right_face),
+        ]
+
+    centers = _spherical_face_centers(vertices, result)
+    tail = vertices[edges[:, 0]]
+    head = vertices[edges[:, 1]]
+    midpoint = _normalize(tail + head)
+    left_normal = _normalize(np.cross(tail, head))
+    left_centers = centers[left_faces]
+    right_centers = centers[right_faces]
+    signed_dual = np.arctan2(
+        np.einsum("ij,ij->i", left_centers, left_normal),
+        np.einsum("ij,ij->i", left_centers, midpoint),
+    ) - np.arctan2(
+        np.einsum("ij,ij->i", right_centers, left_normal),
+        np.einsum("ij,ij->i", right_centers, midpoint),
+    )
+    tolerance = 256.0 * np.finfo(np.float64).eps
+    bad_edges = edges[signed_dual <= tolerance]
+    work = deque((int(edge[0]), int(edge[1])) for edge in bad_edges)
+    queued = set(work)
+    maximum_flips = max(1, 10 * len(adjacency))
+    flips = 0
+
+    def enqueue(edge: tuple[int, int]) -> None:
+        if edge not in queued:
+            queued.add(edge)
+            work.append(edge)
+
+    while work:
+        edge = work.popleft()
+        queued.remove(edge)
+        adjacent = adjacency.get(edge)
+        if adjacent is None or len(adjacent) != 2:
+            continue
+        first_index, second_index = adjacent
+        a, b = edge
+        first = result[first_index]
+        second = result[second_index]
+
+        def follows(face: IntArray, tail: int, head: int) -> bool:
+            return any(
+                int(face[corner]) == tail
+                and int(face[(corner + 1) % 3]) == head
+                for corner in range(3)
+            )
+
+        if follows(first, b, a):
+            first_index, second_index = second_index, first_index
+            first, second = second, first
+        if not follows(first, a, b) or not follows(second, b, a):
+            raise RuntimeError("adaptive face orientations are inconsistent")
+        c = next(int(value) for value in first if value not in edge)
+        d = next(int(value) for value in second if value not in edge)
+
+        centers = _spherical_face_centers(
+            vertices, np.asarray((first, second), dtype=np.int64)
+        )
+        midpoint = _normalize((vertices[a] + vertices[b])[None, :])[0]
+        left_normal = _normalize(
+            np.cross(vertices[a], vertices[b])[None, :]
+        )[0]
+        coordinates = np.arctan2(
+            centers @ left_normal,
+            centers @ midpoint,
+        )
+        if coordinates[0] - coordinates[1] > tolerance:
+            continue
+
+        replacement_edge = tuple(sorted((c, d)))
+        if replacement_edge in adjacency:
+            continue
+        old_edges = set(face_edges(first)) | set(face_edges(second))
+        for old_edge in old_edges:
+            neighbours = adjacency[old_edge]
+            neighbours[:] = [
+                index
+                for index in neighbours
+                if index not in {first_index, second_index}
+            ]
+            if not neighbours:
+                del adjacency[old_edge]
+
+        result[first_index] = (c, d, b)
+        result[second_index] = (d, c, a)
+        replacement_level = max(
+            int(result_levels[first_index]), int(result_levels[second_index])
+        )
+        result_levels[first_index] = replacement_level
+        result_levels[second_index] = replacement_level
+        changed_edges = set(face_edges(result[first_index])) | set(
+            face_edges(result[second_index])
+        )
+        for changed_edge in changed_edges:
+            neighbours = adjacency.setdefault(changed_edge, [])
+            for index in (first_index, second_index):
+                if changed_edge in face_edges(result[index]) and index not in neighbours:
+                    neighbours.append(index)
+            enqueue(changed_edge)
+        if any(len(adjacency[changed_edge]) != 2 for changed_edge in changed_edges):
+            raise RuntimeError("Delaunay flip broke the closed mesh topology")
+        flips += 1
+        if flips > maximum_flips:
+            raise RuntimeError("adaptive Delaunay edge flips did not converge")
+
+    return result, result_levels

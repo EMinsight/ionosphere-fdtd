@@ -3,10 +3,14 @@ import pytest
 
 from ionosphere_fdtd.adaptive_mesh import (
     SphericalRefinementRegion,
+    _enforce_local_delaunay,
     build_adaptive_geodesic_mesh,
     validate_adaptive_mesh,
 )
-from ionosphere_fdtd.mesh import build_geodesic_mesh
+from ionosphere_fdtd.mesh import (
+    build_geodesic_mesh,
+    build_geodesic_mesh_from_topology,
+)
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 
 
@@ -83,6 +87,34 @@ def test_multilevel_two_region_mesh_has_positive_disjoint_hodge_supports() -> No
     assert np.all(mesh.dual_cell_solid_angles > 0.0)
     assert np.all(mesh.edge_diamond_solid_angles() > 0.0)
     assert np.sum(mesh.edge_diamond_solid_angles()) == pytest.approx(4.0 * np.pi)
+
+
+def test_lawson_flip_repairs_non_delaunay_local_edge() -> None:
+    base = build_geodesic_mesh(1)
+    vertices = base.vertices.copy()
+    vertices[15] = (0.3779688486851255, 0.0824166650239095, 0.9221426368789035)
+    levels = np.ones(base.n_faces, dtype=np.int64)
+    invalid = build_geodesic_mesh_from_topology(
+        vertices,
+        base.faces,
+        face_levels=levels,
+        require_well_centered=False,
+    )
+    with pytest.raises(ValueError, match="non-positive"):
+        validate_adaptive_mesh(invalid)
+
+    faces, repaired_levels = _enforce_local_delaunay(
+        vertices, base.faces, levels
+    )
+    repaired = build_geodesic_mesh_from_topology(
+        vertices,
+        faces,
+        face_levels=repaired_levels,
+        require_well_centered=False,
+    )
+
+    assert np.any(faces != base.faces)
+    assert validate_adaptive_mesh(repaired).minimum_dual_edge_angle > 0.0
 
 
 def test_adaptive_mesh_runs_in_solver_without_changing_zero_state() -> None:
