@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..mesh_optimization.mesquite import load_optimized_mesh
 from ..simpson_taflove_2004.model import ValidationTraces, compute_attenuation
 from .model import (
     PAPER_FIGURE_7_DURATION_S,
@@ -41,6 +42,22 @@ def _parser() -> argparse.ArgumentParser:
     radar.add_argument("--subdivision", type=int, choices=range(8), default=7)
     radar.add_argument(
         "--mesh-orientation", choices=("native", "polar"), default="polar"
+    )
+    radar.add_argument(
+        "--mesh-optimization-steps",
+        type=int,
+        default=0,
+        help="apply deterministic spherical edge-quality optimization",
+    )
+    radar.add_argument(
+        "--mesh-coordinates",
+        type=Path,
+        help="NPZ coordinates produced by verification.mesh_optimization",
+    )
+    radar.add_argument(
+        "--geometry-mode",
+        choices=("thin-shell", "full-spherical"),
+        default="full-spherical",
     )
     radar.add_argument(
         "--material", choices=("etopo5", "natural-earth"), default="etopo5"
@@ -137,6 +154,17 @@ def _parser() -> argparse.ArgumentParser:
     analyze.add_argument(
         "--normalization", choices=("pointwise", "peak"), default="pointwise"
     )
+    analyze.add_argument(
+        "--ht-definition",
+        choices=(
+            "principal-axis",
+            "east",
+            "north",
+            "magnitude",
+            "vector-difference",
+        ),
+        default="vector-difference",
+    )
     return parser
 
 
@@ -165,6 +193,20 @@ def _run_radar(args: argparse.Namespace) -> int:
         raise SystemExit("--stop-after-center must be positive")
     if args.material == "etopo5" and args.etopo5_path is None:
         raise SystemExit("--etopo5-path is required with --material etopo5")
+    if args.mesh_coordinates is not None and args.mesh_optimization_steps:
+        raise SystemExit(
+            "--mesh-coordinates cannot be combined with --mesh-optimization-steps"
+        )
+    optimized_mesh = None
+    if args.mesh_coordinates is not None:
+        try:
+            optimized_mesh, _ = load_optimized_mesh(
+                args.mesh_coordinates,
+                expected_subdivision=args.subdivision,
+                expected_orientation=args.mesh_orientation,
+            )
+        except (OSError, KeyError, ValueError) as error:
+            raise SystemExit(str(error)) from error
     source_azimuths = {
         "both": (0.0, 90.0),
         "north": (0.0,),
@@ -191,6 +233,9 @@ def _run_radar(args: argparse.Namespace) -> int:
         include_shield=args.shield,
         shield_radius_m=1_000.0 * args.shield_radius_km,
         mesh_orientation=args.mesh_orientation,
+        mesh_optimization_steps=args.mesh_optimization_steps,
+        mesh=optimized_mesh,
+        geometry_mode=args.geometry_mode,
         vertical_reference=args.vertical_reference,
         horizontal_anomaly_mode=args.horizontal_anomaly,
         deep_lithosphere_resistivity_ohm_m=(
@@ -211,6 +256,9 @@ def _run_radar(args: argparse.Namespace) -> int:
         f"{len(simulation.radial_steps_m)} backend={simulation.backend.name} "
         f"device={simulation.backend.device} dtype={simulation.backend.dtype_name} "
         f"orientation={args.mesh_orientation} "
+        f"mesh_optimization_steps={args.mesh_optimization_steps} "
+        f"mesh_coordinates={args.mesh_coordinates or 'generated'} "
+        f"geometry={args.geometry_mode} "
         f"interface={args.tangential_interface} "
         f"support={args.tangential_support} "
         f"source={args.source_basis}@{simulation.source.altitude_m:g}m "
@@ -248,10 +296,16 @@ def _analyze_radar(args: argparse.Namespace) -> int:
     reference = load_radar_traces(args.reference)
     anomaly = load_radar_traces(args.anomaly)
     curves = compute_radar_perturbation(
-        reference, anomaly, normalization=args.normalization
+        reference,
+        anomaly,
+        normalization=args.normalization,
+        ht_definition=args.ht_definition,
     )
     figure = render_figure_7(curves, args.figure)
-    print(f"figure={figure} normalization={args.normalization}")
+    print(
+        f"figure={figure} normalization={args.normalization} "
+        f"ht_definition={args.ht_definition}"
+    )
     metrics = radar_metrics(curves)
     metrics.update(radar_field_metrics(reference, anomaly, curves))
     for name, value in metrics.items():

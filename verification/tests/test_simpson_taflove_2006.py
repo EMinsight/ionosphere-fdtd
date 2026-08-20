@@ -302,7 +302,7 @@ def test_short_radar_run_records_three_surface_components() -> None:
     assert simulation.source.azimuths_deg == (0.0, 90.0)
     assert simulation.source.line_lengths_m == (22_500.0, 22_500.0)
     assert simulation.config.loss_integration == "trapezoidal"
-    assert simulation.config.geometry_mode == "thin-shell"
+    assert simulation.config.geometry_mode == "full-spherical"
     assert simulation.config.mesh_orientation == "polar"
     pentagons = simulation.mesh.vertices[simulation.mesh.vertex_degree == 5]
     assert np.max(pentagons[:, 2]) == pytest.approx(1.0)
@@ -332,6 +332,23 @@ def test_radar_setup_can_retain_native_orientation() -> None:
     assert simulation.config.mesh_orientation == "native"
     assert simulation.mesh.vertex_degree[north] == 6
     assert simulation.mesh.vertex_degree[south] == 6
+
+
+@requires_natural_earth
+def test_radar_geometry_and_generated_mesh_optimization_are_configurable() -> None:
+    simulation = create_radar_simulation(
+        include_oil=False,
+        subdivision=1,
+        material_model="natural-earth",
+        backend="numpy",
+        dtype="float64",
+        compile_step=False,
+        geometry_mode="full-spherical",
+        mesh_optimization_steps=1,
+    )
+
+    assert simulation.config.geometry_mode == "full-spherical"
+    assert simulation.config.mesh_optimization_steps == 1
 
 
 @requires_natural_earth
@@ -588,6 +605,102 @@ def test_pointwise_radar_normalization_has_expected_db_levels() -> None:
     assert np.max(peak_curves.delta_ht_db) == pytest.approx(-30.0)
     assert np.all(peak_curves.valid_hr)
     assert np.all(peak_curves.valid_ht)
+
+
+def test_tangential_field_definitions_are_explicit_and_distinct() -> None:
+    time = np.linspace(0.0, 0.1, 11)
+    reference = RadarTraces(
+        time,
+        np.ones_like(time),
+        2.0 * np.ones_like(time),
+        4.0 * np.ones_like(time),
+        0.0,
+        "reference",
+        "test-signature",
+    )
+    anomaly = RadarTraces(
+        time,
+        np.ones_like(time),
+        4.0 * np.ones_like(time),
+        5.0 * np.ones_like(time),
+        0.0,
+        "anomaly",
+        "test-signature",
+    )
+
+    east = compute_radar_perturbation(
+        reference, anomaly, relative_stop_s=0.1, ht_definition="east"
+    )
+    north = compute_radar_perturbation(
+        reference, anomaly, relative_stop_s=0.1, ht_definition="north"
+    )
+    vector = compute_radar_perturbation(
+        reference,
+        anomaly,
+        relative_stop_s=0.1,
+        ht_definition="vector-difference",
+    )
+
+    np.testing.assert_allclose(east.delta_ht_db, 0.0)
+    np.testing.assert_allclose(north.delta_ht_db, 20.0 * np.log10(0.25))
+    np.testing.assert_allclose(
+        vector.delta_ht_db,
+        20.0 * np.log10(np.sqrt(5.0) / np.sqrt(20.0)),
+    )
+    assert east.ht_definition == "east"
+    np.testing.assert_array_equal(east.ht_projection_east_north, (1.0, 0.0))
+    assert np.all(np.isnan(vector.ht_projection_east_north))
+
+
+def test_tangential_magnitude_and_vector_difference_are_not_conflated() -> None:
+    time = np.linspace(0.0, 0.1, 11)
+    reference = RadarTraces(
+        time,
+        np.ones_like(time),
+        np.ones_like(time),
+        np.ones_like(time),
+        0.0,
+        "reference",
+        "test-signature",
+    )
+    anomaly = RadarTraces(
+        time,
+        np.ones_like(time),
+        np.ones_like(time),
+        -np.ones_like(time),
+        0.0,
+        "anomaly",
+        "test-signature",
+    )
+
+    magnitude = compute_radar_perturbation(
+        reference, anomaly, relative_stop_s=0.1, ht_definition="magnitude"
+    )
+    vector = compute_radar_perturbation(
+        reference,
+        anomaly,
+        relative_stop_s=0.1,
+        ht_definition="vector-difference",
+    )
+
+    assert np.max(magnitude.delta_ht_db) < -300.0
+    np.testing.assert_allclose(vector.delta_ht_db, 20.0 * np.log10(np.sqrt(2.0)))
+
+
+def test_radar_perturbation_rejects_unknown_tangential_definition() -> None:
+    time = np.linspace(0.0, 0.1, 11)
+    values = np.ones_like(time)
+    reference = RadarTraces(
+        time, values, values, values, 0.0, "reference", "test-signature"
+    )
+    anomaly = RadarTraces(
+        time, values, values, values, 0.0, "anomaly", "test-signature"
+    )
+
+    with pytest.raises(ValueError, match="ht_definition"):
+        compute_radar_perturbation(
+            reference, anomaly, relative_stop_s=0.1, ht_definition="bearing"
+        )
 
 
 def test_radar_perturbation_rejects_incompatible_runs() -> None:

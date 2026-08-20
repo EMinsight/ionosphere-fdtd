@@ -24,14 +24,19 @@ TM dual cells and TE edge diamonds.
 For Figure 7, normalized magnetic perturbation is evaluated as
 
 $$
-\Delta H_q(t)=20\log_{10}
+\Delta H_{tan}(t)=20\log_{10}
 \left(
-\frac{|H_q^{\mathrm{oil}}(t)-H_q^{\mathrm{ref}}(t)|}
-{\max_t |H_q^{\mathrm{ref}}(t)|}
+\frac{\|\mathbf H_{tan}^{\mathrm{oil}}(t)-
+\mathbf H_{tan}^{\mathrm{ref}}(t)\|_2}
+{\max_t \|\mathbf H_{tan}^{\mathrm{ref}}(t)\|_2}
 \right),
 $$
 
-where $q$ denotes the radial or tangential magnetic component.
+and analogously with absolute scalar differences for $H_r$. This
+coordinate-invariant vector-difference definition is used because the
+dissertation does not define a scalar direction for $H_{tan}$. Fixed east,
+north, reference-principal-axis, and difference-of-vector-magnitudes
+interpretations are also evaluated as sensitivities.
 
 The dissertation body supports this peak-reference denominator, but the
 Figure 26 caption attributes spikes to zero crossings of the reference
@@ -120,8 +125,10 @@ respectively, providing a consistent independent check.
 
 ETOPO5, the paper source, the $4800\ \mathrm{km}^2$ conservative oil support,
 the $0.1$ conductivity factor, `float64`, and a Courant factor of 1 were held
-fixed. The table reports the caption-implied pointwise medians and the
-body-defined peak-normalized maxima from the same traces.
+fixed. This initial sweep used the former thin-shell, unoptimized mesh and
+reference-principal-axis $H_{tan}$ implementation. The table reports the
+caption-implied pointwise medians and the body-defined peak-normalized maxima
+from the same traces.
 
 | Subdivision | Reference $H_r$ peak | Pointwise median $\Delta H_{tan}$ | Pointwise median $\Delta H_r$ | Peak-normalized max $\Delta H_{tan}$ | Peak-normalized max $\Delta H_r$ |
 |---:|---:|---:|---:|---:|---:|
@@ -139,9 +146,64 @@ subdivision 5 to 6. A subdivision-4 control with the former $0^\circ$ subsolar
 longitude changes the radial maximum by only 6.30 dB, so the dawn orientation
 does not explain the nonconvergence.
 
-The layered Figure 15 hypothesis therefore does not justify subdivision 7 and
-does not change the Figure 7 or complete-reproduction verdict from **FAIL**.
-Complete machine-readable settings and both normalization results are stored in
+This initial sweep does not justify subdivision 7. The possible effects of its
+thin-shell geometry, unoptimized mesh, and inferred $H_{tan}$ direction are
+isolated below.
+
+### Geometry, mesh, and tangential-field review
+
+The dissertation's update equations retain radial-coordinate-dependent edge
+lengths and areas, so `full-spherical` is the closer implementation. It also
+states that the geodesic cells were optimized to improve Laplace and wave
+propagation accuracy, although it does not publish the final coordinates or
+optimization parameters. The review therefore uses the repository's pinned
+Sandia Mesquite build with a uniform shape-size objective, trust-region mover,
+200 iterations, and the two polar vertices fixed. These are reproducible
+hypothesis parameters, not recovered author inputs.
+
+Mesquite improves mesh quality at every tested level. The primal-edge
+coefficient of variation falls from about 0.0650 to 0.0431, 0.0426, and 0.0423
+at subdivisions 4--6. The RMS adjacent-dual-area mismatch falls from
+0.0455/0.0335/0.0241 to 0.0245/0.0133/0.0070, respectively.
+
+The subdivision-4 factorial comparison uses the coordinate-invariant
+vector-difference definition of $H_{tan}$ and the dissertation-body peak
+normalization:
+
+| Geometry | Mesh | Maximum $\Delta H_{tan}$ | Maximum $\Delta H_r$ |
+|---|---|---:|---:|
+| Thin shell | Unoptimized | $-101.303$ dB | $-29.423$ dB |
+| Full spherical | Unoptimized | $-101.303$ dB | $-29.423$ dB |
+| Thin shell | Mesquite | $-101.367$ dB | $-32.590$ dB |
+| Full spherical | Mesquite | $-101.367$ dB | $-32.590$ dB |
+
+Full-spherical curvature changes these peak ratios by less than 0.00003 dB at
+subdivision 4. Mesh optimization has the larger effect, changing the radial
+peak by about 3.17 dB, but it does not approach the published $+20$ dB result.
+
+The combined full-spherical, Mesquite-optimized convergence sweep gives:
+
+| Subdivision | Reference $H_r$ peak | Pointwise median $\Delta H_{tan}$ | Pointwise median $\Delta H_r$ | Peak-normalized max $\Delta H_{tan}$ | Peak-normalized max $\Delta H_r$ |
+|---:|---:|---:|---:|---:|---:|
+| 4 | $2.423\times10^{-13}$ A/m | $-98.526$ dB | $-32.233$ dB | $-101.367$ dB | $-32.590$ dB |
+| 5 | $2.587\times10^{-14}$ A/m | $-83.148$ dB | $+0.676$ dB | $-85.984$ dB | $+1.811$ dB |
+| 6 | $1.007\times10^{-16}$ A/m | $-60.823$ dB | $+58.659$ dB | $-61.487$ dB | $+66.485$ dB |
+
+Optimization reduces the subdivision-4-to-6 radial-peak swing from about
+121 dB to 99 dB, but the result still crosses the published scale without
+converging. The reference $H_r$ peak still collapses by more than three orders
+of magnitude. Across the five explicit $H_{tan}$ definitions, the
+peak-normalized maximum ranges from $-112.241$ to $-101.141$ dB at subdivision
+4, $-96.154$ to $-85.853$ dB at subdivision 5, and $-65.829$ to $-58.590$ dB
+at subdivision 6. Every convention remains below $-25$ dB, and none can alter
+$H_r$.
+
+The review therefore changes the preferred implementation to full-spherical
+geometry and vector-difference $H_{tan}$, and establishes Mesquite coordinates
+as the appropriate production-mesh input. It does not change the Figure 7 or
+complete-reproduction verdict from **FAIL**, and subdivision 7 remains
+scientifically unjustified. Complete settings, mesh checksums, quality metrics,
+and sensitivity results are stored in
 `artifacts/verification/simpson-taflove-2006-thesis.json`.
 
 ## Accuracy research status
@@ -153,9 +215,11 @@ order over subdivisions 2–6, while the P95 directional anisotropy falls from
 6.365% to 0.080%. Smooth-property point-versus-support differences also
 decrease monotonically for both radial dual cells and tangential edge diamonds.
 
-For Figure 7, the material API now directly exercises the dissertation's
-day/night statement and the verification package contains an explicitly
-qualified Figure 15 piecewise hypothesis. It can also import three-dimensional
+For Figure 7, the material API directly exercises the dissertation's day/night
+statement and the verification package contains an explicitly qualified Figure
+15 piecewise hypothesis. The radar workflow now exposes full-spherical versus
+thin-shell geometry, deterministic or externally optimized meshes, and five
+explicit $H_{tan}$ definitions. It can also import three-dimensional
 conductivity and permittivity volumes from a canonical NPZ grid. No cellwise
 Hermance volume or equivalent observation product is present, so the schematic
 hypothesis is not represented as a recovered global map and the radar scaling

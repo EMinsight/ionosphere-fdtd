@@ -13,6 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ionosphere_fdtd.materials import SphericalAnomaly
+from ionosphere_fdtd.mesh import GeodesicMesh
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import (
     TangentialGaussianCurrent,
@@ -150,6 +151,7 @@ class RadarPerturbation:
     valid_hr: NDArray[np.bool_]
     ht_projection_east_north: FloatArray
     normalization: str
+    ht_definition: str
 
 
 def radar_radial_altitudes_m() -> tuple[float, ...]:
@@ -233,6 +235,9 @@ def create_radar_simulation(
     include_shield: bool = True,
     shield_radius_m: float = 2_500_000.0,
     mesh_orientation: str = "polar",
+    mesh_optimization_steps: int = 0,
+    mesh: GeodesicMesh | None = None,
+    geometry_mode: str = "full-spherical",
     vertical_reference: str = "terrain",
     horizontal_anomaly_mode: str = "conservative-nearest",
     deep_lithosphere_resistivity_ohm_m: float = (
@@ -358,10 +363,11 @@ def create_radar_simulation(
             radial_altitudes_m=altitudes,
             radial_grid_policy="allow-abrupt",
             mesh_orientation=mesh_orientation,
+            mesh_optimization_steps=mesh_optimization_steps,
             tangential_material_support=tangential_material_support,
             horizontal_anomaly_mode=horizontal_anomaly_mode,
             loss_integration="trapezoidal",
-            geometry_mode="thin-shell",
+            geometry_mode=geometry_mode,
         ),
         material=material,
         source=source,
@@ -370,6 +376,7 @@ def create_radar_simulation(
         dtype=dtype,
         compile_step=compile_step,
         compile_chunk_size=compile_chunk_size,
+        mesh=mesh,
     )
     simulation.radar_receiver_altitude_m = receiver_surface_altitude_m
     simulation.radar_vertical_reference = vertical_reference
@@ -555,8 +562,9 @@ def compute_radar_perturbation(
     relative_stop_s: float = PAPER_FIGURE_7_DURATION_S,
     denominator_floor_fraction: float = 1.0e-6,
     normalization: str = "pointwise",
+    ht_definition: str = "vector-difference",
 ) -> RadarPerturbation:
-    """Compute either interpretation of Figure 7 reference normalization."""
+    """Compute perturbations for an explicit tangential-field definition."""
 
     if reference.case != "reference" or anomaly.case != "anomaly":
         raise ValueError("radar traces must be ordered as reference then anomaly")
@@ -580,20 +588,18 @@ def compute_radar_perturbation(
     reference_ht_vector = np.column_stack(
         (reference.ht_east_a_m[selected], reference.ht_north_a_m[selected])
     )
-    _, _, principal_axes = np.linalg.svd(reference_ht_vector, full_matrices=False)
-    projection = principal_axes[0]
-    reference_ht = (
-        projection[0] * reference.ht_east_a_m[selected]
-        + projection[1] * reference.ht_north_a_m[selected]
+    anomaly_ht_vector = np.column_stack(
+        (anomaly.ht_east_a_m[selected], anomaly.ht_north_a_m[selected])
     )
-    anomaly_ht = (
-        projection[0] * anomaly.ht_east_a_m[selected]
-        + projection[1] * anomaly.ht_north_a_m[selected]
+    reference_ht, _, difference_ht, projection = _tangential_response(
+        reference_ht_vector, anomaly_ht_vector, definition=ht_definition
     )
     reference_hr = reference.hr_a_m[selected]
     anomaly_hr = anomaly.hr_a_m[selected]
 
-    def relative_db(base: FloatArray, changed: FloatArray) -> tuple[FloatArray, NDArray[np.bool_]]:
+    def relative_db(
+        base: FloatArray, difference: FloatArray
+    ) -> tuple[FloatArray, NDArray[np.bool_]]:
         peak = float(np.max(np.abs(base)))
         if peak == 0.0:
             raise ValueError("reference magnetic field is identically zero")
@@ -604,12 +610,14 @@ def compute_radar_perturbation(
             denominator = np.full_like(base, peak)
             valid = np.ones_like(base, dtype=np.bool_)
         ratio = np.full_like(base, np.nan)
-        ratio[valid] = np.abs(changed[valid] - base[valid]) / denominator[valid]
+        ratio[valid] = difference[valid] / denominator[valid]
         ratio[valid] = np.maximum(ratio[valid], np.finfo(np.float64).tiny)
         return 20.0 * np.log10(ratio), valid
 
-    delta_ht_db, valid_ht = relative_db(reference_ht, anomaly_ht)
-    delta_hr_db, valid_hr = relative_db(reference_hr, anomaly_hr)
+    delta_ht_db, valid_ht = relative_db(reference_ht, difference_ht)
+    delta_hr_db, valid_hr = relative_db(
+        reference_hr, np.abs(anomaly_hr - reference_hr)
+    )
     return RadarPerturbation(
         time_s=relative_time[selected],
         delta_ht_db=delta_ht_db,
@@ -618,7 +626,44 @@ def compute_radar_perturbation(
         valid_hr=valid_hr,
         ht_projection_east_north=projection,
         normalization=normalization,
+        ht_definition=ht_definition,
     )
+
+
+def _tangential_response(
+    reference: FloatArray,
+    anomaly: FloatArray,
+    *,
+    definition: str,
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+    """Reduce two-component tangential fields using one declared convention."""
+
+    if definition == "principal-axis":
+        _, _, principal_axes = np.linalg.svd(reference, full_matrices=False)
+        projection = principal_axes[0]
+        base = reference @ projection
+        changed = anomaly @ projection
+        difference = np.abs(changed - base)
+    elif definition in {"east", "north"}:
+        component = 0 if definition == "east" else 1
+        projection = np.eye(2, dtype=np.float64)[component]
+        base = reference[:, component]
+        changed = anomaly[:, component]
+        difference = np.abs(changed - base)
+    elif definition in {"magnitude", "vector-difference"}:
+        projection = np.full(2, np.nan, dtype=np.float64)
+        base = np.linalg.norm(reference, axis=1)
+        changed = np.linalg.norm(anomaly, axis=1)
+        if definition == "magnitude":
+            difference = np.abs(changed - base)
+        else:
+            difference = np.linalg.norm(anomaly - reference, axis=1)
+    else:
+        raise ValueError(
+            "ht_definition must be 'principal-axis', 'east', 'north', "
+            "'magnitude', or 'vector-difference'"
+        )
+    return base, changed, difference, projection
 
 
 def _radar_run_signature(
@@ -781,24 +826,30 @@ def radar_field_metrics(
     selected = (relative_time >= curves.time_s[0]) & (
         relative_time <= curves.time_s[-1]
     )
-    projection = curves.ht_projection_east_north
-    reference_ht = (
-        projection[0] * reference.ht_east_a_m[selected]
-        + projection[1] * reference.ht_north_a_m[selected]
+    reference_ht_vector = np.column_stack(
+        (reference.ht_east_a_m[selected], reference.ht_north_a_m[selected])
     )
-    anomaly_ht = (
-        projection[0] * anomaly.ht_east_a_m[selected]
-        + projection[1] * anomaly.ht_north_a_m[selected]
+    anomaly_ht_vector = np.column_stack(
+        (anomaly.ht_east_a_m[selected], anomaly.ht_north_a_m[selected])
+    )
+    reference_ht, anomaly_ht, difference_ht, _ = _tangential_response(
+        reference_ht_vector,
+        anomaly_ht_vector,
+        definition=curves.ht_definition,
     )
     fields = {
-        "ht": (reference_ht, anomaly_ht),
-        "hr": (reference.hr_a_m[selected], anomaly.hr_a_m[selected]),
+        "ht": (reference_ht, anomaly_ht, difference_ht),
+        "hr": (
+            reference.hr_a_m[selected],
+            anomaly.hr_a_m[selected],
+            np.abs(anomaly.hr_a_m[selected] - reference.hr_a_m[selected]),
+        ),
     }
     metrics: dict[str, float] = {}
-    for name, (base, changed) in fields.items():
+    for name, (base, changed, difference) in fields.items():
         reference_peak = float(np.max(np.abs(base)))
         anomaly_peak = float(np.max(np.abs(changed)))
-        difference_peak = float(np.max(np.abs(changed - base)))
+        difference_peak = float(np.max(difference))
         metrics.update(
             {
                 f"{name}_reference_peak_a_m": reference_peak,

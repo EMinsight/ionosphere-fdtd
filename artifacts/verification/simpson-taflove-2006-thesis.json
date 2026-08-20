@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "source": {
     "title": "Three-Dimensional FDTD Modeling of Impulsive Electromagnetic Propagation in the Global Earth-Ionosphere Waveguide",
     "author": "Jamesina J. Simpson",
@@ -23,7 +23,10 @@
     "night_scale_height_m": 2470.0,
     "subsolar_latitude_deg": 0.0,
     "subsolar_longitude_deg": 90.0,
-    "dawn_longitude_deg": 0.0
+    "dawn_longitude_deg": 0.0,
+    "baseline_geometry_mode": "thin-shell",
+    "baseline_mesh": "generated-unoptimized",
+    "baseline_ht_definition": "principal-axis"
   },
   "reflection_height_check": {
     "day_height_m": 48000.0,
@@ -123,6 +126,118 @@
     "peak_delta_hr_maximum_db": -23.1257093,
     "dawn_aligned_difference_db": -6.2970791
   },
+  "geometry_mesh_htan_review": {
+    "qualification": "The dissertation uses radial-coordinate-dependent spherical cell geometry and states that the geodesic cells were optimized, but it does not define a scalar Htan direction or publish the exact optimized coordinates. Full-spherical geometry, Sandia Mesquite meshes, and five explicit Htan conventions are therefore tested as controlled sensitivities.",
+    "selected_geometry_mode": "full-spherical",
+    "selected_mesh": "sandia-mesquite",
+    "selected_ht_definition": "vector-difference",
+    "selected_ht_equation": "norm(Htan_oil - Htan_reference) / peak(norm(Htan_reference))",
+    "mesquite": {
+      "commit": "7ae51c8e8617c67e63018c8a7effc0f5455f58b4",
+      "executable_sha256": "6270ba0923e1763ac9f37c7a9a142771cade9a0b98bc054ca88c340b32439c6b",
+      "objective": "uniform-shape-size:TShapeSizeB1:PMeanP(1)",
+      "vertex_mover": "TrustRegion",
+      "fixed_vertices": "poles",
+      "maximum_iterations": 200,
+      "quality": [
+        {
+          "subdivision": 4,
+          "coordinates_sha256": "8489e371058e021626dfee775d513e17de434146ff12a831d58aaa1ba9652779",
+          "maximum_displacement_rad": 0.015180317114309288,
+          "primal_edge_cv_before": 0.06503318456636129,
+          "primal_edge_cv_after": 0.04310867641636129,
+          "adjacent_dual_area_rms_before": 0.04554450485455459,
+          "adjacent_dual_area_rms_after": 0.024469178714996393
+        },
+        {
+          "subdivision": 5,
+          "coordinates_sha256": "6807568369ae1946483ffc3dbb43dbfbe4237a5756bd34b8476c19978b6a36a5",
+          "maximum_displacement_rad": 0.015615342454755515,
+          "primal_edge_cv_before": 0.06502828093460745,
+          "primal_edge_cv_after": 0.0425915312425596,
+          "adjacent_dual_area_rms_before": 0.03347266570626734,
+          "adjacent_dual_area_rms_after": 0.0133413641821797
+        },
+        {
+          "subdivision": 6,
+          "coordinates_sha256": "2bddbc29703fed796a2463030599835cf7e672d78292650655a618e0562fd68b",
+          "maximum_displacement_rad": 0.01551571023696498,
+          "primal_edge_cv_before": 0.06502695797106765,
+          "primal_edge_cv_after": 0.04232031702462463,
+          "adjacent_dual_area_rms_before": 0.02408712794169409,
+          "adjacent_dual_area_rms_after": 0.007016790750512112
+        }
+      ]
+    },
+    "subdivision_4_factorial_peak_normalized": [
+      {
+        "geometry_mode": "thin-shell",
+        "mesh": "generated-unoptimized",
+        "delta_ht_maximum_db": -101.30282915944599,
+        "delta_hr_maximum_db": -29.422788445378984
+      },
+      {
+        "geometry_mode": "full-spherical",
+        "mesh": "generated-unoptimized",
+        "delta_ht_maximum_db": -101.30280108312141,
+        "delta_hr_maximum_db": -29.422766354997716
+      },
+      {
+        "geometry_mode": "thin-shell",
+        "mesh": "sandia-mesquite",
+        "delta_ht_maximum_db": -101.36675730839349,
+        "delta_hr_maximum_db": -32.5899944130092
+      },
+      {
+        "geometry_mode": "full-spherical",
+        "mesh": "sandia-mesquite",
+        "delta_ht_maximum_db": -101.36672974404597,
+        "delta_hr_maximum_db": -32.58999752032177
+      }
+    ],
+    "full_spherical_mesquite_convergence": [
+      {
+        "subdivision": 4,
+        "steps": 77502,
+        "time_step_s": 2.0847609344543916e-06,
+        "reference_hr_peak_a_m": 2.423233062092564e-13,
+        "difference_hr_peak_a_m": 5.687158207323999e-15,
+        "pointwise_delta_ht_median_db": -98.52635398544723,
+        "pointwise_delta_hr_median_db": -32.23290282839164,
+        "peak_delta_ht_maximum_db": -101.36672974404597,
+        "peak_delta_hr_maximum_db": -32.58999752032177
+      },
+      {
+        "subdivision": 5,
+        "steps": 77504,
+        "time_step_s": 2.0847097252572775e-06,
+        "reference_hr_peak_a_m": 2.5869804430680162e-14,
+        "difference_hr_peak_a_m": 3.186752154324758e-14,
+        "pointwise_delta_ht_median_db": -83.14780821124702,
+        "pointwise_delta_hr_median_db": 0.6758888863977287,
+        "peak_delta_ht_maximum_db": -85.98395915938704,
+        "peak_delta_hr_maximum_db": 1.8111028501037572
+      },
+      {
+        "subdivision": 6,
+        "steps": 77512,
+        "time_step_s": 2.0844821701914807e-06,
+        "reference_hr_peak_a_m": 1.0071986723395194e-16,
+        "difference_hr_peak_a_m": 2.1250732344530853e-13,
+        "pointwise_delta_ht_median_db": -60.8228550883652,
+        "pointwise_delta_hr_median_db": 58.65922572040057,
+        "peak_delta_ht_maximum_db": -61.48698729317406,
+        "peak_delta_hr_maximum_db": 66.48517513423366
+      }
+    ],
+    "ht_definition_peak_sensitivity": {
+      "definitions": ["principal-axis", "east", "north", "magnitude", "vector-difference"],
+      "subdivision_4_delta_ht_maximum_range_db": [-112.24061854090984, -101.14132454263336],
+      "subdivision_5_delta_ht_maximum_range_db": [-96.15397717202727, -85.85340514907216],
+      "subdivision_6_delta_ht_maximum_range_db": [-65.82916944968169, -58.59019845113703],
+      "interpretation": "The Htan convention changes reported values but every tested peak remains below -25 dB; it cannot alter Hr or explain radial nonconvergence."
+    }
+  },
   "verdict": "fail",
-  "reason": "The layered Figure 15 hypothesis satisfies the tangential threshold but the radial response changes by about 121 dB from subdivisions 4 to 6 and does not converge to the published +20 dB scale."
+  "reason": "With full-spherical geometry, Sandia Mesquite meshes, and coordinate-invariant vector-difference Htan, the tangential threshold is satisfied but the radial peak changes by about 99 dB from subdivisions 4 to 6 and does not converge to the published +20 dB scale."
 }
