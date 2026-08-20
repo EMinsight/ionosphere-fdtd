@@ -46,6 +46,7 @@ def test_local_refinement_is_conforming_balanced_and_well_centered() -> None:
     assert mesh.n_faces < build_geodesic_mesh(3).n_faces
     assert validation.maximum_adjacent_level_jump <= 1
     assert validation.minimum_dual_edge_angle > 0.0
+    assert validation.minimum_dual_to_primal_ratio > 0.05
     assert validation.primal_area_error < 1.0e-12
     assert validation.dual_area_error < 1.0e-12
 
@@ -92,6 +93,23 @@ def test_multilevel_two_region_mesh_has_positive_disjoint_hodge_supports() -> No
     assert np.all(mesh.dual_cell_solid_angles > 0.0)
     assert np.all(mesh.edge_diamond_solid_angles() > 0.0)
     assert np.sum(mesh.edge_diamond_solid_angles()) == pytest.approx(4.0 * np.pi)
+
+
+def test_default_relaxation_prevents_transition_dual_edge_collapse() -> None:
+    mesh = build_adaptive_geodesic_mesh(
+        3,
+        (
+            SphericalRefinementRegion(46.5, -90.9, 3.0, 5, 3.0, "source"),
+            SphericalRefinementRegion(69.0, -156.0, 3.0, 5, 3.0, "oil"),
+        ),
+    )
+
+    validation = validate_adaptive_mesh(mesh)
+
+    assert validation.minimum_dual_to_primal_ratio > 0.05
+    assert mesh.refinement_spec["algorithm"] == "conforming-red-transition-v3"
+    assert mesh.refinement_spec["relaxations_per_level"] == 4
+    assert mesh.refinement_spec["optimization_steps_per_level"] == 0
 
 
 def test_lawson_flip_repairs_non_delaunay_local_edge() -> None:

@@ -79,6 +79,7 @@ class AdaptiveMeshValidation:
 
     maximum_adjacent_level_jump: int
     minimum_dual_edge_angle: float
+    minimum_dual_to_primal_ratio: float
     primal_area_error: float
     dual_area_error: float
 
@@ -88,16 +89,19 @@ def build_adaptive_geodesic_mesh(
     regions: tuple[SphericalRefinementRegion, ...],
     *,
     orientation: str = "polar",
-    relaxations_per_level: int = 2,
-    optimization_steps_per_level: int = 1,
+    relaxations_per_level: int = 4,
+    optimization_steps_per_level: int = 0,
 ) -> GeodesicMesh:
     """Build one closed composite mesh with conforming local refinement.
 
     Marked faces receive red refinement. Their unmarked neighbours receive
     one- or two-edge transition triangulations, so every midpoint is shared
     and no hanging nodes remain. Repeating this operation produces multiple
-    levels while keeping adjacent face levels within one. A projected Lloyd
-    relaxation after each level restores a positive circumcentric Hodge star.
+    levels while keeping adjacent face levels within one. Four projected Lloyd
+    relaxations after each level keep circumcenters separated at refinement
+    transitions; edge-length optimization remains opt-in because applying it
+    to only the transition vertices can make adjacent faces nearly cocircular
+    and collapse the circumcentric dual edge between them.
     """
 
     if (
@@ -164,7 +168,7 @@ def build_adaptive_geodesic_mesh(
         faces, levels = _enforce_local_delaunay(vertices, faces, levels)
 
     refinement_spec = {
-        "algorithm": "conforming-red-transition-v2",
+        "algorithm": "conforming-red-transition-v3",
         "base_subdivision": int(base_subdivision),
         "orientation": orientation,
         "relaxations_per_level": int(relaxations_per_level),
@@ -214,6 +218,9 @@ def validate_adaptive_mesh(mesh: GeodesicMesh) -> AdaptiveMeshValidation:
     )
     signed_dual_angles = left_coordinate - right_coordinate
     minimum_dual_angle = float(np.min(signed_dual_angles))
+    minimum_dual_to_primal_ratio = float(
+        np.min(signed_dual_angles / mesh.primal_edge_angles)
+    )
     tolerance = 64.0 * np.finfo(np.float64).eps
     if minimum_dual_angle <= tolerance:
         raise ValueError("adaptive mesh has a non-positive circumcentric Hodge star")
@@ -237,6 +244,7 @@ def validate_adaptive_mesh(mesh: GeodesicMesh) -> AdaptiveMeshValidation:
     return AdaptiveMeshValidation(
         maximum_adjacent_level_jump=maximum_jump,
         minimum_dual_edge_angle=minimum_dual_angle,
+        minimum_dual_to_primal_ratio=minimum_dual_to_primal_ratio,
         primal_area_error=primal_error,
         dual_area_error=dual_error,
     )
