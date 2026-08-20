@@ -57,6 +57,11 @@ def test_local_refinement_is_conforming_balanced_and_well_centered() -> None:
         atol=0.0,
     )
 
+    base = build_geodesic_mesh(1)
+    region = SphericalRefinementRegion(35.0, 126.0, 8.0, 3)
+    farthest = int(np.argmin(base.vertices @ region.direction()))
+    np.testing.assert_array_equal(mesh.vertices[farthest], base.vertices[farthest])
+
 
 def test_two_refinement_regions_cover_source_and_receiver() -> None:
     regions = (

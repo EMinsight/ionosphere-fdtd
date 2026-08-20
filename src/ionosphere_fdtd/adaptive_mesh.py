@@ -15,8 +15,6 @@ from .mesh import (
     _arc_length,
     _build_edges,
     _normalize,
-    _optimize_edge_lengths,
-    _relax,
     _spherical_face_centers,
     build_geodesic_mesh,
     build_geodesic_mesh_from_topology,
@@ -146,19 +144,27 @@ def build_adaptive_geodesic_mesh(
         marked = desired > levels
         if not np.any(marked):
             break
+        previous_vertex_count = len(vertices)
         vertices, faces, levels = _refine_marked_faces(
             vertices, faces, levels, marked
         )
+        new_vertices = np.arange(len(vertices)) >= previous_vertex_count
+        transition_faces = np.any(new_vertices[faces], axis=1)
+        movable = np.zeros(len(vertices), dtype=np.bool_)
+        movable[np.unique(faces[transition_faces])] = True
         for _ in range(int(relaxations_per_level)):
-            vertices = _relax(vertices, faces)
+            vertices = _relax_selected(vertices, faces, movable)
         if optimization_steps_per_level:
-            vertices = _optimize_edge_lengths(
-                vertices, faces, int(optimization_steps_per_level)
+            vertices = _optimize_selected_edge_lengths(
+                vertices,
+                faces,
+                movable,
+                int(optimization_steps_per_level),
             )
         faces, levels = _enforce_local_delaunay(vertices, faces, levels)
 
     refinement_spec = {
-        "algorithm": "conforming-red-transition-v1",
+        "algorithm": "conforming-red-transition-v2",
         "base_subdivision": int(base_subdivision),
         "orientation": orientation,
         "relaxations_per_level": int(relaxations_per_level),
@@ -172,6 +178,7 @@ def build_adaptive_geodesic_mesh(
         face_levels=levels,
         refinement_spec=refinement_spec,
         topology_kind="adaptive",
+        normalize_vertices=False,
         require_well_centered=False,
     )
     validate_adaptive_mesh(mesh)
@@ -345,6 +352,64 @@ def _transition_children(
     else:
         x, y, z, xy, yz = a, b, c, ab, bc
     return [(y, yz, xy), (x, xy, z), (xy, yz, z)]
+
+
+def _relax_selected(
+    vertices: FloatArray,
+    faces: IntArray,
+    movable: NDArray[np.bool_],
+) -> FloatArray:
+    centers = _normalize(vertices[faces].sum(axis=1))
+    accumulated = np.zeros_like(vertices)
+    counts = np.zeros(len(vertices), dtype=np.int64)
+    for corner in range(3):
+        np.add.at(accumulated, faces[:, corner], centers)
+        np.add.at(counts, faces[:, corner], 1)
+    proposed = _normalize(accumulated / counts[:, None])
+    result = np.array(vertices, copy=True)
+    result[movable] = proposed[movable]
+    return result
+
+
+def _optimize_selected_edge_lengths(
+    vertices: FloatArray,
+    faces: IntArray,
+    movable: NDArray[np.bool_],
+    steps: int,
+) -> FloatArray:
+    edges = _build_edges(faces)[0]
+    degree = np.bincount(edges.ravel(), minlength=len(vertices))
+    selected = movable & (degree != 5)
+    result = np.array(vertices, copy=True)
+    tails = edges[:, 0]
+    heads = edges[:, 1]
+    for _ in range(steps):
+        tail_vertices = result[tails]
+        head_vertices = result[heads]
+        dot = np.clip(
+            np.einsum("ij,ij->i", tail_vertices, head_vertices), -1.0, 1.0
+        )
+        sine = np.linalg.norm(np.cross(tail_vertices, head_vertices), axis=1)
+        lengths = np.arctan2(sine, dot)
+        residual = lengths - float(np.mean(lengths))
+        tail_gradient = (
+            residual[:, None]
+            * (dot[:, None] * tail_vertices - head_vertices)
+            / sine[:, None]
+        )
+        head_gradient = (
+            residual[:, None]
+            * (dot[:, None] * head_vertices - tail_vertices)
+            / sine[:, None]
+        )
+        gradient = np.zeros_like(result)
+        np.add.at(gradient, tails, tail_gradient)
+        np.add.at(gradient, heads, head_gradient)
+        gradient /= degree[:, None]
+        gradient -= np.einsum("ij,ij->i", gradient, result)[:, None] * result
+        updated = _normalize(result - gradient)
+        result[selected] = updated[selected]
+    return result
 
 
 def _enforce_local_delaunay(
