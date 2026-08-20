@@ -1,5 +1,11 @@
 """Geodesic finite-difference time-domain Earth-ionosphere model."""
 
+from .adaptive_mesh import (
+    AdaptiveMeshValidation,
+    SphericalRefinementRegion,
+    build_adaptive_geodesic_mesh,
+    validate_adaptive_mesh,
+)
 from .backends import (
     ArrayBackend,
     BackendUnavailableError,
@@ -37,6 +43,7 @@ from .visualization import (
 )
 
 __all__ = [
+    "AdaptiveMeshValidation",
     "ArrayBackend",
     "BackendUnavailableError",
     "CheckpointError",
@@ -52,12 +59,14 @@ __all__ = [
     "Receiver",
     "ReceiverTraces",
     "SimulationConfig",
+    "SphericalRefinementRegion",
     "SphericalAnomaly",
     "SpatialEarthIonosphereMaterial",
     "TorchBackend",
     "animate_surface_field",
     "build_geodesic_mesh",
     "build_geodesic_mesh_from_topology",
+    "build_adaptive_geodesic_mesh",
     "create_backend",
     "plot_mesh_3d",
     "plot_radial_section",
@@ -66,4 +75,5 @@ __all__ = [
     "record_receiver_traces",
     "run_live_surface",
     "sample_radial_section",
+    "validate_adaptive_mesh",
 ]
