@@ -206,6 +206,39 @@ scientifically unjustified. Complete settings, mesh checksums, quality metrics,
 and sensitivity results are stored in
 `artifacts/verification/simpson-taflove-2006-thesis.json`.
 
+### Adaptive-mesh screening
+
+The conforming composite mesh was rerun with a subdivision-7 global base and
+1-degree refinement cores around the transmitter and oil receiver. The coarse
+mesh targets subdivision 9 (329,520 faces, $dt=7.67037\times10^{-7}$ s); the
+fine mesh targets subdivision 10 (335,574 faces,
+$dt=6.00656\times10^{-7}$ s). All FDTD updates were retained while magnetic
+observations were recorded every 32 steps. Independent target levels occupied
+the two local GPUs concurrently because the shallow 44-layer problem measured
+slower when split across NCCL ranks.
+
+This is a `float32` screening run, not final precision evidence. A declared 5%
+relative-L2 threshold was applied to all fields over the common 0--84.981 ms
+half-step window:
+
+| s9 to s10 relative-L2 change | Reference | Oil anomaly | Oil-induced perturbation |
+|---|---:|---:|---:|
+| $H_r$ | 109.989% | 246.394% | 197.213% |
+| $H_{tan}$ vector | 0.102% | 0.104% | 7.975% |
+
+The tangential background field is stable, but the tangential perturbation
+misses the threshold and every radial quantity is strongly nonconvergent. At
+s10, peak-normalized perturbations are $-55.544$ dB for $H_{tan}$ and
+$+7.501$ dB for $H_r$; pointwise medians are $-53.688$ and $+8.992$ dB,
+respectively. These values are not promoted into the main Figure 7 acceptance
+table because the s9--s10 radial response fails the convergence screen.
+
+The adaptive result therefore confirms that the earlier Figure 7 mismatch
+cannot yet be treated as a resolved uniform-grid limitation. A more expensive
+`float64` run is not justified until radial convergence is improved. Complete
+metrics, mesh checksums, time steps, and run revisions are stored in
+`artifacts/verification/simpson-taflove-2006-adaptive-float32/convergence.json`.
+
 ## Accuracy research status
 
 The independent directional-dispersion and material-support convergence study
@@ -232,6 +265,7 @@ the trace archive.
 ```bash
 python -m verification.simpson_taflove_2004 --help
 python -m verification.simpson_taflove_2006 --help
+python -m verification.simpson_taflove_2006.adaptive_run --help
 python -m verification.scientific_accuracy --help
 ```
 
