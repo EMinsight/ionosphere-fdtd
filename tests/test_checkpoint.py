@@ -10,6 +10,10 @@ from ionosphere_fdtd.materials import (
     LayeredEarthIonosphereMaterial,
     SphericalAnomaly,
 )
+from ionosphere_fdtd.mesh import (
+    build_geodesic_mesh,
+    build_geodesic_mesh_from_topology,
+)
 from ionosphere_fdtd.solver import GeodesicFDTD, SimulationConfig
 from ionosphere_fdtd.sources import GaussianCurrent, TangentialGaussianCurrent
 
@@ -27,6 +31,16 @@ def assert_same_state(first: GeodesicFDTD, second: GeodesicFDTD) -> None:
     assert second.steps == first.steps
     assert second.time_s == pytest.approx(first.time_s)
     np.testing.assert_array_equal(second.mesh.vertices, first.mesh.vertices)
+    np.testing.assert_array_equal(second.mesh.faces, first.mesh.faces)
+    assert second.mesh.topology_kind == first.mesh.topology_kind
+    assert second.mesh.subdivision == first.mesh.subdivision
+    assert second.mesh.refinement_spec == first.mesh.refinement_spec
+    if first.mesh.face_levels is None:
+        assert second.mesh.face_levels is None
+    else:
+        np.testing.assert_array_equal(
+            second.mesh.face_levels, first.mesh.face_levels
+        )
     for name in ("er", "et", "hr", "ht"):
         np.testing.assert_array_equal(
             second.to_numpy(getattr(second, name)),
@@ -86,6 +100,57 @@ def test_checkpoint_preserves_tangential_source_and_optimized_mesh(tmp_path) -> 
             converted.to_numpy(getattr(converted, name)),
             simulation.to_numpy(getattr(simulation, name)).astype(np.float64),
         )
+
+
+def test_checkpoint_v2_preserves_custom_topology_and_refinement_metadata(
+    tmp_path,
+) -> None:
+    uniform = build_geodesic_mesh(1)
+    faces = np.roll(uniform.faces, 7, axis=0)
+    face_levels = np.where(np.arange(len(faces)) % 2, 2, 1)
+    mesh = build_geodesic_mesh_from_topology(
+        uniform.vertices,
+        faces,
+        subdivision=1,
+        face_levels=face_levels,
+        refinement_spec={"balance": "2:1", "regions": [{"level": 2}]},
+    )
+    simulation = GeodesicFDTD(checkpoint_config(), mesh=mesh)
+    simulation.step(3)
+
+    path = simulation.save_checkpoint(tmp_path / "adaptive.npz")
+    with np.load(path, allow_pickle=False) as archive:
+        metadata = json.loads(str(archive["metadata"].item()))
+        assert metadata["version"] == 2
+        np.testing.assert_array_equal(archive["mesh_faces"], faces)
+        np.testing.assert_array_equal(archive["mesh_face_levels"], face_levels)
+
+    restored = GeodesicFDTD.load_checkpoint(path)
+    assert_same_state(simulation, restored)
+    simulation.step(2)
+    restored.step(2)
+    assert_same_state(simulation, restored)
+
+
+def test_checkpoint_loads_legacy_v1_uniform_mesh(tmp_path) -> None:
+    simulation = GeodesicFDTD(checkpoint_config())
+    path = simulation.save_checkpoint(tmp_path / "current.npz")
+    with np.load(path, allow_pickle=False) as archive:
+        arrays = {
+            name: np.array(archive[name], copy=True)
+            for name in archive.files
+            if name not in {"mesh_faces", "mesh_face_levels"}
+        }
+    metadata = json.loads(str(arrays["metadata"].item()))
+    metadata["version"] = 1
+    metadata.pop("mesh")
+    arrays["metadata"] = np.asarray(json.dumps(metadata))
+    legacy = tmp_path / "legacy-v1.npz"
+    np.savez_compressed(legacy, **arrays)
+
+    restored = GeodesicFDTD.load_checkpoint(legacy)
+
+    assert_same_state(simulation, restored)
 
 
 def test_checkpoint_rejects_unsupported_material(tmp_path) -> None:

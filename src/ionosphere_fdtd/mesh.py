@@ -276,6 +276,7 @@ def build_geodesic_mesh_from_topology(
     subdivision: int | None = None,
     face_levels: IntArray | None = None,
     refinement_spec: Mapping[str, Any] | None = None,
+    topology_kind: str | None = None,
     normalize_vertices: bool = True,
     require_well_centered: bool = True,
 ) -> GeodesicMesh:
@@ -361,12 +362,17 @@ def build_geodesic_mesh_from_topology(
                 "refinement_spec must contain JSON-compatible finite values"
             ) from error
 
-    topology_kind = "adaptive" if levels is not None else "custom"
+    inferred_kind = "adaptive" if levels is not None else "custom"
+    selected_kind = topology_kind or inferred_kind
+    if selected_kind not in {"uniform", "custom", "adaptive"}:
+        raise ValueError("topology_kind must be 'uniform', 'custom', or 'adaptive'")
+    if selected_kind == "uniform" and subdivision is None:
+        raise ValueError("uniform topology requires subdivision metadata")
     return _assemble_geodesic_mesh(
         assembled_vertices,
         assembled_faces,
         int(subdivision) if subdivision is not None else None,
-        topology_kind=topology_kind,
+        topology_kind=selected_kind,
         face_levels=levels,
         refinement_spec_json=specification_json,
         require_well_centered=require_well_centered,

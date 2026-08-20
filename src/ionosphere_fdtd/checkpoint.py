@@ -12,11 +12,15 @@ from typing import Any
 import numpy as np
 
 from .materials import EarthIonosphereMaterial, SphericalAnomaly
-from .mesh import build_geodesic_mesh_from_vertices
+from .mesh import (
+    build_geodesic_mesh_from_topology,
+    build_geodesic_mesh_from_vertices,
+)
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 
 CHECKPOINT_FORMAT = "ionosphere-fdtd-checkpoint"
-CHECKPOINT_VERSION = 1
+CHECKPOINT_VERSION = 2
+SUPPORTED_CHECKPOINT_VERSIONS = (1, CHECKPOINT_VERSION)
 
 
 class CheckpointError(ValueError):
@@ -38,6 +42,12 @@ def save_checkpoint(simulation: Any, path: str | Path) -> Path:
             json.dumps(metadata, default=_json_default, sort_keys=True)
         ),
         "mesh_vertices": np.asarray(simulation.mesh.vertices, dtype=np.float64),
+        "mesh_faces": np.asarray(simulation.mesh.faces, dtype=np.int64),
+        "mesh_face_levels": (
+            np.asarray(simulation.mesh.face_levels, dtype=np.int64)
+            if simulation.mesh.face_levels is not None
+            else np.empty(0, dtype=np.int64)
+        ),
         "er": simulation.to_numpy(simulation.er),
         "et": simulation.to_numpy(simulation.et),
         "hr": simulation.to_numpy(simulation.hr),
@@ -79,14 +89,28 @@ def load_checkpoint(
     source_path = Path(path)
     try:
         with np.load(source_path, allow_pickle=False) as archive:
+            if "metadata" not in archive.files:
+                raise CheckpointError("checkpoint is missing arrays: metadata")
+            metadata = _read_metadata(archive["metadata"])
             required = {"metadata", "mesh_vertices", "er", "et", "hr", "ht"}
+            if metadata["version"] >= 2:
+                required.update(("mesh_faces", "mesh_face_levels"))
             missing = required.difference(archive.files)
             if missing:
                 raise CheckpointError(
                     f"checkpoint is missing arrays: {', '.join(sorted(missing))}"
                 )
-            metadata = _read_metadata(archive["metadata"])
             vertices = np.array(archive["mesh_vertices"], dtype=np.float64, copy=True)
+            faces = (
+                np.array(archive["mesh_faces"], copy=True)
+                if metadata["version"] >= 2
+                else None
+            )
+            face_levels = (
+                np.array(archive["mesh_face_levels"], copy=True)
+                if metadata["version"] >= 2
+                else None
+            )
             fields = {
                 name: np.array(archive[name], copy=True)
                 for name in ("er", "et", "hr", "ht")
@@ -105,12 +129,40 @@ def load_checkpoint(
                 config_values["radial_altitudes_m"]
             )
         config = SimulationConfig(**config_values)
-        mesh = build_geodesic_mesh_from_vertices(
-            config.subdivision,
-            vertices,
-            orientation=config.mesh_orientation,
-            normalize_vertices=False,
-        )
+        if metadata["version"] == 1:
+            mesh = build_geodesic_mesh_from_vertices(
+                config.subdivision,
+                vertices,
+                orientation=config.mesh_orientation,
+                normalize_vertices=False,
+            )
+        else:
+            mesh_metadata = metadata["mesh"]
+            if not isinstance(mesh_metadata, dict):
+                raise CheckpointError("checkpoint mesh metadata must be an object")
+            has_face_levels = mesh_metadata["has_face_levels"]
+            if not isinstance(has_face_levels, bool):
+                raise CheckpointError("checkpoint has_face_levels must be boolean")
+            assert faces is not None
+            assert face_levels is not None
+            if has_face_levels:
+                restored_face_levels = face_levels
+            else:
+                if face_levels.shape != (0,):
+                    raise CheckpointError(
+                        "checkpoint has unexpected face-level values"
+                    )
+                restored_face_levels = None
+            mesh = build_geodesic_mesh_from_topology(
+                vertices,
+                faces,
+                subdivision=mesh_metadata["subdivision"],
+                face_levels=restored_face_levels,
+                refinement_spec=mesh_metadata["refinement_spec"],
+                topology_kind=mesh_metadata["topology_kind"],
+                normalize_vertices=False,
+                require_well_centered=False,
+            )
         material = _deserialize_material(metadata["material"])
         source = _deserialize_source(metadata["source"])
     except CheckpointError:
@@ -187,6 +239,12 @@ def _metadata(simulation: Any) -> dict[str, Any]:
         "format": CHECKPOINT_FORMAT,
         "version": CHECKPOINT_VERSION,
         "simulation_config": asdict(simulation.config),
+        "mesh": {
+            "topology_kind": simulation.mesh.topology_kind,
+            "subdivision": simulation.mesh.subdivision,
+            "has_face_levels": simulation.mesh.face_levels is not None,
+            "refinement_spec": simulation.mesh.refinement_spec,
+        },
         "material": _serialize_material(simulation.material),
         "source": _serialize_source(simulation.source),
         "state": {
@@ -212,12 +270,14 @@ def _read_metadata(value: np.ndarray) -> dict[str, Any]:
         raise CheckpointError("checkpoint metadata must be a JSON object")
     if metadata.get("format") != CHECKPOINT_FORMAT:
         raise CheckpointError("file is not an ionosphere-fdtd checkpoint")
-    if metadata.get("version") != CHECKPOINT_VERSION:
+    if metadata.get("version") not in SUPPORTED_CHECKPOINT_VERSIONS:
         raise CheckpointError(
             f"unsupported checkpoint version {metadata.get('version')!r}; "
-            f"expected {CHECKPOINT_VERSION}"
+            f"supported versions are {SUPPORTED_CHECKPOINT_VERSIONS}"
         )
     required = {"simulation_config", "material", "source", "state", "runtime"}
+    if metadata["version"] >= 2:
+        required.add("mesh")
     missing = required.difference(metadata)
     if missing:
         raise CheckpointError(
