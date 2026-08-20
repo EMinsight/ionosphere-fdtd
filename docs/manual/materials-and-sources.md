@@ -54,6 +54,62 @@ datasets to SI units and this canonical schema in a provenance-preserving
 preprocessing step rather than embedding study-specific file formats in the
 runtime solver.
 
+## Provenance and mesh-native material artifacts
+
+Use `MeshMaterialArtifact` after the source grids have been converted and a
+production mesh has been selected. It freezes the four material arrays at the
+actual staggered solver supports: radial conductivity/permittivity on vertices
+and radial nodes, and tangential conductivity/permittivity on edges and radial
+cell centers. A later run therefore performs no global-grid interpolation and
+does not need to retain the source volume in accelerator memory.
+
+Every artifact requires one or more `DatasetProvenance` records. Each record
+contains a stable dataset identifier, title and version, download URL,
+citation, license, timezone-qualified retrieval timestamp, exact source-file
+SHA-256, coordinate reference system, and per-variable source/canonical units
+with the applied conversion. The artifact separately records the interpolation
+policy and an ordered list of processing steps.
+
+```python
+from ionosphere_fdtd import (
+    DatasetProvenance,
+    MeshMaterialArtifact,
+    VariableProvenance,
+)
+
+source = DatasetProvenance.from_file(
+    "downloads/source.nc",
+    dataset_id="provider.product.release",
+    title="Provider product title",
+    version="release",
+    source_url="https://provider.example/product",
+    citation="Provider citation for this release.",
+    license="documented source-data license",
+    retrieved_at="2026-08-20T10:00:00Z",
+    coordinate_reference_system="WGS 84 latitude/longitude; altitude above MSL",
+    variables=(
+        VariableProvenance(
+            "conductivity", "mS/m", "S/m", "multiply by 1e-3"
+        ),
+    ),
+)
+artifact = MeshMaterialArtifact.from_simulation(
+    preprocessing_simulation,
+    provenance=(source,),
+    interpolation="periodic lon, linear lat/alt, no extrapolation",
+    processing_steps=("convert to SI", "sample declared solver supports"),
+)
+artifact.save("artifacts/materials/production-mesh.npz")
+```
+
+Loading with `MeshMaterialArtifact.load()` verifies every embedded array
+checksum. Solver construction also verifies the mesh vertex and face hashes,
+Earth radius, complete radial grid, radial/tangential support rules, anomaly
+policy, and entity counts. Regridding, changing support rules, or optimizing
+mesh coordinates requires generating a new artifact; silently reusing an
+almost-matching file is prohibited. `content_sha256` is the stable identity to
+record in run metadata.
+
 ## Spherical anomalies
 
 ```python

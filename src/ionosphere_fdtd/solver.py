@@ -391,6 +391,36 @@ class GeodesicFDTD:
     def _sample_material_properties(self) -> None:
         """Sample validated host-side material properties before choosing dt."""
 
+        mesh_sampler = getattr(self.material, "sample_mesh", None)
+        if mesh_sampler is not None:
+            values = mesh_sampler(
+                self.mesh,
+                self.altitudes_m,
+                self.config.earth_radius_m,
+                radial_material_support=self.config.radial_material_support,
+                tangential_material_support=(
+                    self.config.tangential_material_support
+                ),
+                horizontal_anomaly_mode=self.config.horizontal_anomaly_mode,
+            )
+            try:
+                sigma_er, epsilon_r_er, sigma_et, epsilon_r_et = values
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    "mesh material sampler must return four property arrays"
+                ) from error
+            self.sigma_er, self.epsilon_r_er = self._validated_material_sample(
+                (sigma_er, epsilon_r_er),
+                (self.mesh.n_vertices, len(self.altitudes_m)),
+                "mesh-native radial",
+            )
+            self.sigma_et, self.epsilon_r_et = self._validated_material_sample(
+                (sigma_et, epsilon_r_et),
+                (self.mesh.n_edges, len(self.radial_midpoint_altitudes_m)),
+                "mesh-native tangential",
+            )
+            return
+
         material_anomalies = getattr(self.material, "anomalies", None)
         if (
             self.config.horizontal_anomaly_mode == "conservative-nearest"

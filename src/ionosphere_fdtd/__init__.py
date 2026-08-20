@@ -14,6 +14,12 @@ from .backends import (
     create_backend,
 )
 from .checkpoint import CheckpointError
+from .data_artifacts import (
+    DataArtifactError,
+    DatasetProvenance,
+    MeshMaterialArtifact,
+    VariableProvenance,
+)
 from .distributed import (
     DistributedGeodesicFDTD,
     TorchDistributedHaloExchange,
@@ -60,11 +66,14 @@ __all__ = [
     "ArrayBackend",
     "BackendUnavailableError",
     "CheckpointError",
+    "DataArtifactError",
+    "DatasetProvenance",
     "DistributedGeodesicFDTD",
     "EarthIonosphereMaterial",
     "FieldHalo",
     "GriddedMaterial",
     "LayeredEarthIonosphereMaterial",
+    "MeshMaterialArtifact",
     "GaussianCurrent",
     "TangentialGaussianCurrent",
     "GeodesicFDTD",
@@ -82,6 +91,7 @@ __all__ = [
     "SpatialEarthIonosphereMaterial",
     "TorchBackend",
     "TorchDistributedHaloExchange",
+    "VariableProvenance",
     "animate_surface_field",
     "build_geodesic_mesh",
     "build_geodesic_mesh_from_topology",
