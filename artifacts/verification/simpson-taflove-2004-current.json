@@ -1,0 +1,129 @@
+{
+  "format_version": 1,
+  "source_revision": "5b02bbc5ac9bd3eca2e97ea35a94b56eab8f66b2",
+  "run_note": "The generated reports record 5b02bbc-dirty only because the parallel run outputs were untracked; source files were unchanged.",
+  "common_configuration": {
+    "material": "etopo5",
+    "etopo5_sha256": "471d3dd534144aa9a6551fe3e76320a06a45dade6fd8d45f7d6ad981d59f93c3",
+    "backend": "torch-cuda",
+    "dtype": "float64",
+    "mesh_orientation": "polar",
+    "mesh_optimization_steps": 0,
+    "radial_cells": 40,
+    "nominal_radial_spacing_m": 5000.0,
+    "time_step_s": 3e-06,
+    "steps": 35000,
+    "ionosphere_reference_height_m": 70000.0,
+    "ionosphere_scale_height_m": 3333.3333333333335,
+    "deep_lithosphere_resistivity_ohm_m": 500.0,
+    "radial_support": "dual-cell",
+    "tangential_interface": "fractional",
+    "tangential_support": "edge-diamond",
+    "dft_window": "adaptive",
+    "spectral_window": "rectangular",
+    "torch_compile": true
+  },
+  "cases": [
+    {
+      "subdivision": 6,
+      "surface_cells": 40962,
+      "device": "cuda:1",
+      "elapsed_s": 140.5,
+      "trace_sha256": "fa8f485a93d34a7569e3d4d6e505199c6ee9d1a516485ce121afeb8aa1e52bc9",
+      "figure_7_sha256": "6487d44fdc59f716c91211d2b611dad0c11a4d65c59efbe4981de4523c8b017e",
+      "figure_8_sha256": "99308f9d12b6dc71147d1ba990b59f51e55403d261336a9d531f0dfd28caac3b",
+      "attenuation": {
+        "path_ab_mae_db_per_mm": 3.35611,
+        "path_ab_maximum_db_per_mm": 5.56619,
+        "path_apbp_mae_db_per_mm": 0.70776,
+        "path_apbp_maximum_db_per_mm": 3.98347
+      },
+      "phase_velocity": {
+        "path_ab_mae_fraction_c": 0.0547695,
+        "path_apbp_mae_fraction_c": 0.0261454
+      },
+      "negative_peak_steps": {
+        "A": 7609,
+        "A_prime": 7795,
+        "B": 14844,
+        "B_prime": 14717
+      },
+      "negative_peak_uv_m": {
+        "A": -1.09757,
+        "A_prime": -0.801483,
+        "B": -0.0774592,
+        "B_prime": -0.392667
+      },
+      "east_west_relative_rms": {
+        "quarter": 0.368967,
+        "half": 3.88328
+      },
+      "dft_cutoff_steps": {
+        "A": 23340,
+        "A_prime": 23138,
+        "B": 24686,
+        "B_prime": 24853
+      }
+    },
+    {
+      "subdivision": 7,
+      "surface_cells": 163842,
+      "device": "cuda:0",
+      "elapsed_s": 629.1,
+      "trace_sha256": "3a94c4d1e366875938c8358413a56faa26c3dd8d5489de25ba099a25963d4e13",
+      "figure_7_sha256": "ac85cec119ceb8f586af860e5be4890fa005144329fe1be871a107d340700bd0",
+      "figure_8_sha256": "be25b311b167be402ffa97d9d8d8ddc3a7787bab0acf571c8892c0709aa0a565",
+      "attenuation": {
+        "path_ab_mae_db_per_mm": 2.27135,
+        "path_ab_maximum_db_per_mm": 3.9938,
+        "path_apbp_mae_db_per_mm": 0.870003,
+        "path_apbp_maximum_db_per_mm": 2.46866
+      },
+      "phase_velocity": {
+        "path_ab_mae_fraction_c": 0.0366824,
+        "path_apbp_mae_fraction_c": 0.0167767
+      },
+      "negative_peak_steps": {
+        "A": 7514,
+        "A_prime": 7703,
+        "B": 14687,
+        "B_prime": 14648
+      },
+      "negative_peak_uv_m": {
+        "A": -1.14033,
+        "A_prime": -0.571505,
+        "B": -0.154803,
+        "B_prime": -0.394412
+      },
+      "east_west_relative_rms": {
+        "quarter": 0.523808,
+        "half": 1.4461
+      },
+      "dft_cutoff_steps": {
+        "A": 23326,
+        "A_prime": 23065,
+        "B": 24540,
+        "B_prime": 24762
+      },
+      "source_distribution": {
+        "requested_altitude_m": 2500.0,
+        "staggered_centroid_altitude_m": 2500.0,
+        "lower_plane_altitude_m": 0.0,
+        "upper_plane_altitude_m": 5000.0,
+        "weight_sum": 1.0
+      }
+    }
+  ],
+  "s6_to_s7_trace_relative_l2": {
+    "A": 0.0968056394530568,
+    "A_prime": 0.41449801448433266,
+    "B": 0.5100937237468781,
+    "B_prime": 0.041261573711126945,
+    "combined": 0.21053857047487126
+  },
+  "conclusion": {
+    "qualitative_phenomena_and_trends": "supported with a partial east-west peak-ordering mismatch",
+    "independent_physical_model": "not yet converged",
+    "exact_curve_reproduction": "information-limited"
+  }
+}
