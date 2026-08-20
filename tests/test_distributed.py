@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -15,18 +16,25 @@ def _distributed_worker(
     rendezvous: str,
     output: str,
     backend: str = "gloo",
+    cuda_graph_chunk_size: int = 0,
 ) -> None:
     import torch
     import torch.distributed as distributed
 
     if backend == "nccl":
+        os.environ.setdefault("NCCL_GRAPH_MIXING_SUPPORT", "0")
         torch.cuda.set_device(rank)
+        device_id = torch.device("cuda", rank)
+    else:
+        device_id = None
     distributed.init_process_group(
         backend,
         init_method=f"file://{rendezvous}",
         rank=rank,
         world_size=2,
+        device_id=device_id,
     )
+    simulation = None
     try:
         mesh = build_geodesic_mesh(0)
         partition = partition_surface_mesh(mesh)
@@ -42,19 +50,24 @@ def _distributed_worker(
             device="cpu" if backend == "gloo" else f"cuda:{rank}",
             dtype="float64",
         )
-        radial_trace, tangential_trace = simulation.record_h_observations(
-            np.asarray(((0,),), dtype=np.int64),
-            np.asarray(((0,),), dtype=np.int64),
-            np.asarray(((1.0,),)),
-            np.asarray(((0,),), dtype=np.int64),
-            np.asarray(((0,),), dtype=np.int64),
-            np.asarray(((1.0,),)),
-            8,
-        )
-        fields = {
-            name: simulation.global_field(name)
-            for name in ("er", "et", "hr", "ht")
-        }
+        if cuda_graph_chunk_size:
+            simulation.enable_cuda_graph(cuda_graph_chunk_size)
+            simulation.step(8)
+            radial_trace = np.empty((0, 0))
+            tangential_trace = np.empty((0, 0))
+        else:
+            radial_trace, tangential_trace = simulation.record_h_observations(
+                np.asarray(((0,),), dtype=np.int64),
+                np.asarray(((0,),), dtype=np.int64),
+                np.asarray(((1.0,),)),
+                np.asarray(((0,),), dtype=np.int64),
+                np.asarray(((0,),), dtype=np.int64),
+                np.asarray(((1.0,),)),
+                8,
+            )
+        fields = {}
+        for name in ("er", "et", "hr", "ht"):
+            fields[name] = simulation.global_field(name)
         memory = torch.tensor(
             (simulation.field_memory_bytes,),
             dtype=torch.int64,
@@ -73,6 +86,8 @@ def _distributed_worker(
                 tangential_trace=tangential_trace,
             )
     finally:
+        if simulation is not None:
+            simulation.close()
         distributed.destroy_process_group()
 
 
@@ -154,6 +169,43 @@ def test_two_rank_nccl_matches_single_torch_solver(tmp_path: Path) -> None:
     torch.multiprocessing.start_processes(
         _distributed_worker,
         args=(str(rendezvous), str(output), "nccl"),
+        nprocs=2,
+        join=True,
+        start_method="spawn",
+    )
+    config = SimulationConfig(subdivision=0, radial_cells=4, courant_factor=0.2)
+    reference = GeodesicFDTD(
+        config,
+        source=GaussianCurrent(peak_current_a=1.0e6),
+        backend="torch",
+        device="cpu",
+        dtype="float64",
+    )
+    reference.step(8)
+
+    with np.load(output) as values:
+        for name in ("er", "et", "hr", "ht"):
+            np.testing.assert_allclose(
+                values[name],
+                reference.to_numpy(getattr(reference, name)),
+                rtol=2.0e-13,
+                atol=1.0e-24,
+            )
+
+
+def test_two_rank_nccl_cuda_graph_matches_single_solver(tmp_path: Path) -> None:
+    torch = pytest.importorskip("torch")
+    if (
+        not torch.cuda.is_available()
+        or torch.cuda.device_count() < 2
+        or not torch.distributed.is_nccl_available()
+    ):
+        pytest.skip("two CUDA devices with NCCL are required")
+    rendezvous = tmp_path / "nccl-graph-init"
+    output = tmp_path / "nccl-graph-fields.npz"
+    torch.multiprocessing.start_processes(
+        _distributed_worker,
+        args=(str(rendezvous), str(output), "nccl", 2),
         nprocs=2,
         join=True,
         start_method="spawn",

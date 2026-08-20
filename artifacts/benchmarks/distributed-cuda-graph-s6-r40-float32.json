@@ -1,0 +1,44 @@
+{
+  "system": {
+    "platform": "Linux-6.8.0-137-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "cuda_devices": [
+      "NVIDIA GeForce RTX 3060",
+      "NVIDIA GeForce RTX 2060 SUPER"
+    ]
+  },
+  "configuration": {
+    "subdivision": 6,
+    "radial_cells": 40,
+    "steps": 100,
+    "warmup_steps": 20,
+    "repeats": 3,
+    "dtype": "float32",
+    "cuda_graph_chunk_size": 1,
+    "capacities": [
+      1.0,
+      1.0
+    ]
+  },
+  "mesh": {
+    "vertices": 40962,
+    "edges": 122880,
+    "faces": 81920,
+    "cut_edges": 428,
+    "halo_values_per_radial_column": 2096,
+    "relative_face_load_imbalance": 0.0
+  },
+  "result": {
+    "median_seconds": 0.47479600098449737,
+    "steps_per_second": 210.61676971298905,
+    "slow_rank_seconds": [
+      0.47479600098449737,
+      0.47474358600447886,
+      0.4752391149813775
+    ],
+    "total_field_memory_bytes": 59978448,
+    "maximum_rank_field_memory_bytes": 29989552
+  }
+}

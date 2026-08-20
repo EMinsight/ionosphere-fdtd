@@ -1,5 +1,8 @@
+import pytest
+
 from benchmarks.backend_matrix import run_backend_matrix
 from benchmarks.backend_scaling import benchmark_cases
+from benchmarks.distributed_scaling import summarize_distributed_timings
 
 
 def test_backend_matrix_always_reports_numpy_cpu() -> None:
@@ -47,3 +50,12 @@ def test_scaling_cases_use_only_eager_mode_for_numpy() -> None:
         ("torch", "cuda"),
         ("torch", "mps"),
     }
+
+
+def test_distributed_timing_uses_median_slow_rank_duration() -> None:
+    assert summarize_distributed_timings([4.0, 2.0, 3.0], 12) == {
+        "median_seconds": 3.0,
+        "steps_per_second": 4.0,
+    }
+    with pytest.raises(ValueError, match="positive"):
+        summarize_distributed_timings([], 12)

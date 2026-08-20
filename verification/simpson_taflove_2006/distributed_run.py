@@ -53,6 +53,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--etopo5-path", type=Path)
     parser.add_argument("--dtype", choices=("float32", "float64"), default="float64")
     parser.add_argument("--capacities", type=float, nargs=2, default=(1.0, 1.0))
+    parser.add_argument("--cuda-graph-chunk-size", type=int, default=1)
     parser.add_argument(
         "--stop-after-center", type=float, default=PAPER_FIGURE_7_DURATION_S
     )
@@ -68,6 +69,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--target-subdivision must exceed --base-subdivision")
     if args.stop_after_center <= 0.0:
         raise SystemExit("--stop-after-center must be positive")
+    if args.cuda_graph_chunk_size < 0:
+        raise SystemExit("--cuda-graph-chunk-size must be nonnegative")
 
     device = initialize_torchrun_process_group("nccl")
     import torch.distributed as distributed
@@ -117,27 +120,36 @@ def main(argv: list[str] | None = None) -> int:
                 device=str(device),
                 dtype=args.dtype,
             )
-            simulation.radar_receiver_altitude_m = setup.radar_receiver_altitude_m
-            simulation.radar_vertical_reference = setup.radar_vertical_reference
-            steps = int(
-                np.ceil(
-                    (PAPER_SOURCE_CENTER_S + args.stop_after_center)
-                    / simulation.time_step_s
+            try:
+                simulation.radar_receiver_altitude_m = (
+                    setup.radar_receiver_altitude_m
                 )
-            )
-            if rank == 0:
-                print(
-                    f"case={case} target=s{args.target_subdivision} "
-                    f"faces={mesh.n_faces:,} dt={simulation.time_step_s:.9e}s "
-                    f"steps={steps:,}",
-                    flush=True,
+                simulation.radar_vertical_reference = (
+                    setup.radar_vertical_reference
                 )
-            traces[case] = record_radar_traces(
-                simulation,
-                steps=steps,
-                case=case,
-                synchronize_every=args.synchronize_every,
-            )
+                if args.cuda_graph_chunk_size:
+                    simulation.enable_cuda_graph(args.cuda_graph_chunk_size)
+                steps = int(
+                    np.ceil(
+                        (PAPER_SOURCE_CENTER_S + args.stop_after_center)
+                        / simulation.time_step_s
+                    )
+                )
+                if rank == 0:
+                    print(
+                        f"case={case} target=s{args.target_subdivision} "
+                        f"faces={mesh.n_faces:,} "
+                        f"dt={simulation.time_step_s:.9e}s steps={steps:,}",
+                        flush=True,
+                    )
+                traces[case] = record_radar_traces(
+                    simulation,
+                    steps=steps,
+                    case=case,
+                    synchronize_every=args.synchronize_every,
+                )
+            finally:
+                simulation.close()
             del simulation, setup
             gc.collect()
         if rank == 0:

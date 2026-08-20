@@ -51,6 +51,11 @@ The production path uses NCCL. Rank-local CUDA devices come from
 the target surface workload ratio when the two GPUs have different measured
 throughput or usable memory. Reference and anomaly cases run sequentially on
 the same mesh so their signatures and anomaly subtraction remain compatible.
+The radar runner captures one complete field step, including its NCCL halo
+exchanges, in a CUDA Graph by default. Use `--cuda-graph-chunk-size 0` to
+disable capture. Its per-step observations require the default chunk size of 1.
+See the [two-GPU benchmark](../benchmarks/distributed-scaling.md) before choosing
+distributed execution for a mesh that fits on one GPU.
 
 ## Compilation
 

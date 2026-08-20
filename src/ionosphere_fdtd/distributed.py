@@ -57,6 +57,8 @@ class TorchDistributedHaloExchange:
                 (send_halo.ht_edges, receive_halo.ht_edges, ht_layout),
             )
         )
+        self._buffers: dict[str, tuple[Any, Any, tuple[int, ...]]] = {}
+        self._active: dict[str, tuple[list[Any], tuple[Any, Any]]] = {}
 
     def _phase_plan(
         self,
@@ -80,31 +82,79 @@ class TorchDistributedHaloExchange:
             )
         return tuple(result)
 
+    def prepare(self, er: Any, et: Any, hr: Any, ht: Any) -> None:
+        """Allocate stable phase buffers before stepping or graph capture."""
+
+        self._prepare_phase("electric", (er, et), self._electric)
+        self._prepare_phase("magnetic", (hr, ht), self._magnetic)
+
+    def begin_electric(self, er: Any, et: Any) -> None:
+        self._begin("electric", (er, et), self._electric, tag=100)
+
+    def finish_electric(self, er: Any, et: Any) -> None:
+        self._finish("electric", (er, et), self._electric)
+
+    def begin_magnetic(self, hr: Any, ht: Any) -> None:
+        self._begin("magnetic", (hr, ht), self._magnetic, tag=200)
+
+    def finish_magnetic(self, hr: Any, ht: Any) -> None:
+        self._finish("magnetic", (hr, ht), self._magnetic)
+
     def exchange_electric(self, er: Any, et: Any) -> None:
-        self._exchange((er, et), self._electric, tag=100)
+        self.begin_electric(er, et)
+        self.finish_electric(er, et)
 
     def exchange_magnetic(self, hr: Any, ht: Any) -> None:
-        self._exchange((hr, ht), self._magnetic, tag=200)
+        self.begin_magnetic(hr, ht)
+        self.finish_magnetic(hr, ht)
 
-    def _exchange(
+    def _prepare_phase(
         self,
+        name: str,
+        fields: tuple[Any, Any],
+        plan: tuple[tuple[Any, Any], ...],
+    ) -> None:
+        send_size = sum(
+            int(indices.numel() * field.shape[1])
+            for field, (indices, _) in zip(fields, plan, strict=True)
+        )
+        receive_sizes = [
+            int(indices.numel() * field.shape[1])
+            for field, (_, indices) in zip(fields, plan, strict=True)
+        ]
+        send_buffer = self.torch.empty(
+            send_size, dtype=fields[0].dtype, device=self.device
+        )
+        receive_buffer = self.torch.empty(
+            sum(receive_sizes), dtype=fields[0].dtype, device=self.device
+        )
+        self._buffers[name] = (send_buffer, receive_buffer, tuple(receive_sizes))
+
+    def _begin(
+        self,
+        name: str,
         fields: tuple[Any, Any],
         plan: tuple[tuple[Any, Any], ...],
         *,
         tag: int,
     ) -> None:
-        send_parts = [
-            field.index_select(0, indices).contiguous().view(-1)
-            for field, (indices, _) in zip(fields, plan, strict=True)
-        ]
-        send_buffer = self.torch.cat(send_parts)
-        receive_sizes = [
-            int(indices.numel() * field.shape[1])
-            for field, (_, indices) in zip(fields, plan, strict=True)
-        ]
-        receive_buffer = self.torch.empty(
-            sum(receive_sizes), dtype=fields[0].dtype, device=self.device
-        )
+        if name in self._active:
+            raise RuntimeError(f"{name} halo exchange is already active")
+        send_buffer, receive_buffer, _ = self._buffers[name]
+        offset = 0
+        for field, (send_indices, _) in zip(fields, plan, strict=True):
+            size = int(send_indices.numel() * field.shape[1])
+            rows = int(send_indices.numel())
+            if rows:
+                self.torch.index_select(
+                    field,
+                    0,
+                    send_indices,
+                    out=send_buffer[offset : offset + size].view(
+                        rows, field.shape[1]
+                    ),
+                )
+            offset += size
         operations = [
             self.distributed.P2POp(
                 self.distributed.irecv,
@@ -119,8 +169,27 @@ class TorchDistributedHaloExchange:
                 tag=tag,
             ),
         ]
-        for request in self.distributed.batch_isend_irecv(operations):
+        requests = self.distributed.batch_isend_irecv(operations)
+        self._active[name] = (requests, fields)
+
+    def _finish(
+        self,
+        name: str,
+        fields: tuple[Any, Any],
+        plan: tuple[tuple[Any, Any], ...],
+    ) -> None:
+        active = self._active.pop(name, None)
+        if active is None:
+            raise RuntimeError(f"{name} halo exchange is not active")
+        requests, active_fields = active
+        if any(
+            active is not current
+            for active, current in zip(active_fields, fields, strict=True)
+        ):
+            raise RuntimeError("halo fields changed during an active exchange")
+        for request in requests:
             request.wait()
+        _, receive_buffer, receive_sizes = self._buffers[name]
         offset = 0
         for field, (_, receive_indices), size in zip(
             fields, plan, receive_sizes, strict=True
@@ -258,6 +327,11 @@ class DistributedGeodesicFDTD:
             face_layout=self._face_layout,
             ht_layout=self._ht_layout,
         )
+        self.halo_exchange.prepare(self.er, self.et, self.hr, self.ht)
+        self._cuda_graph = None
+        self._cuda_graph_currents = None
+        self._cuda_graph_chunk_size = 0
+        self._host_process_group = None
 
     def _zeros(self, shape: tuple[int, int]) -> Any:
         return self.torch.zeros(shape, dtype=self.dtype, device=self.device)
@@ -353,6 +427,38 @@ class DistributedGeodesicFDTD:
             incidence_signs
             * self.mesh.dual_edge_angles[incidence_global_edges]
         )
+        edge_boundary = np.any(
+            self.partition.vertex_owner[self.mesh.edges[owned_edges]] != self.rank,
+            axis=1,
+        )
+        face_boundary = np.any(
+            self.partition.edge_owner[self.mesh.face_edges[owned_faces]] != self.rank,
+            axis=1,
+        )
+        vertex_boundary = np.asarray(
+            [
+                any(
+                    self.partition.edge_owner[global_edge] != self.rank
+                    for _, global_edge, _ in values
+                )
+                for values in incident
+            ]
+        )
+        et_boundary = (
+            self.partition.face_owner[self.mesh.edge_left_faces[owned_edges]]
+            != self.rank
+        ) | (
+            self.partition.face_owner[self.mesh.edge_right_faces[owned_edges]]
+            != self.rank
+        )
+        self._interior_h_edges = self._indices(np.flatnonzero(~edge_boundary))
+        self._boundary_h_edges = self._indices(np.flatnonzero(edge_boundary))
+        self._interior_h_faces = self._indices(np.flatnonzero(~face_boundary))
+        self._boundary_h_faces = self._indices(np.flatnonzero(face_boundary))
+        self._interior_e_vertices = self._indices(np.flatnonzero(~vertex_boundary))
+        self._boundary_e_vertices = self._indices(np.flatnonzero(vertex_boundary))
+        self._interior_e_edges = self._indices(np.flatnonzero(~et_boundary))
+        self._boundary_e_edges = self._indices(np.flatnonzero(et_boundary))
 
     def _prepare_local_coefficients(self, template: GeodesicFDTD) -> None:
         owned_vertices = self.rank_partition.owned_vertices
@@ -401,34 +507,74 @@ class DistributedGeodesicFDTD:
             raise ValueError("step count must be an integer")
         if count < 0:
             raise ValueError("step count must be non-negative")
-        for _ in range(int(count)):
-            current = (
-                0.0
-                if self.source is None
-                else self.source.current_a(
-                    (self.steps + 0.5) * self.time_step_s, self.time_step_s
-                )
-            )
-            self.halo_exchange.exchange_electric(self.er, self.et)
-            self._update_magnetic_fields()
-            self.halo_exchange.exchange_magnetic(self.hr, self.ht)
-            self._update_electric_fields(current)
+        remaining = int(count)
+        if self._cuda_graph is not None:
+            while remaining >= self._cuda_graph_chunk_size:
+                currents = [
+                    self._current_at_offset(offset)
+                    for offset in range(self._cuda_graph_chunk_size)
+                ]
+                self._cuda_graph_currents.copy_(self._tensor(currents))
+                self._cuda_graph.replay()
+                self.steps += self._cuda_graph_chunk_size
+                remaining -= self._cuda_graph_chunk_size
+        for _ in range(remaining):
+            self._advance_fields(self._current_at_offset(0))
             self.steps += 1
-            self.time_s = self.steps * self.time_step_s
+        self.time_s = self.steps * self.time_step_s
+
+    def _current_at_offset(self, offset: int) -> float:
+        return (
+            0.0
+            if self.source is None
+            else self.source.current_a(
+                (self.steps + offset + 0.5) * self.time_step_s,
+                self.time_step_s,
+            )
+        )
+
+    def _advance_fields(self, current_a: Any) -> None:
+        self.halo_exchange.begin_electric(self.er, self.et)
+        self._update_magnetic_subsets(
+            self._interior_h_edges, self._interior_h_faces
+        )
+        self.halo_exchange.finish_electric(self.er, self.et)
+        self._update_magnetic_subsets(
+            self._boundary_h_edges, self._boundary_h_faces
+        )
+        self.halo_exchange.begin_magnetic(self.hr, self.ht)
+        self._update_electric_subsets(
+            self._interior_e_vertices, self._interior_e_edges
+        )
+        self.halo_exchange.finish_magnetic(self.hr, self.ht)
+        self._update_electric_subsets(
+            self._boundary_e_vertices, self._boundary_e_edges
+        )
+        self._apply_sources(current_a)
 
     def _update_magnetic_fields(self) -> None:
-        owned_edges = self._ht_layout.owned_count
-        owned_faces = self._face_layout.owned_count
-        surface_gradient_er = (
-            self.er[self._edge_endpoints[:, 1]]
-            - self.er[self._edge_endpoints[:, 0]]
+        self._update_magnetic_subsets(
+            self._indices(np.arange(self._ht_layout.owned_count)),
+            self._indices(np.arange(self._face_layout.owned_count)),
         )
-        surface_gradient_er *= self._inverse_primal_edge_angles
+
+    def _update_magnetic_subsets(self, edge_rows: Any, face_rows: Any) -> None:
+        if edge_rows.numel():
+            self._update_magnetic_edges(edge_rows)
+        if face_rows.numel():
+            self._update_magnetic_faces(face_rows)
+
+    def _update_magnetic_edges(self, rows: Any) -> None:
+        surface_gradient_er = (
+            self.er[self._edge_endpoints[rows, 1]]
+            - self.er[self._edge_endpoints[rows, 0]]
+        )
+        surface_gradient_er *= self._inverse_primal_edge_angles[rows]
         surface_gradient_er *= self._inverse_radii
-        values = self.et[:owned_edges]
+        values = self.et[rows]
         if self.config.geometry_mode == "full-spherical":
             values = values * self._radial_midpoints[None, :]
-        radial_derivative = self.torch.empty_like(self.ht[:owned_edges])
+        radial_derivative = self.torch.empty_like(self.ht[rows])
         radial_derivative[:, 0] = 2.0 * values[:, 0] / self._radial_steps[0]
         radial_derivative[:, -1] = -2.0 * values[:, -1] / self._radial_steps[-1]
         if radial_derivative.shape[1] > 2:
@@ -437,31 +583,68 @@ class DistributedGeodesicFDTD:
             ) / self._radial_center_distances
         if self.config.geometry_mode == "full-spherical":
             radial_derivative *= self._inverse_radii
-        self.ht[:owned_edges] += (
-            surface_gradient_er - radial_derivative
-        ) * (self.time_step_s / MU_0)
+        self.ht[rows] += (surface_gradient_er - radial_derivative) * (
+            self.time_step_s / MU_0
+        )
 
+    def _update_magnetic_faces(self, rows: Any) -> None:
         edge_values = (
-            self.et[self._face_edges] * self._face_primal_edge_angles[:, :, None]
+            self.et[self._face_edges[rows]]
+            * self._face_primal_edge_angles[rows, :, None]
         )
         circulation = self.torch.sum(
-            edge_values * self._face_edge_signs[:, :, None], dim=1
+            edge_values * self._face_edge_signs[rows, :, None], dim=1
         )
-        circulation *= self._inverse_face_solid_angles
+        circulation *= self._inverse_face_solid_angles[rows]
         circulation *= self._inverse_radial_midpoints
-        self.hr[:owned_faces] -= circulation * (self.time_step_s / MU_0)
+        self.hr[rows] -= circulation * (self.time_step_s / MU_0)
 
     def _update_electric_fields(self, current_a: float) -> None:
-        owned_vertices = self._vertex_layout.owned_count
-        owned_edges = self._et_layout.owned_count
+        self._update_electric_subsets(
+            self._indices(np.arange(self._vertex_layout.owned_count)),
+            self._indices(np.arange(self._et_layout.owned_count)),
+        )
+        self._apply_sources(current_a)
+
+    def _update_electric_subsets(self, vertex_rows: Any, edge_rows: Any) -> None:
+        if vertex_rows.numel():
+            self._update_electric_vertices(vertex_rows)
+        if edge_rows.numel():
+            self._update_electric_edges(edge_rows)
+
+    def _update_electric_vertices(self, rows: Any) -> None:
         circulation = self.torch.sum(
-            self.ht[self._vertex_edges] * self._vertex_edge_metric[:, :, None],
+            self.ht[self._vertex_edges[rows]]
+            * self._vertex_edge_metric[rows, :, None],
             dim=1,
         )
-        circulation *= self._inverse_dual_cell_solid_angles
+        circulation *= self._inverse_dual_cell_solid_angles[rows]
         circulation *= self._inverse_radii
-        self.er[:owned_vertices] *= self._ca_er
-        self.er[:owned_vertices] += circulation * self._cb_er
+        ca = self._ca_er if self._ca_er.shape[0] == 1 else self._ca_er[rows]
+        cb = self._cb_er if self._cb_er.shape[0] == 1 else self._cb_er[rows]
+        self.er[rows] *= ca
+        self.er[rows] += circulation * cb
+
+    def _update_electric_edges(self, rows: Any) -> None:
+        gradient = (
+            self.hr[self._edge_left_faces[rows]]
+            - self.hr[self._edge_right_faces[rows]]
+        )
+        gradient *= self._inverse_dual_edge_angles[rows]
+        gradient *= self._inverse_radial_midpoints
+        values = self.ht[rows]
+        if self.config.geometry_mode == "full-spherical":
+            values = values * self._radii[None, :]
+        radial_derivative = self.torch.diff(values, dim=1) / self._radial_steps[None, :]
+        if self.config.geometry_mode == "full-spherical":
+            radial_derivative *= self._inverse_radial_midpoints
+        gradient -= radial_derivative
+        ca = self._ca_et if self._ca_et.shape[0] == 1 else self._ca_et[rows]
+        cb = self._cb_et if self._cb_et.shape[0] == 1 else self._cb_et[rows]
+        self.et[rows] *= ca
+        self.et[rows] += gradient * cb
+
+    def _apply_sources(self, current_a: Any) -> None:
         if self._source_distribution is not None:
             vertices, layers, weights, areas = self._source_distribution
             density = (
@@ -476,21 +659,6 @@ class DistributedGeodesicFDTD:
             self.er[vertices, layers] -= (
                 self._cb_er[coefficient_rows, layers] * density
             )
-
-        gradient = (
-            self.hr[self._edge_left_faces] - self.hr[self._edge_right_faces]
-        )
-        gradient *= self._inverse_dual_edge_angles
-        gradient *= self._inverse_radial_midpoints
-        values = self.ht[:owned_edges]
-        if self.config.geometry_mode == "full-spherical":
-            values = values * self._radii[None, :]
-        radial_derivative = self.torch.diff(values, dim=1) / self._radial_steps[None, :]
-        if self.config.geometry_mode == "full-spherical":
-            radial_derivative *= self._inverse_radial_midpoints
-        gradient -= radial_derivative
-        self.et[:owned_edges] *= self._ca_et
-        self.et[:owned_edges] += gradient * self._cb_et
         if self._tangential_source_distribution is not None:
             edges, layers, weights, dual_angles = self._tangential_source_distribution
             density = (
@@ -502,6 +670,43 @@ class DistributedGeodesicFDTD:
             )
             coefficient_rows = 0 if self._cb_et.shape[0] == 1 else edges
             self.et[edges, layers] -= self._cb_et[coefficient_rows, layers] * density
+
+    def enable_cuda_graph(self, chunk_size: int = 8) -> None:
+        """Capture overlapped NCCL P2P and field updates in a CUDA graph."""
+
+        if self.device.type != "cuda" or self.distributed.get_backend() != "nccl":
+            raise RuntimeError("CUDA graph capture requires the NCCL CUDA path")
+        if self.steps != 0:
+            raise RuntimeError("enable CUDA graph capture before advancing fields")
+        if (
+            isinstance(chunk_size, bool)
+            or not isinstance(chunk_size, int)
+            or chunk_size < 1
+        ):
+            raise ValueError("CUDA graph chunk size must be a positive integer")
+        self._cuda_graph_chunk_size = chunk_size
+        self._cuda_graph_currents = self.torch.zeros(
+            chunk_size, dtype=self.dtype, device=self.device
+        )
+        self._host_process_group = self.distributed.new_group(
+            ranks=tuple(range(self.partition.n_parts)), backend="gloo"
+        )
+        self.distributed.barrier(device_ids=[self.device.index])
+        warmup_stream = self.torch.cuda.Stream(device=self.device)
+        warmup_stream.wait_stream(self.torch.cuda.current_stream(self.device))
+        with self.torch.cuda.stream(warmup_stream):
+            for offset in range(chunk_size):
+                self._advance_fields(self._cuda_graph_currents[offset])
+        self.torch.cuda.current_stream(self.device).wait_stream(warmup_stream)
+        self.torch.cuda.synchronize(self.device)
+        for field in (self.er, self.et, self.hr, self.ht):
+            field.zero_()
+        self.distributed.barrier(device_ids=[self.device.index])
+        graph = self.torch.cuda.CUDAGraph()
+        with self.torch.cuda.graph(graph):
+            for offset in range(chunk_size):
+                self._advance_fields(self._cuda_graph_currents[offset])
+        self._cuda_graph = graph
 
     def global_field(self, name: str) -> np.ndarray:
         """Collect one full field on every rank for diagnostics and tests."""
@@ -520,8 +725,12 @@ class DistributedGeodesicFDTD:
         )
         global_owned = layout.global_indices[: layout.owned_count]
         result[self._indices(global_owned)] = field[: layout.owned_count]
-        self.distributed.all_reduce(result)
-        return result.detach().cpu().numpy()
+        if self._host_process_group is None:
+            self.distributed.all_reduce(result)
+            return result.detach().cpu().numpy()
+        host_result = result.detach().cpu()
+        self.distributed.all_reduce(host_result, group=self._host_process_group)
+        return host_result.numpy()
 
     def record_h_observations(
         self,
@@ -548,7 +757,10 @@ class DistributedGeodesicFDTD:
             raise ValueError("distributed face observations must have matching shapes")
         if edges.ndim != 2 or edge_layers.shape != edges.shape:
             raise ValueError("distributed edge observations must have matching shapes")
-        if radial_weights.shape != faces.shape or tangential_weights.shape != edges.shape:
+        if (
+            radial_weights.shape != faces.shape
+            or tangential_weights.shape != edges.shape
+        ):
             raise ValueError("distributed observation weights must match their indices")
         if steps < 0:
             raise ValueError("observation step count must be non-negative")
@@ -586,18 +798,45 @@ class DistributedGeodesicFDTD:
         for row in range(1, steps + 1):
             self.step()
             sample(row)
-        self.distributed.all_reduce(radial_traces)
-        self.distributed.all_reduce(tangential_traces)
+        if self._host_process_group is None:
+            self.distributed.all_reduce(radial_traces)
+            self.distributed.all_reduce(tangential_traces)
+            radial_result = radial_traces.detach().cpu()
+            tangential_result = tangential_traces.detach().cpu()
+        else:
+            radial_result = radial_traces.detach().cpu()
+            tangential_result = tangential_traces.detach().cpu()
+            self.distributed.all_reduce(
+                radial_result, group=self._host_process_group
+            )
+            self.distributed.all_reduce(
+                tangential_result, group=self._host_process_group
+            )
         return (
-            radial_traces.detach().cpu().numpy(),
-            tangential_traces.detach().cpu().numpy(),
+            radial_result.numpy(),
+            tangential_result.numpy(),
         )
 
     @property
     def field_memory_bytes(self) -> int:
         return int(
-            sum(field.numel() * field.element_size() for field in (self.er, self.et, self.hr, self.ht))
+            sum(
+                field.numel() * field.element_size()
+                for field in (self.er, self.et, self.hr, self.ht)
+            )
         )
+
+    def close(self) -> None:
+        """Release captured graphs and auxiliary groups before group teardown."""
+
+        if self._cuda_graph is not None:
+            self.torch.cuda.synchronize(self.device)
+            self._cuda_graph.reset()
+            self._cuda_graph = None
+            self._cuda_graph_currents = None
+        if self._host_process_group is not None:
+            self.distributed.destroy_process_group(self._host_process_group)
+            self._host_process_group = None
 
 
 def _layout(global_count: int, owned: np.ndarray, ghost: np.ndarray) -> _EntityLayout:
@@ -623,6 +862,7 @@ def initialize_torchrun_process_group(backend: str = "nccl") -> Any:
     if backend == "nccl":
         if not torch.cuda.is_available():
             raise RuntimeError("NCCL distributed execution requires CUDA")
+        os.environ.setdefault("NCCL_GRAPH_MIXING_SUPPORT", "0")
         torch.cuda.set_device(local_rank)
         device = torch.device("cuda", local_rank)
     else:
