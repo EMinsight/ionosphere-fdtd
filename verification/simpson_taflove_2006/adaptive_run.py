@@ -19,6 +19,15 @@ from .model import (
 )
 
 
+def _save_pair(traces_by_case: dict, output_dir: Path, target: int) -> None:
+    if traces_by_case["reference"].run_signature != traces_by_case["anomaly"].run_signature:
+        raise ValueError("adaptive reference/anomaly signatures do not match")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for case, traces in traces_by_case.items():
+        output = save_radar_traces(traces, output_dir / f"s{target}-{case}.npz")
+        print(f"output={output}", flush=True)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -58,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         core_radius_deg=args.core_radius_deg,
         transition_width_deg=args.transition_width_deg,
     )
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+    traces_by_case = {}
     for case in ("reference", "anomaly"):
         simulation = create_radar_simulation(
             include_oil=case == "anomaly",
@@ -94,15 +103,14 @@ def main(argv: list[str] | None = None) -> int:
             synchronize_every=args.synchronize_every,
             sample_every=args.sample_every,
         )
-        output = save_radar_traces(
-            traces, args.output_dir / f"s{args.target_subdivision}-{case}.npz"
-        )
         print(
-            f"elapsed_s={time.perf_counter() - started:.3f} output={output}",
+            f"elapsed_s={time.perf_counter() - started:.3f}",
             flush=True,
         )
-        del simulation, traces
+        traces_by_case[case] = traces
+        del simulation
         gc.collect()
+    _save_pair(traces_by_case, args.output_dir, args.target_subdivision)
     return 0
 
 

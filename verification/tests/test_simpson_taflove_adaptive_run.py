@@ -1,6 +1,9 @@
 import pytest
 
-from verification.simpson_taflove_2006.adaptive_run import _parser, main
+import numpy as np
+
+from verification.simpson_taflove_2006.adaptive_run import _parser, _save_pair, main
+from verification.simpson_taflove_2006.model import RadarTraces
 
 
 def test_adaptive_runner_defaults_to_decimated_float32_pair() -> None:
@@ -49,3 +52,20 @@ def test_adaptive_runner_rejects_invalid_chunks_before_building_mesh() -> None:
                 "0",
             ]
         )
+
+
+def test_adaptive_runner_rejects_mismatched_pair_before_saving(tmp_path) -> None:
+    def traces(case: str, signature: str) -> RadarTraces:
+        values = np.zeros(1)
+        return RadarTraces(values, values, values, values, 0.0, case, signature)
+
+    with pytest.raises(ValueError, match="signatures do not match"):
+        _save_pair(
+            {
+                "reference": traces("reference", "clean"),
+                "anomaly": traces("anomaly", "dirty"),
+            },
+            tmp_path,
+            9,
+        )
+    assert not list(tmp_path.iterdir())
