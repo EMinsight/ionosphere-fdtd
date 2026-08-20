@@ -26,6 +26,14 @@ from .mesh import (
     build_geodesic_mesh,
     build_geodesic_mesh_from_topology,
 )
+from .partition import (
+    FieldHalo,
+    PartitionValidation,
+    RankSurfacePartition,
+    SurfacePartition,
+    partition_surface_mesh,
+    validate_surface_partition,
+)
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .visualization import (
@@ -48,6 +56,7 @@ __all__ = [
     "BackendUnavailableError",
     "CheckpointError",
     "EarthIonosphereMaterial",
+    "FieldHalo",
     "GriddedMaterial",
     "LayeredEarthIonosphereMaterial",
     "GaussianCurrent",
@@ -55,12 +64,15 @@ __all__ = [
     "GeodesicFDTD",
     "GeodesicMesh",
     "NumPyBackend",
+    "PartitionValidation",
     "RadialSection",
     "Receiver",
     "ReceiverTraces",
+    "RankSurfacePartition",
     "SimulationConfig",
     "SphericalRefinementRegion",
     "SphericalAnomaly",
+    "SurfacePartition",
     "SpatialEarthIonosphereMaterial",
     "TorchBackend",
     "animate_surface_field",
@@ -69,6 +81,7 @@ __all__ = [
     "build_adaptive_geodesic_mesh",
     "create_backend",
     "plot_mesh_3d",
+    "partition_surface_mesh",
     "plot_radial_section",
     "plot_receiver_traces",
     "plot_surface_field",
@@ -76,4 +89,5 @@ __all__ = [
     "run_live_surface",
     "sample_radial_section",
     "validate_adaptive_mesh",
+    "validate_surface_partition",
 ]
