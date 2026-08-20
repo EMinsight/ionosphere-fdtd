@@ -19,6 +19,13 @@ The principal option groups are:
 | Source | `--source-current`, `--source-length`, `--source-frequency`, `--source-center`, `--source-width`, `--source-latitude`, `--source-longitude` |
 | Anomaly | `--oil-anomaly`, `--anomaly-radius-km` |
 
+This installed runner intentionally covers the compact data-free model. Use the
+Python API for conforming adaptive surface meshes, balanced radial refinement,
+gridded or mesh-native materials, surface impedance, magnetized plasma, and
+generic two-rank construction. Paper-specific adaptive and distributed runners
+are source-only modules under `verification/` and are not installed console
+scripts.
+
 ## TOML configuration files
 
 Both command-line applications accept `--config PATH`. Configuration values

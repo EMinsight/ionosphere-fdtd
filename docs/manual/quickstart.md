@@ -37,7 +37,7 @@ for the table layout and validation rules.
 # Small smoke run
 uv run ionosphere --subdivision 1 --radial-cells 16 --steps 100
 
-# The 642-cell surface grid used in many paper illustrations
+# A 642-cell demonstration grid
 uv run ionosphere --subdivision 3 --radial-cells 40 --steps 1000
 ```
 
@@ -57,6 +57,12 @@ where $L$ is the subdivision level.
 | 3 | 642 | 962 km |
 | 4 | 2,562 | 482 km |
 | 5 | 10,242 | 241 km |
+| 6 | 40,962 | 121 km |
+| 7 | 163,842 | 60 km |
+
+The Simpson–Taflove paper-target grid is subdivision 7. Lower levels are useful
+for smoke tests and controlled convergence sweeps, but they are not substitutes
+for the paper's stated surface-cell count.
 
 ## Run with PyTorch
 

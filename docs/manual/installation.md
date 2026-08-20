@@ -28,7 +28,7 @@ uv run python -c "import ionosphere_fdtd; print(ionosphere_fdtd.__name__)"
 
 | Extra | Packages and use |
 |---|---|
-| `test` | pytest test suite |
+| `test` | pytest runner and runtime unit-test dependencies |
 | `pytorch` | PyTorch CPU, CUDA, and MPS backends |
 | `visualization` | Matplotlib, Cartopy, PyVista, Pillow, and video output |
 | `verification` | SciPy analytic roots and verification workflows |
@@ -52,8 +52,11 @@ python -m pip install -e '.[test,visualization,pytorch,verification]'
 
 ```bash
 uv run ionosphere --subdivision 1 --radial-cells 8 --steps 2
-uv run --extra test pytest -q
+uv run --extra test --extra verification pytest -q
 ```
 
 The first command should report the mesh, backend, time step, memory use, and
-finite field maxima.
+finite field maxima. The verification extra is required when collecting the
+complete configured suite because its analytic-solution tests import SciPy.
+Install the PyTorch and visualization extras as well to run their optional
+tests instead of skipping them.

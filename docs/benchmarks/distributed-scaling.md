@@ -53,7 +53,7 @@ and
 Run the eager case:
 
 ```bash
-uv run torchrun --standalone --nproc-per-node=2 \
+uv run --extra pytorch torchrun --standalone --nproc-per-node=2 \
   -m benchmarks.distributed_scaling \
   --subdivision 6 --radial-cells 40 \
   --steps 100 --warmup-steps 20 --repeats 3 \
@@ -62,8 +62,10 @@ uv run torchrun --standalone --nproc-per-node=2 \
 ```
 
 Add `--cuda-graph-chunk-size 1` and select a different output path for the graph
-case. Increase the chunk only when every call can advance that many steps;
-per-step radar observations require chunk 1. Test `--capacities A B` on the
-target adaptive mesh because unequal theoretical GPU capability did not improve
-the reference mesh: the changed cut and boundary workload outweighed the
-intended compute balance.
+case. Increase the chunk only when most calls can advance that many steps;
+observation intervals shorter than the graph chunk execute their remainder
+eagerly. The dedicated radar runner therefore pairs its default graph chunk of
+32 with a default sample interval of 32. Test `--capacities A B` on the target
+adaptive mesh because unequal theoretical GPU capability did not improve the
+reference mesh: the changed cut and boundary workload outweighed the intended
+compute balance.

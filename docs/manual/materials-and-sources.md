@@ -199,7 +199,23 @@ material = EarthIonosphereMaterial(anomalies=(anomaly,))
 ```
 
 An anomaly only affects electric samples intersecting its horizontal and radial
-support. The CLI warns when the selected grid cannot resolve it.
+support. With `horizontal_anomaly_mode="conservative-nearest"`, the solver
+preserves the requested spherical area by filling the nearest vertex dual cells
+and edge diamonds, with at most one fractional support in each association. It
+does not calculate exact intersections with the nominal circular boundary.
+
+With `conservative-nearest`, vertical treatment follows the staggered field
+layout: `Et` material receives the exact overlap fraction between an anomaly
+interval and each radial cell, while `Er` material is selected by whether a
+radial node lies inside that interval. In the default `point` mode, both
+components instead use their staggered sample altitudes. The current anomaly
+mixer applies a linear conductivity fraction and does not perform
+component-specific thin-layer homogenization, such as a harmonic
+complex-admittance average for the normal component. A layer only one cell
+thick is therefore a discrete compatibility model, not independent evidence of
+radial convergence. Use multiple radial resolutions before making a
+quantitative claim about a shallow layer. The CLI warns when no selected
+electric sample intersects an anomaly.
 
 ## Vertical Gaussian current
 

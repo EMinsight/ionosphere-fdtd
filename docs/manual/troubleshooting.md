@@ -69,7 +69,7 @@ The opt-in render test is enabled with
 
 ```bash
 IONOSPHERE_TEST_PYVISTA_RENDER=1 \
-  uv run --extra test --extra visualization --extra pytorch pytest -q
+  uv run --extra test --extra visualization --extra pytorch --extra verification pytest -q
 ```
 
 ## Diagnose a run

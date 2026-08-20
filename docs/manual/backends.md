@@ -46,16 +46,24 @@ uv run --extra pytorch torchrun --standalone --nproc-per-node=2 \
   --dtype float64
 ```
 
-The production path uses NCCL. Rank-local CUDA devices come from
+The dedicated runner uses NCCL and requires exactly two torch ranks. Rank-local
+CUDA devices come from
 `LOCAL_RANK`; do not rely on `nvidia-smi` ordering. `--capacities A B` changes
 the target surface workload ratio when the two GPUs have different measured
 throughput or usable memory. Reference and anomaly cases run sequentially on
 the same mesh so their signatures and anomaly subtraction remain compatible.
-The radar runner captures one complete field step, including its NCCL halo
-exchanges, in a CUDA Graph by default. Use `--cuda-graph-chunk-size 0` to
-disable capture. Its per-step observations require the default chunk size of 1.
+The radar runner captures chunks of 32 complete field steps, including their
+NCCL halo exchanges, in a CUDA Graph by default; its default observation
+interval is also 32 steps. Use `--cuda-graph-chunk-size 0` to disable capture.
+Intervals shorter than the graph chunk, including per-step observations, run
+their remainder eagerly rather than requiring a chunk size of 1.
 See the [two-GPU benchmark](../benchmarks/distributed-scaling.md) before choosing
 distributed execution for a mesh that fits on one GPU.
+
+The documented and benchmarked path uses two GPUs in one host. Multi-node
+operation has not been validated as a supported workflow. Magnetized-plasma
+current halos are also not implemented, so distributed construction rejects a
+plasma model instead of omitting its coupling.
 
 ## Compilation
 

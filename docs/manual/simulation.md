@@ -55,6 +55,46 @@ storage but is not a moving or geographically local 3-D AMR hierarchy. See the
 [refinement decision](../benchmarks/refinement-strategy.md) for the measured
 memory result and the reasons local subcycling and dynamic AMR are deferred.
 
+## Static surface refinement
+
+`build_adaptive_geodesic_mesh()` creates one closed, conforming surface mesh
+with fine cores and graded transition rings. It introduces no hanging nodes or
+overset boundaries, keeps neighboring face levels 2:1 balanced, and uses the
+same global leapfrog time step as a uniform mesh.
+
+```python
+from ionosphere_fdtd import (
+    GeodesicFDTD,
+    SimulationConfig,
+    SphericalRefinementRegion,
+    build_adaptive_geodesic_mesh,
+)
+
+mesh = build_adaptive_geodesic_mesh(
+    4,
+    (
+        SphericalRefinementRegion(
+            latitude_deg=69.0,
+            longitude_deg=-156.0,
+            radius_deg=2.0,
+            target_subdivision=6,
+            transition_width_deg=2.0,
+            label="receiver",
+        ),
+    ),
+)
+simulation = GeodesicFDTD(
+    SimulationConfig(subdivision=4, radial_cells=24),
+    mesh=mesh,
+)
+```
+
+Refinement regions are fixed before stepping. They reduce surface storage
+relative to a globally uniform fine grid but do not provide local time
+subcycling or a geographically local radial hierarchy. Validate production
+regions against source, receiver, coastline, and material-feature support, and
+record the generated mesh metadata with the run.
+
 ## Maxwell layout
 
 For an oriented primal surface edge, the solver advances
@@ -149,18 +189,25 @@ explicit `time_step_s` above `courant_factor * cfl_time_step_limit_s`.
 
 | Option | Choices | Purpose |
 |---|---|---|
-| `radial_material_support` | `point`, `dual-cell` | Sample `Er` material at a vertex or average over its dual cell |
-| `tangential_material_support` | `point`, `edge-diamond` | Sample `Et` material at an edge midpoint or average over its diamond |
-| `horizontal_anomaly_mode` | `point`, `conservative-nearest` | Point-select or conservatively assign anomaly area |
+| `radial_material_support` | `point`, `dual-cell` | Sample the radial E component at a vertex or average horizontally over its surface dual cell |
+| `tangential_material_support` | `point`, `edge-diamond` | Sample the tangential E component at an edge midpoint or average horizontally over its edge diamond |
+| `horizontal_anomaly_mode` | `point`, `conservative-nearest` | Point-select supports or preserve the declared anomaly area using nearest supports |
 
 The averaging modes are valuable at discontinuous coastlines and anomaly
-boundaries but cost more during setup.
+boundaries but cost more during setup. Here, “radial material” names the radial
+electric-field component; `dual-cell` does not average along altitude.
+`conservative-nearest` preserves total spherical area but does not compute exact
+geometric intersections with a circular anomaly boundary. See
+[Materials and Sources](materials-and-sources.md#spherical-anomalies) for the
+vertical support rule and thin-layer limitation.
 
 ## Mesh controls
 
 `mesh_orientation` accepts `polar` or `native`. `mesh_relaxations` and
 `mesh_optimization_steps` alter coordinates while preserving topology. Do not
-combine these controls with an explicitly supplied `GeodesicMesh`.
+combine these controls with an explicitly supplied `GeodesicMesh`. Use
+`build_adaptive_geodesic_mesh()` when selected geographic regions need higher
+surface resolution; pass the resulting mesh explicitly to `GeodesicFDTD`.
 
 ## Diagnostics and memory
 

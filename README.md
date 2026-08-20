@@ -13,10 +13,13 @@ sampling, and two- and three-dimensional visualization.
 - NumPy CPU and PyTorch CPU, CUDA, and Apple Metal/MPS backends
 - Full-spherical radial curls and conservative CFL selection
 - Exponential conductive integration with a legacy trapezoidal option
-- Configurable geodesic and radial grids, materials, sources, and anomalies
+- Static conforming surface and 2:1-balanced radial refinement
+- Configurable materials, sources, anomalies, surface impedance, and plasma ADEs
+- Mesh-bound material artifacts with explicit dataset provenance
+- Two-rank PyTorch/NCCL execution for models that require both local GPUs
 - Portable, versioned checkpoints with cross-backend restart
 - Surface maps, radial sections, receiver traces, interactive 3-D views, and animations
-- Analytic Maxwell verification and Simpson–Taflove reproduction workflows
+- Analytic Maxwell checks and Simpson–Taflove qualitative verification workflows
 
 ## Quick start
 
@@ -67,11 +70,19 @@ print(simulation.diagnostics())
   [Simpson–Taflove 2004](docs/verification/simpson-taflove-2004.md), and
   [Simpson–Taflove 2006](docs/verification/simpson-taflove-2006.md)
 - [Backend benchmarks](docs/benchmarks/backend-comparison.md)
+- [Refinement strategy](docs/benchmarks/refinement-strategy.md)
+- [Two-GPU scaling](docs/benchmarks/distributed-scaling.md)
+
+The verification reports distinguish qualitative agreement with published
+phenomena from an independently converged physical model. The Simpson–Taflove
+2006 radial trend is currently provisional: its magnitude is not mesh-converged
+and is not accepted as a quantitative oil-detection prediction. Exact published
+curves require author inputs that are not available in the papers.
 
 ## Development
 
 ```bash
-uv run --extra test --extra visualization --extra pytorch pytest -q
+uv run --extra test --extra visualization --extra pytorch --extra verification pytest -q
 ```
 
 Verification workflows are kept outside the distributed runtime package and

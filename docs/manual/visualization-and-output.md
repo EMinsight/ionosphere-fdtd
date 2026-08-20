@@ -15,8 +15,10 @@ uv run --extra visualization ionosphere-visualize \
 ```
 
 Surface maps interpolate display values onto a regular longitude/latitude grid;
-the solver fields are not modified. `er` and `hr` maps use symmetric color
-limits about zero.
+the solver fields are not modified. The requested altitude selects the nearest
+`Er` radial node or `Hr` radial midpoint; it does not interpolate between
+staggered planes. The rendered title reports the plane actually selected. `er`
+and `hr` maps use symmetric color limits about zero.
 
 ## Radial sections
 
@@ -68,9 +70,13 @@ uv run --extra visualization ionosphere-visualize \
   --output traces.png
 ```
 
-Receiver buffers remain on the selected backend during stepping and are copied
-to the host after recording. The solver also exposes
-`record_er_observations()` and `record_h_observations()` for custom analyses.
+The visualization runner records `Er` at the nearest mesh vertex and nearest
+radial node for each requested receiver. It does not interpolate to the exact
+geographic coordinate or altitude, and each plotted sample is read as a host
+scalar. This simple path is intended for inspection. For accelerator-resident
+weighted sampling, construct explicit support indices and weights and use
+`record_er_observations()` or `record_h_observations()`; those methods buffer
+traces on the selected backend and copy them after recording.
 
 ## Python plotting API
 
@@ -103,10 +109,17 @@ restored = GeodesicFDTD.load_checkpoint(
 restored.step(5_000)
 ```
 
-The archive contains JSON metadata, exact mesh vertices, all four evolving
-fields, the simulation clock, configuration, material, and source. Loading
+The current format is version 4, and the loader accepts legacy versions 1–4.
+The archive contains JSON metadata, exact mesh topology and refinement
+metadata, all four evolving fields, the simulation clock, configuration,
+material, and source. Version 3 added surface-impedance ADE memory; version 4
+adds the mesh-bound plasma model and every species-current ADE state. Loading
 uses `allow_pickle=False`; checkpoint files never execute serialized Python
-objects. Format version 1 supports `EarthIonosphereMaterial`,
-`GaussianCurrent`, and `TangentialGaussianCurrent`. Models containing external
-callables, including `LayeredEarthIonosphereMaterial` terrain samplers, are
-rejected at save time because those callables cannot be portably reconstructed.
+objects.
+
+Checkpoint saving currently supports `EarthIonosphereMaterial` and optional
+`GaussianCurrent` or `TangentialGaussianCurrent` sources. Other runtime
+materials, including layered, spatial, gridded, and mesh-artifact inputs, are
+rejected even when they contain no external callable. Preserve those input
+artifacts and their provenance separately until a portable checkpoint schema
+is defined for them.
