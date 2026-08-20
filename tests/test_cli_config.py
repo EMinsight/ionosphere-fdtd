@@ -77,6 +77,40 @@ checkpoint = "result.npz"
     assert args.checkpoint == Path("result.npz")
 
 
+def test_cli_can_disable_boolean_enabled_by_toml(tmp_path: Path) -> None:
+    config = _write(
+        tmp_path,
+        "[ionosphere]\ntorch_compile = true\noil_anomaly = true\n",
+    )
+
+    args = parse_simulation_args(
+        [
+            "--config",
+            str(config),
+            "--no-torch-compile",
+            "--no-oil-anomaly",
+        ]
+    )
+
+    assert args.torch_compile is False
+    assert args.oil_anomaly is False
+
+
+def test_visualization_cli_can_disable_boolean_enabled_by_toml(
+    tmp_path: Path,
+) -> None:
+    config = _write(
+        tmp_path,
+        "[visualization.surface]\ncoastlines = true\noutput = 'surface.png'\n",
+    )
+
+    args = parse_visualization_args(
+        ["--config", str(config), "surface", "--no-coastlines"]
+    )
+
+    assert args.coastlines is False
+
+
 def test_visualization_toml_applies_global_and_command_tables(
     tmp_path: Path,
 ) -> None:

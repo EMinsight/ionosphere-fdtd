@@ -13,7 +13,7 @@ The principal option groups are:
 
 | Group | Options |
 |---|---|
-| Work | `--steps`, `--report-every`, `--resume`, `--checkpoint`, `--checkpoint-every` |
+| Work | `--steps`, `--dry-run`, `--report-every`, `--resume`, `--checkpoint`, `--checkpoint-every` |
 | Grid | `--subdivision`, `--radial-cells`, `--surface-step`, `--courant` |
 | Backend | `--backend`, `--device`, `--dtype`, `--torch-compile`, `--torch-compile-chunk-size`, `--torch-threads` |
 | Source | `--source-current`, `--source-length`, `--source-frequency`, `--source-center`, `--source-width`, `--source-latitude`, `--source-longitude` |
@@ -25,6 +25,19 @@ gridded or mesh-native materials, surface impedance, magnetized plasma, and
 generic two-rank construction. Paper-specific adaptive and distributed runners
 are source-only modules under `verification/` and are not installed console
 scripts.
+
+Run a preflight before a long job:
+
+```bash
+uv run ionosphere --config run.toml --dry-run
+```
+
+The command constructs and validates the selected mesh, material, source,
+backend, device, precision, and time step, then reports exact field memory
+without advancing a field step or writing a configured checkpoint. Use
+`--version` to report the installed package version. Boolean options accept
+both forms, such as `--torch-compile` and `--no-torch-compile`, so command-line
+values can override either TOML boolean value.
 
 ## TOML configuration files
 

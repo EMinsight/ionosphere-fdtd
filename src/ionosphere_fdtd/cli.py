@@ -9,6 +9,7 @@ import numpy as np
 
 from .backends import BackendUnavailableError
 from .checkpoint import CheckpointError
+from .cli_common import DefaultsHelpFormatter, add_version_argument
 from .cli_config import (
     add_config_argument,
     apply_toml_defaults,
@@ -27,9 +28,20 @@ from .sources import (
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=DefaultsHelpFormatter
+    )
     add_config_argument(parser)
-    parser.add_argument("--steps", type=int, default=100)
+    add_version_argument(parser)
+    parser.add_argument(
+        "--steps", type=int, default=100, help="number of field steps to advance"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="validate and allocate the model without stepping or writing checkpoints",
+    )
     parser.add_argument(
         "--resume", type=Path, help="resume model and fields from an NPZ checkpoint"
     )
@@ -41,18 +53,27 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         help="also update --checkpoint after this many completed steps",
     )
-    parser.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
+    parser.add_argument(
+        "--backend",
+        choices=("numpy", "torch"),
+        default="numpy",
+        help="array implementation",
+    )
     parser.add_argument(
         "--device",
         default="auto",
         help="compute device: auto, cpu, mps, cuda, cuda:N, or gpu",
     )
     parser.add_argument(
-        "--dtype", choices=("auto", "float32", "float64"), default="auto"
+        "--dtype",
+        choices=("auto", "float32", "float64"),
+        default="auto",
+        help="field precision; auto selects the backend default",
     )
     parser.add_argument(
         "--torch-compile",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="compile chunked PyTorch field steps for long-running simulations",
     )
     parser.add_argument(
@@ -66,41 +87,86 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         help="set PyTorch CPU intra-op threads (small grids often prefer 1)",
     )
-    parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
-    parser.add_argument("--radial-cells", type=int, default=24)
+    parser.add_argument(
+        "--subdivision",
+        type=int,
+        default=2,
+        choices=range(0, 8),
+        help="recursive surface-mesh refinement level",
+    )
+    parser.add_argument(
+        "--radial-cells",
+        type=int,
+        default=24,
+        help="number of radial intervals",
+    )
     parser.add_argument(
         "--surface-step",
         type=float,
         help="refine radial nodes within +/-5 km of sea level to this spacing (m)",
     )
-    parser.add_argument("--courant", type=float, default=0.35)
-    parser.add_argument("--report-every", type=int, default=20)
-    parser.add_argument("--source-current", type=float, default=1.0e6)
+    parser.add_argument(
+        "--courant",
+        type=float,
+        default=0.35,
+        help="fraction of the conservative CFL time-step limit",
+    )
+    parser.add_argument(
+        "--report-every",
+        type=int,
+        default=20,
+        help="diagnostic reporting interval in steps",
+    )
+    parser.add_argument(
+        "--source-current",
+        type=float,
+        default=1.0e6,
+        help="peak source current in amperes",
+    )
     parser.add_argument(
         "--source-length",
         type=float,
         default=5_000.0,
         help="vertical current-element length in metres",
     )
-    parser.add_argument("--source-frequency", type=float, default=0.0)
-    parser.add_argument("--source-center", type=float)
+    parser.add_argument(
+        "--source-frequency",
+        type=float,
+        default=0.0,
+        help="source carrier frequency in hertz; zero disables the carrier",
+    )
+    parser.add_argument(
+        "--source-center", type=float, help="Gaussian center time in seconds"
+    )
     parser.add_argument(
         "--source-width",
         type=float,
         help="Gaussian 1/e half-width in seconds",
     )
     parser.add_argument(
-        "--source-latitude", type=float, default=GWANGJU_LATITUDE_DEG
+        "--source-latitude",
+        type=float,
+        default=GWANGJU_LATITUDE_DEG,
+        help="source geodetic latitude in degrees",
     )
     parser.add_argument(
-        "--source-longitude", type=float, default=GWANGJU_LONGITUDE_DEG
+        "--source-longitude",
+        type=float,
+        default=GWANGJU_LONGITUDE_DEG,
+        help="source longitude in degrees east",
     )
     parser.add_argument(
         "--oil-anomaly",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="enable a small Alaska-like low-conductivity lithosphere anomaly",
     )
-    parser.add_argument("--anomaly-radius-km", type=float, default=40.0)
+    parser.add_argument(
+        "--anomaly-radius-km",
+        type=float,
+        default=40.0,
+        help="horizontal anomaly radius in kilometres",
+    )
     return parser
 
 
@@ -241,6 +307,12 @@ def main(argv: list[str] | None = None) -> int:
         f"dt={simulation.time_step_s:.6e} s "
         f"(conservative limit), field memory={simulation.memory_bytes / 2**20:.2f} MiB"
     )
+    if args.dry_run:
+        print(
+            f"dry-run: validated {args.steps} requested steps; "
+            "no field steps or checkpoints written"
+        )
+        return 0
     completed = 0
     while completed < args.steps:
         until_report = args.report_every - completed % args.report_every

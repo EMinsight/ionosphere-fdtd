@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from .backends import BackendUnavailableError
+from .cli_common import DefaultsHelpFormatter, add_version_argument
 from .cli_config import (
     add_config_argument,
     apply_toml_defaults,
@@ -37,20 +38,32 @@ from .visualization import (
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=DefaultsHelpFormatter
+    )
     add_config_argument(parser)
-    parser.add_argument("--backend", choices=("numpy", "torch"), default="numpy")
+    add_version_argument(parser)
+    parser.add_argument(
+        "--backend",
+        choices=("numpy", "torch"),
+        default="numpy",
+        help="array implementation",
+    )
     parser.add_argument(
         "--device",
         default="auto",
         help="compute device: auto, cpu, mps, cuda, cuda:N, or gpu",
     )
     parser.add_argument(
-        "--dtype", choices=("auto", "float32", "float64"), default="auto"
+        "--dtype",
+        choices=("auto", "float32", "float64"),
+        default="auto",
+        help="field precision; auto selects the backend default",
     )
     parser.add_argument(
         "--torch-compile",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="compile chunked PyTorch field steps for long-running simulations",
     )
     parser.add_argument(
@@ -64,16 +77,43 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         help="set PyTorch CPU intra-op threads (small grids often prefer 1)",
     )
-    parser.add_argument("--subdivision", type=int, default=2, choices=range(0, 8))
-    parser.add_argument("--radial-cells", type=int, default=24)
-    parser.add_argument("--steps", type=int, default=100, help="warm-up steps")
-    parser.add_argument("--source-current", type=float, default=1.0e6)
-    parser.add_argument("--source-frequency", type=float, default=0.0)
     parser.add_argument(
-        "--source-latitude", type=float, default=GWANGJU_LATITUDE_DEG
+        "--subdivision",
+        type=int,
+        default=2,
+        choices=range(0, 8),
+        help="recursive surface-mesh refinement level",
     )
     parser.add_argument(
-        "--source-longitude", type=float, default=GWANGJU_LONGITUDE_DEG
+        "--radial-cells",
+        type=int,
+        default=24,
+        help="number of radial intervals",
+    )
+    parser.add_argument("--steps", type=int, default=100, help="warm-up steps")
+    parser.add_argument(
+        "--source-current",
+        type=float,
+        default=1.0e6,
+        help="peak source current in amperes",
+    )
+    parser.add_argument(
+        "--source-frequency",
+        type=float,
+        default=0.0,
+        help="source carrier frequency in hertz; zero disables the carrier",
+    )
+    parser.add_argument(
+        "--source-latitude",
+        type=float,
+        default=GWANGJU_LATITUDE_DEG,
+        help="source geodetic latitude in degrees",
+    )
+    parser.add_argument(
+        "--source-longitude",
+        type=float,
+        default=GWANGJU_LONGITUDE_DEG,
+        help="source longitude in degrees east",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -83,7 +123,12 @@ def _parser() -> argparse.ArgumentParser:
     surface.add_argument("--projection", default="mollweide")
     surface.add_argument("--scale", choices=("linear", "symlog"), default="linear")
     surface.add_argument("--color-limit", type=float)
-    surface.add_argument("--coastlines", action="store_true")
+    surface.add_argument(
+        "--coastlines",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="overlay Natural Earth coastlines (may download data on first use)",
+    )
     surface.add_argument("--output", type=Path)
 
     section = subparsers.add_parser("section", help="render a distance-height section")
