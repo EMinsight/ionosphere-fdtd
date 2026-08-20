@@ -46,6 +46,12 @@ from .partition import (
     validate_surface_partition,
 )
 from .plasma import ColdPlasmaSpecies, MeshPlasmaModel
+from .radial_grid import (
+    RadialGridValidation,
+    RadialRefinementRegion,
+    build_refined_radial_grid,
+    validate_radial_grid,
+)
 from .solver import GeodesicFDTD, SimulationConfig
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import ConductiveHalfSpaceSurface
@@ -86,6 +92,8 @@ __all__ = [
     "NumPyBackend",
     "PartitionValidation",
     "RadialSection",
+    "RadialGridValidation",
+    "RadialRefinementRegion",
     "Receiver",
     "ReceiverTraces",
     "RankSurfacePartition",
@@ -101,6 +109,7 @@ __all__ = [
     "build_geodesic_mesh",
     "build_geodesic_mesh_from_topology",
     "build_adaptive_geodesic_mesh",
+    "build_refined_radial_grid",
     "create_backend",
     "initialize_torchrun_process_group",
     "plot_mesh_3d",
@@ -112,5 +121,6 @@ __all__ = [
     "run_live_surface",
     "sample_radial_section",
     "validate_adaptive_mesh",
+    "validate_radial_grid",
     "validate_surface_partition",
 ]

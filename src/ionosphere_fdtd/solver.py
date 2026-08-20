@@ -19,6 +19,7 @@ from .materials import (
 )
 from .mesh import GeodesicMesh, build_geodesic_mesh
 from .plasma import GeodesicPlasmaCoupler, MeshPlasmaModel
+from .radial_grid import validate_radial_grid
 from .sources import GaussianCurrent, TangentialGaussianCurrent
 from .surface_impedance import (
     ConductiveHalfSpaceSurface,
@@ -99,9 +100,14 @@ class SimulationConfig:
             raise ValueError(
                 "loss_integration must be 'exponential' or 'trapezoidal'"
             )
-        if self.radial_grid_policy not in {"smooth", "allow-abrupt"}:
+        if self.radial_grid_policy not in {
+            "smooth",
+            "balanced-2to1",
+            "allow-abrupt",
+        }:
             raise ValueError(
-                "radial_grid_policy must be 'smooth' or 'allow-abrupt'"
+                "radial_grid_policy must be 'smooth', 'balanced-2to1', "
+                "or 'allow-abrupt'"
             )
         if self.geometry_mode not in {"full-spherical", "thin-shell"}:
             raise ValueError(
@@ -158,6 +164,10 @@ class SimulationConfig:
                 raise ValueError(
                     "custom radial grid is not smoothly graded; use a smooth node "
                     "mapping or explicitly select radial_grid_policy='allow-abrupt'"
+                )
+            if self.radial_grid_policy == "balanced-2to1":
+                validate_radial_grid(
+                    altitudes, maximum_adjacent_step_ratio=2.0
                 )
 
 

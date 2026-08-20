@@ -23,6 +23,38 @@ Smoothly graded nodes use `radial_grid_policy="smooth"`. Abrupt subgridding is
 first-order at the transition and requires an explicit
 `radial_grid_policy="allow-abrupt"` selection.
 
+For deterministic static h-refinement, use `build_refined_radial_grid()` and
+`radial_grid_policy="balanced-2to1"`. The builder bisects intersecting cells to
+meet each `RadialRefinementRegion.maximum_step_m` and then enforces at most one
+level difference between neighbors:
+
+```python
+from ionosphere_fdtd import (
+    RadialRefinementRegion,
+    SimulationConfig,
+    build_refined_radial_grid,
+)
+
+altitudes = build_refined_radial_grid(
+    0.0,
+    100_000.0,
+    10_000.0,
+    (RadialRefinementRegion(60_000.0, 90_000.0, 1_250.0),),
+)
+config = SimulationConfig(
+    radial_cells=len(altitudes) - 1,
+    minimum_altitude_m=altitudes[0],
+    maximum_altitude_m=altitudes[-1],
+    radial_altitudes_m=altitudes,
+    radial_grid_policy="balanced-2to1",
+)
+```
+
+This grid is static and shared by every surface column. It reduces radial
+storage but is not a moving or geographically local 3-D AMR hierarchy. See the
+[refinement decision](../benchmarks/refinement-strategy.md) for the measured
+memory result and the reasons local subcycling and dynamic AMR are deferred.
+
 ## Maxwell layout
 
 For an oriented primal surface edge, the solver advances
