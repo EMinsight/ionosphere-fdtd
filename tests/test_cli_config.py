@@ -6,10 +6,47 @@ from ionosphere_fdtd.cli import _parse_args as parse_simulation_args
 from ionosphere_fdtd.viz_cli import _parse_args as parse_visualization_args
 
 
+CONFIGS = Path(__file__).parents[1] / "configs"
+
+
 def _write(tmp_path: Path, text: str) -> Path:
     path = tmp_path / "run.toml"
     path.write_text(text)
     return path
+
+
+def test_shipped_example_is_cpu_safe_and_uses_one_demo_model() -> None:
+    config = CONFIGS / "ionosphere.example.toml"
+
+    simulation = parse_simulation_args(["--config", str(config)])
+    visualization = parse_visualization_args(
+        ["--config", str(config), "surface"]
+    )
+
+    assert simulation.backend == visualization.backend == "numpy"
+    assert simulation.device == visualization.device == "cpu"
+    assert simulation.dtype == visualization.dtype == "float64"
+    assert simulation.subdivision == visualization.subdivision == 2
+    assert simulation.radial_cells == visualization.radial_cells == 24
+    assert simulation.steps == visualization.steps == 200
+    assert simulation.torch_compile is False
+    assert visualization.coastlines is False
+    assert simulation.checkpoint == Path("artifacts/runs/demo.npz")
+
+
+def test_shipped_research_template_remains_parseable() -> None:
+    config = CONFIGS / "ionosphere.research.toml"
+
+    simulation = parse_simulation_args(["--config", str(config)])
+    visualization = parse_visualization_args(
+        ["--config", str(config), "traces"]
+    )
+
+    assert simulation.backend == visualization.backend == "torch"
+    assert simulation.device == visualization.device == "cuda:0"
+    assert simulation.subdivision == visualization.subdivision == 5
+    assert simulation.steps == visualization.steps == 20_000
+    assert simulation.torch_compile is True
 
 
 def test_simulation_toml_defaults_and_cli_precedence(tmp_path: Path) -> None:

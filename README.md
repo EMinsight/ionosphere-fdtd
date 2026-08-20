@@ -30,13 +30,18 @@ uv sync --extra test --extra visualization --extra pytorch
 uv run ionosphere --steps 200
 ```
 
-For repeatable runs, copy the provided TOML configuration and edit it instead
+For repeatable runs, copy the CPU-safe starter configuration and edit it instead
 of repeating command-line options:
 
 ```bash
 cp configs/ionosphere.example.toml run.toml
 uv run ionosphere --config run.toml
 ```
+
+This starter remains on NumPy CPU and writes
+`artifacts/runs/demo.npz`. Use
+[`configs/ionosphere.research.toml`](configs/ionosphere.research.toml) only
+after selecting and sizing the intended accelerator workload.
 
 Explicit command-line options override values from the file. See the
 [command-line reference](docs/manual/command-line-reference.md#toml-configuration-files)

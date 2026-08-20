@@ -1,50 +1,50 @@
-# Defaults for the `ionosphere` simulation runner.
+# CPU-safe defaults for a first simulation and plot.
 [ionosphere]
-steps = 20000
-report_every = 1000
-subdivision = 5
-radial_cells = 40
+steps = 200
+report_every = 20
+subdivision = 2
+radial_cells = 24
 courant = 0.35
 
-backend = "torch"
-device = "cuda:0"
-dtype = "float32"
-torch_compile = true
-torch_compile_chunk_size = 32
+backend = "numpy"
+device = "cpu"
+dtype = "float64"
+torch_compile = false
 
 source_current = 1.0e6
 source_length = 5000.0
-source_frequency = 20.0
+source_frequency = 0.0
 source_latitude = 35.1595
 source_longitude = 126.8526
 
-# Paths are resolved relative to the directory where the command is run.
-checkpoint = "artifacts/runs/example.npz"
-checkpoint_every = 5000
+checkpoint = "artifacts/runs/demo.npz"
 
-# Shared defaults for `ionosphere-visualize`.
+# Use the same model when rendering a standalone demonstration.
 [visualization]
-steps = 100
-subdivision = 4
-radial_cells = 40
-backend = "torch"
-device = "cuda:0"
-dtype = "float32"
+steps = 200
+subdivision = 2
+radial_cells = 24
+backend = "numpy"
+device = "cpu"
+dtype = "float64"
+source_current = 1.0e6
+source_frequency = 0.0
+source_latitude = 35.1595
+source_longitude = 126.8526
 
-# Each visualization command has its own optional table.
 [visualization.surface]
 component = "er"
 altitude_km = 0.0
 projection = "mollweide"
 scale = "symlog"
-coastlines = true
-output = "artifacts/figures/surface.png"
+coastlines = false
+output = "artifacts/figures/demo-surface.png"
 
 [visualization.traces]
-trace_steps = 10000
+trace_steps = 1000
 sample_every = 10
 receiver = [
   [35.1595, 126.8526, 0.0],
   [-35.1595, -53.1474, 0.0],
 ]
-output = "artifacts/figures/traces.png"
+output = "artifacts/figures/demo-traces.png"

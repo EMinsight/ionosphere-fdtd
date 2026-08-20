@@ -12,12 +12,19 @@ includes simulation time and maximum electric and magnetic amplitudes.
 
 ## Reuse run parameters
 
-Copy the example TOML file when a run needs more than a few options:
+Copy the CPU-safe example TOML file when a run needs more than a few options:
 
 ```bash
 cp configs/ionosphere.example.toml run.toml
 uv run ionosphere --config run.toml
 ```
+
+The starter uses the same subdivision, radial grid, backend, source, and dtype
+for its simulation and visualization tables. It writes a final checkpoint to
+`artifacts/runs/demo.npz`. The separate
+[`ionosphere.research.toml`](../../configs/ionosphere.research.toml) retains a
+long compiled CUDA example; review its device, resolution, step count, and
+checkpoint path before running it.
 
 Edit values below `[ionosphere]` in `run.toml`. An option supplied directly on
 the command line takes precedence, which makes one-off changes concise:
